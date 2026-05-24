@@ -73,7 +73,7 @@
   ],
   "lang": "en-US",
   "name": "Domolux Demo",
-  "short_name": "Domolux",
+  "short_name": "HA Demo",
   "start_url": "/?homescreen=1",
-  "theme_color": "#1a1a1a"
+  "theme_color": "#009ac7"
 }

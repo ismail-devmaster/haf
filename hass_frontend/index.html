@@ -1,15 +1,26 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
     <title>Domolux</title>
     <meta charset="utf-8" />
-<link rel="manifest" href="http://homeassistant.local:8123/manifest.json" crossorigin="use-credentials" />
-<link rel="icon" href="/static/icons/favicon.ico" />
+    <link
+      rel="manifest"
+      href="http://homeassistant.local:8123/manifest.json"
+      crossorigin="use-credentials"
+    />
+    <link rel="icon" href="/static/icons/favicon.ico" />
 
-  <link rel="modulepreload" href="/frontend_latest/core.js" crossorigin="use-credentials" />
+    <link
+      rel="modulepreload"
+      href="/frontend_latest/core.js"
+      crossorigin="use-credentials"
+    />
 
-  <link rel="modulepreload" href="/frontend_latest/app.js" crossorigin="use-credentials" />
-
+    <link
+      rel="modulepreload"
+      href="/frontend_latest/app.js"
+      crossorigin="use-credentials"
+    />
 
     <link rel="mask-icon" href="/static/icons/mask-icon.svg" color="#1a1a1a" />
     <link
@@ -18,31 +29,41 @@
     />
     <meta name="apple-itunes-app" content="app-id=1099568401" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Domolux">
-    <meta name="msapplication-config" content="/static/icons/browserconfig.xml" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Domolux" />
+    <meta
+      name="msapplication-config"
+      content="/static/icons/browserconfig.xml"
+    />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="application-name" content="Domolux">
+    <meta name="application-name" content="Domolux" />
     <meta name="referrer" content="same-origin" />
     <meta name="theme-color" content="{{ theme_color }}" />
     <meta name="color-scheme" content="dark light" />
-    <meta name="viewport" content="width=device-width, user-scalable=no, viewport-fit=cover, initial-scale=1">
-<style>
-  body {
-    font-family: Roboto, Noto, sans-serif;
-    -moz-osx-font-smoothing: grayscale;
-    -webkit-font-smoothing: antialiased;
-    font-weight: 400;
-    margin: 0;
-    padding: 0;
-    height: 100%;
-  }
-</style>
+    <meta
+      name="viewport"
+      content="width=device-width, user-scalable=no, viewport-fit=cover, initial-scale=1"
+    />
+    <style>
+      body {
+        font-family: Roboto, Noto, sans-serif;
+        -moz-osx-font-smoothing: grayscale;
+        -webkit-font-smoothing: antialiased;
+        font-weight: 400;
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+    </style>
 
     <style>
       @keyframes fade-out {
-        from { opacity: 1; }
-        to { opacity: 0; }
+        from {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+        }
       }
       ::view-transition-group(launch-screen) {
         animation-duration: var(--ha-animation-duration-slow, 350ms);
@@ -81,7 +102,7 @@
       }
       #ha-launch-screen .ha-launch-screen-spacer-top {
         flex: 1;
-        margin-top: calc( 2 * max(var(--safe-area-inset-top, 0px), 48px) + 46px );
+        margin-top: calc(2 * max(var(--safe-area-inset-top, 0px), 48px) + 46px);
         padding-top: 48px;
       }
       #ha-launch-screen .ha-launch-screen-spacer-bottom {
@@ -93,7 +114,7 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        opacity: .66;
+        opacity: 0.66;
       }
       @media (prefers-color-scheme: dark) {
         html {
@@ -114,36 +135,53 @@
     <div id="ha-launch-screen">
       <div class="ha-launch-screen-spacer-top"></div>
       <picture>
-        <source srcset="/static/images/domolux_dark.png" media="(prefers-color-scheme: dark)">
-        <img src="/static/images/domolux.png" alt="Domolux" loading="eager" fetchpriority="high" />
+        <source
+          srcset="/static/images/domolux_dark.png"
+          media="(prefers-color-scheme: dark)"
+        />
+        <img
+          src="/static/images/domolux.png"
+          alt="Domolux"
+          loading="eager"
+          fetchpriority="high"
+        />
       </picture>
-      <div id="ha-launch-screen-info-box" class="ha-launch-screen-spacer-bottom"></div>
+      <div
+        id="ha-launch-screen-info-box"
+        class="ha-launch-screen-spacer-bottom"
+      ></div>
       <div class="ohf-logo">
-        <img src="/static/images/ohf-badge.svg" alt="Home Assistant is a project by the Open Home Foundation" height="46">
+        <img
+          src="/static/images/ohf-badge.svg"
+          alt="Home Assistant is a project by the Open Home Foundation"
+          height="46"
+        />
       </div>
     </div>
     <home-assistant></home-assistant>
     <script>
-  function _ls(src, notCustom) {
-    var script = document.createElement("script");
-    if (notCustom) {
-      script.crossOrigin = "use-credentials";
-    }
-    script.src = src;
-    return document.head.appendChild(script);
-  }
-  if (!("attachShadow" in Element.prototype)) {
-    _ls("/static/polyfills/webcomponents-bundle.js", true);
-    _ls("/static/polyfills/lit-polyfill-support.js", true);
-  }
-  // Modern browsers are detected primarily using the user agent string.
-  // A feature detection which roughly lines up with the modern targets is used
-  // as a fallback to guard against spoofs. It should be updated periodically.
-  var isModern = /Edge?\/(13[7-9]|1[4-9]\d|[2-9]\d{2}|\d{4,})\.\d+(\.\d+|)|Firefox\/(139|1[4-9]\d|[2-9]\d{2}|\d{4,})\.\d+(\.\d+|)|Chrom(ium|e)\/(109|1[1-9]\d|[2-9]\d{2}|\d{4,})\.\d+(\.\d+|)|(Maci|X1{2}).+ Version\/(26\.\d+|(2[7-9]|[3-9]\d|\d{3,})\.\d+)([,.]\d+|)( \(\w+\)|)( Mobile\/\w+|) Safari\/|Chrome.+OPR\/(12\d|1[3-9]\d|[2-9]\d{2}|\d{4,})\.\d+\.\d+|(CPU[ +]OS|iPhone[ +]OS|CPU[ +]iPhone|CPU IPhone OS|CPU iPad OS)[ +]+(18[._]([5-9]|\d{2,})|(19|[2-9]\d|\d{3,})[._]\d+)([._]\d+|)|Android:?[ /-](13[7-9]|1[4-9]\d|[2-9]\d{2}|\d{4,})(\.\d+|)(\.\d+|)|Mobile Safari.+OPR\/([89]\d|\d{3,})\.\d+\.\d+|Android.+Firefox\/(139|1[4-9]\d|[2-9]\d{2}|\d{4,})\.\d+(\.\d+|)|Android.+Chrom(ium|e)\/(13[7-9]|1[4-9]\d|[2-9]\d{2}|\d{4,})\.\d+(\.\d+|)|SamsungBrowser\/(29|[3-9]\d|\d{3,})\.\d+|Domolux\/[\d.]+ \(.+; macOS (2[6-9]|[3-9]\d|\d{3,})\.\d+(\.\d+)?\)/.test(navigator.userAgent) &&
-    "findLast" in Array.prototype;
-</script>
+      function _ls(src, notCustom) {
+        var script = document.createElement("script");
+        if (notCustom) {
+          script.crossOrigin = "use-credentials";
+        }
+        script.src = src;
+        return document.head.appendChild(script);
+      }
+      if (!("attachShadow" in Element.prototype)) {
+        _ls("/static/polyfills/webcomponents-bundle.js", true);
+        _ls("/static/polyfills/lit-polyfill-support.js", true);
+      }
+      // Modern browsers are detected primarily using the user agent string.
+      // A feature detection which roughly lines up with the modern targets is used
+      // as a fallback to guard against spoofs. It should be updated periodically.
+      var isModern =
+        /Edge?\/(13[7-9]|1[4-9]\d|[2-9]\d{2}|\d{4,})\.\d+(\.\d+|)|Firefox\/(139|1[4-9]\d|[2-9]\d{2}|\d{4,})\.\d+(\.\d+|)|Chrom(ium|e)\/(109|1[1-9]\d|[2-9]\d{2}|\d{4,})\.\d+(\.\d+|)|(Maci|X1{2}).+ Version\/(26\.\d+|(2[7-9]|[3-9]\d|\d{3,})\.\d+)([,.]\d+|)( \(\w+\)|)( Mobile\/\w+|) Safari\/|Chrome.+OPR\/(12\d|1[3-9]\d|[2-9]\d{2}|\d{4,})\.\d+\.\d+|(CPU[ +]OS|iPhone[ +]OS|CPU[ +]iPhone|CPU IPhone OS|CPU iPad OS)[ +]+(18[._]([5-9]|\d{2,})|(19|[2-9]\d|\d{3,})[._]\d+)([._]\d+|)|Android:?[ /-](13[7-9]|1[4-9]\d|[2-9]\d{2}|\d{4,})(\.\d+|)(\.\d+|)|Mobile Safari.+OPR\/([89]\d|\d{3,})\.\d+\.\d+|Android.+Firefox\/(139|1[4-9]\d|[2-9]\d{2}|\d{4,})\.\d+(\.\d+|)|Android.+Chrom(ium|e)\/(13[7-9]|1[4-9]\d|[2-9]\d{2}|\d{4,})\.\d+(\.\d+|)|SamsungBrowser\/(29|[3-9]\d|\d{3,})\.\d+|Domolux\/[\d.]+ \(.+; macOS (2[6-9]|[3-9]\d|\d{3,})\.\d+(\.\d+)?\)/.test(
+          navigator.userAgent
+        ) && "findLast" in Array.prototype;
+    </script>
 
-        <script>
+    <script>
       if (navigator.userAgent.indexOf("Android") === -1) {
         function _pf(src, type) {
           var el = document.createElement("link");
@@ -161,27 +199,23 @@
 
     <script crossorigin="use-credentials">
       if (isModern) {
-        
-          import("/frontend_latest/core.js");
-        
-          import("/frontend_latest/app.js");
-        
+        import("/frontend_latest/core.js");
+
+        import("/frontend_latest/app.js");
+
         window.customPanelJS = "/frontend_latest/custom-panel.js";
         window.latestJS = true;
       }
     </script>
-    
-    <script>
-        if (!window.latestJS) {
-          window.customPanelJS = "/frontend_es5/custom-panel.js";
-          
-            _ls("/frontend_es5/core.js", true);
-          
-            _ls("/frontend_es5/app.js", true);
-          
-        }
-    </script>
 
-    
+    <script>
+      if (!window.latestJS) {
+        window.customPanelJS = "/frontend_es5/custom-panel.js";
+
+        _ls("/frontend_es5/core.js", true);
+
+        _ls("/frontend_es5/app.js", true);
+      }
+    </script>
   </body>
 </html>
