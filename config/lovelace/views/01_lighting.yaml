@@ -1,0 +1,54 @@
+title: Lighting
+path: lighting
+icon: mdi:lightbulb-group
+type: sections
+max_cols: 2
+dense: false
+cards:
+  - type: custom:button-card
+    template: gh_theme_base
+    name: Lighting
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 16px 0 8px 0
+      name:
+        - font-size: 22px
+        - font-weight: 400
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: light.living_room_main_light
+        name: Living Room
+        icon: mdi:lightbulb
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: light.kitchen_main_light
+        name: Kitchen
+        icon: mdi:lightbulb
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: light.bedroom_main_light
+        name: Bedroom
+        icon: mdi:lightbulb
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: light.office_main_light
+        name: Office
+        icon: mdi:lightbulb
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: light.garage_light
+        name: Garage
+        icon: mdi:lightbulb
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: light.bathroom_light
+        name: Bathroom
+        icon: mdi:lightbulb

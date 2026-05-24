@@ -46,9 +46,10 @@ class DialogCommunity extends LitElement {
         >
           <ha-list-item hasMeta graphic="icon">
             <img
-              src="/static/icons/favicon-192x192.png"
+              src="/static/images/domolux.png"
               slot="graphic"
               alt="Domolux Logo"
+              style="width:40px;height:auto;"
             />
             ${this.localize("ui.panel.page-onboarding.welcome.forums")}
             <ha-svg-icon slot="meta" .path=${mdiOpenInNew}></ha-svg-icon>

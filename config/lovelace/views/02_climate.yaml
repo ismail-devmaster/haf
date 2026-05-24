@@ -1,0 +1,60 @@
+title: Climate
+path: climate
+icon: mdi:thermostat
+type: sections
+max_cols: 2
+dense: false
+cards:
+  - type: custom:button-card
+    template: gh_theme_base
+    name: Climate
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 16px 0 8px 0
+      name:
+        - font-size: 22px
+        - font-weight: 400
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        template: gh_climate_tile
+        entity: climate.living_room_thermostat
+        name: Living Room
+      - type: custom:button-card
+        template: gh_climate_tile
+        entity: climate.bedroom_thermostat
+        name: Bedroom
+
+  - type: custom:button-card
+    template: gh_theme_base
+    name: Fans
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 16px 0 8px 0
+      name:
+        - font-size: 22px
+        - font-weight: 400
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: fan.living_room_ceiling_fan
+        name: Living Room Fan
+        icon: mdi:fan
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: fan.bedroom_ceiling_fan
+        name: Bedroom Fan
+        icon: mdi:fan

@@ -40,6 +40,7 @@ import { isMobileClient } from "../util/is_mobile";
 import "./animation/ha-fade-in";
 import "./ha-icon";
 import "./ha-icon-button";
+import "./ha-logo-svg";
 import "./ha-spinner";
 import "./ha-svg-icon";
 import "./ha-tooltip";
@@ -347,7 +348,13 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
             ></ha-icon-button>
           `
         : ""}
-      <div class="title">Domolux</div>
+      <div class="title">
+        <ha-logo-svg
+          class="sidebar-logo"
+          .darkMode=${this.hass.themes?.darkMode || false}
+        ></ha-logo-svg>
+        <span class="brand-text">Domolux</span>
+      </div>
     </div>`;
   }
 
@@ -679,23 +686,39 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
         }
         .title {
           font-family: 'Google Sans', 'Product Sans', sans-serif;
-          margin-left: 4px;
           margin-inline-start: 4px;
           margin-inline-end: initial;
           flex: 1;
           min-width: 0;
-          max-width: 0;
-          opacity: 0;
+          display: flex;
+          align-items: center;
+          gap: var(--ha-space-2);
+          overflow: hidden;
           font-weight: 500;
-          transition:
-            max-width var(--ha-animation-duration-normal) ease,
-            opacity var(--ha-animation-duration-normal) ease;
         }
         :host([narrow]) .title {
           margin: 0;
           padding: 0 var(--ha-space-4);
         }
-        :host([expanded]) .title {
+        .sidebar-logo {
+          flex-shrink: 0;
+          --logo-width: var(--logo-sidebar-width, 24px);
+          --logo-height: var(--logo-sidebar-height, 24px);
+        }
+        .brand-text {
+          font-size: 18px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          flex: 1;
+          min-width: 0;
+          max-width: 0;
+          opacity: 0;
+          transition:
+            max-width var(--ha-animation-duration-normal) ease,
+            opacity var(--ha-animation-duration-normal) ease;
+        }
+        :host([expanded]) .brand-text {
           max-width: 100%;
           opacity: 1;
           transition-delay: 0ms, 80ms;

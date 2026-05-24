@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Home Assistant</title>
+    <title>Domolux</title>
     <meta charset="utf-8" />
 <link rel="manifest" href="http://homeassistant.local:8123/manifest.json" crossorigin="use-credentials" />
 <link rel="icon" href="/static/icons/favicon.ico" />
@@ -11,7 +11,7 @@
   <link rel="modulepreload" href="/frontend_latest/app.js" crossorigin="use-credentials" />
 
 
-    <link rel="mask-icon" href="/static/icons/mask-icon.svg" color="#18bcf2" />
+    <link rel="mask-icon" href="/static/icons/mask-icon.svg" color="#1a1a1a" />
     <link
       rel="apple-touch-icon"
       href="/static/icons/favicon-apple-180x180.png"
@@ -19,10 +19,10 @@
     <meta name="apple-itunes-app" content="app-id=1099568401" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Home Assistant">
+    <meta name="apple-mobile-web-app-title" content="Domolux">
     <meta name="msapplication-config" content="/static/icons/browserconfig.xml" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="application-name" content="Home Assistant">
+    <meta name="application-name" content="Domolux">
     <meta name="referrer" content="same-origin" />
     <meta name="theme-color" content="{{ theme_color }}" />
     <meta name="color-scheme" content="dark light" />
@@ -41,12 +41,8 @@
 
     <style>
       @keyframes fade-out {
-        from {
-          opacity: 1;
-        }
-        to {
-          opacity: 0;
-        }
+        from { opacity: 1; }
+        to { opacity: 0; }
       }
       ::view-transition-group(launch-screen) {
         animation-duration: var(--ha-animation-duration-slow, 350ms);
@@ -79,7 +75,7 @@
       #ha-launch-screen.removing {
         opacity: 0;
       }
-      #ha-launch-screen svg {
+      #ha-launch-screen img {
         width: 112px;
         flex-shrink: 0;
       }
@@ -117,10 +113,10 @@
   <body>
     <div id="ha-launch-screen">
       <div class="ha-launch-screen-spacer-top"></div>
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
-        <path fill="#18BCF2" d="M240 224.762a15 15 0 0 1-15 15H15a15 15 0 0 1-15-15v-90c0-8.25 4.77-19.769 10.61-25.609l98.78-98.7805c5.83-5.83 15.38-5.83 21.21 0l98.79 98.7895c5.83 5.83 10.61 17.36 10.61 25.61v90-.01Z"/>
-        <path fill="#F2F4F9" d="m107.27 239.762-40.63-40.63c-2.09.72-4.32 1.13-6.64 1.13-11.3 0-20.5-9.2-20.5-20.5s9.2-20.5 20.5-20.5 20.5 9.2 20.5 20.5c0 2.33-.41 4.56-1.13 6.65l31.63 31.63v-115.88c-6.8-3.3395-11.5-10.3195-11.5-18.3895 0-11.3 9.2-20.5 20.5-20.5s20.5 9.2 20.5 20.5c0 8.07-4.7 15.05-11.5 18.3895v81.27l31.46-31.46c-.62-1.96-.96-4.04-.96-6.2 0-11.3 9.2-20.5 20.5-20.5s20.5 9.2 20.5 20.5-9.2 20.5-20.5 20.5c-2.5 0-4.88-.47-7.09-1.29L129 208.892v30.88z"/>
-      </svg>
+      <picture>
+        <source srcset="/static/images/domolux_dark.png" media="(prefers-color-scheme: dark)">
+        <img src="/static/images/domolux.png" alt="Domolux" loading="eager" fetchpriority="high" />
+      </picture>
       <div id="ha-launch-screen-info-box" class="ha-launch-screen-spacer-bottom"></div>
       <div class="ohf-logo">
         <img src="/static/images/ohf-badge.svg" alt="Home Assistant is a project by the Open Home Foundation" height="46">

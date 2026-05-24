@@ -15,6 +15,7 @@ import { listenMediaQuery } from "../common/dom/media_query";
 import { toggleAttribute } from "../common/dom/toggle_attribute";
 import { computeRTLDirection } from "../common/util/compute_rtl";
 import "../components/ha-drawer";
+import "../components/ha-logo-svg";
 import { showNotificationDrawer } from "../dialogs/notifications/show-notification-drawer";
 import type { HomeAssistant, Route } from "../types";
 import "./partial-panel-resolver";
@@ -118,6 +119,14 @@ export class HomeAssistantMain extends LitElement {
 
     return html`
       <div class="domolux-bottom-nav">
+        <div class="nav-item logo-item">
+          <div class="icon-wrapper logo-wrapper">
+            <ha-logo-svg
+              class="bottom-nav-logo"
+              .darkMode=${this.hass.themes?.darkMode || false}
+            ></ha-logo-svg>
+          </div>
+        </div>
         ${items.map(
           (item) => html`
             <div
@@ -318,6 +327,22 @@ export class HomeAssistantMain extends LitElement {
 
     .nav-item.active ha-svg-icon {
       transform: scale(1.0);
+    }
+
+    .logo-item {
+      cursor: default;
+      flex: 0 0 auto;
+      width: 56px;
+    }
+
+    .logo-wrapper {
+      background: none !important;
+    }
+
+    .bottom-nav-logo {
+      --logo-width: var(--logo-bottom-nav-width, 22px);
+      --logo-height: var(--logo-bottom-nav-height, 22px);
+      opacity: 0.8;
     }
   `;
 }

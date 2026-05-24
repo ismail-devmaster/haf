@@ -1,0 +1,336 @@
+# Home Assistant button-card template library
+# Google Home Material You (M3) redesign
+# All cards extend gh_theme_base for consistent tokens
+
+button_card_templates:
+  # Mushroom card global overrides via card_mod
+  mushroom_override:
+    card_mod:
+      style: |
+        ha-card {
+          border-radius: 20px !important;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04) !important;
+          border: none !important;
+          font-family: "Google Sans", Roboto, sans-serif !important;
+        }
+
+  # P0: Base token injection — ALL cards extend this
+  gh_theme_base:
+    styles:
+      card:
+        - font-family: >
+            "Google Sans", Roboto, sans-serif
+        - border-radius: 20px
+        - border: none
+        - box-shadow: >
+            0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)
+      icon:
+        - color: var(--paper-item-icon-color, "#5F6368")
+      name:
+        - color: var(--primary-text-color, "#202124")
+        - font-family: >
+            "Google Sans", Roboto, sans-serif
+        - font-size: 14px
+        - font-weight: 500
+      state:
+        - color: var(--secondary-text-color, "#5F6368")
+        - font-family: >
+            "Google Sans", Roboto, sans-serif
+        - font-size: 14px
+
+  # P0: Dynamic time-based greeting header
+  gh_greeting:
+    template: gh_theme_base
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 20px 0 8px 0
+    custom_fields:
+      greeting: >
+        [[[
+          const h = new Date().getHours();
+          let time = h < 12 ? 'morning' : h < 17 ? 'afternoon' : h < 21 ? 'evening' : 'night';
+          let icon = h < 12 || h < 17 ? '☀️' : h < 21 ? '🌅' : '🌙';
+          return `${icon} Good ${time}`;
+        ]]]
+    extra_styles: >
+      [[[
+        return `
+          .greeting-text {
+            font-size: 22px;
+            font-weight: 400;
+            line-height: 28px;
+            color: var(--primary-text-color);
+          }
+          .greeting-sub {
+            font-size: 14px;
+            font-weight: 400;
+            line-height: 20px;
+            color: var(--secondary-text-color);
+            margin-top: 4px;
+          }
+        `;
+      ]]]
+    custom_fields_config:
+      greeting:
+        - class: "greeting-text"
+      subtext:
+        - class: "greeting-sub"
+    entity: optional
+
+  # P1: Tappable room tile (Extra Large 28px radius)
+  gh_room_card:
+    template: gh_theme_base
+    styles:
+      card:
+        - border-radius: 28px
+        - min-height: 120px
+        - padding: 16px
+        - background: >
+            [[[
+              if (states[entity].state === 'on') return 'var(--primary-container-color, #E8F0FE)';
+              return 'var(--surface-color, #F8F9FA)';
+            ]]]
+      icon:
+        - color: >
+            [[[
+              if (states[entity].state === 'on') return '#1A73E8';
+              return '#5F6368';
+            ]]]
+      name:
+        - font-size: 16px
+        - font-weight: 500
+    tap_action:
+      action: navigate
+      navigation_path: >
+        [[[
+          const room = entity.split('.')[1];
+          return `/lovelace/${room}`;
+        ]]]
+    hold_action:
+      action: call-service
+      service: homeassistant.toggle
+      service_data:
+        entity_id: "[[[ return entity; ]]]"
+
+  # P1: Pill scene/automation shortcut
+  gh_scene_chip:
+    template: gh_theme_base
+    styles:
+      card:
+        - border-radius: 9999px
+        - height: 40px
+        - padding: 0 16px
+        - background: >
+            [[[
+              if (states[entity].state === 'on') return '#E8F0FE';
+              return '#F1F3F4';
+            ]]]
+      icon:
+        - width: 18px
+        - height: 18px
+        - color: >
+            [[[
+              if (states[entity].state === 'on') return '#1A73E8';
+              return '#5F6368';
+            ]]]
+      name:
+        - font-size: 14px
+        - font-weight: 500
+        - color: >
+            [[[
+              if (states[entity].state === 'on') return '#1A73E8';
+              return '#202124';
+            ]]]
+    tap_action:
+      action: call-service
+      service: scene.turn_on
+      service_data:
+        entity_id: "[[[ return entity; ]]]"
+    layout: icon-left
+
+  # P1: Standard device toggle tile
+  gh_device_tile:
+    template: gh_theme_base
+    styles:
+      card:
+        - min-height: 110px
+        - padding: 12px
+        - border-radius: 20px
+        - background: >
+            [[[
+              if (states[entity].state === 'unavailable') return '#F8F9FA';
+              if (states[entity].state === 'on') return '#E8F0FE';
+              return '#FFFFFF';
+            ]]]
+        - opacity: >
+            [[[
+              if (states[entity].state === 'unavailable') return 0.5;
+              return 1;
+            ]]]
+      icon:
+        - color: >
+            [[[
+              if (states[entity].state === 'on') return '#1A73E8';
+              if (states[entity].state === 'unavailable') return '#5F6368';
+              return '#5F6368';
+            ]]]
+      name:
+        - font-size: 14px
+        - font-weight: 500
+        - color: >
+            [[[
+              if (states[entity].state === 'on') return '#1A73E8';
+              return '#202124';
+            ]]]
+      state:
+        - font-size: 14px
+        - color: '#5F6368'
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
+    layout: vertical
+    show_state: true
+    state:
+      - value: 'unavailable'
+        styles:
+          icon:
+            - icon: 'mdi:alert-circle-outline'
+
+  # P2: Compact horizontal device chip
+  gh_device_chip:
+    template: gh_device_tile
+    styles:
+      card:
+        - min-height: 48px
+        - padding: 8px 12px
+        - border-radius: 9999px
+      name:
+        - font-size: 12px
+        - font-weight: 500
+    layout: horizontal
+    show_state: false
+
+  # P2: Thermostat tile with temp display
+  gh_climate_tile:
+    template: gh_device_tile
+    custom_fields:
+      temperature: >
+        [[[
+          const hvac = states[entity].attributes.hvac_action || states[entity].state;
+          const temp = states[entity].attributes.current_temperature;
+          const setpoint = states[entity].attributes.temperature;
+          let icon, iconColor, bgColor;
+          if (hvac === 'heating') {
+            icon = 'mdi:thermometer-chevron-up';
+            iconColor = '#D93025';
+            bgColor = '#FCE8E6';
+          } else if (hvac === 'cooling') {
+            icon = 'mdi:thermometer-chevron-down';
+            iconColor = '#1A73E8';
+            bgColor = '#E8F0FE';
+          } else if (hvac === 'auto') {
+            icon = 'mdi:home-thermometer-outline';
+            iconColor = '#0F9D58';
+            bgColor = '#E6F4EA';
+          } else {
+            icon = 'mdi:thermostat';
+            iconColor = '#5F6368';
+            bgColor = '#FFFFFF';
+          }
+          return `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;">
+              <div style="font-size:22px;font-weight:400;line-height:28px;color:var(--primary-text-color);">
+                ${temp ? Math.round(temp) + '°' : '--°'}
+              </div>
+              <div style="font-size:14px;color:var(--secondary-text-color);">
+                ${setpoint ? 'Set to ' + Math.round(setpoint) + '°' : 'Off'}
+              </div>
+            </div>
+          `;
+        ]]]
+    extra_styles: >
+      [[[
+        return `
+          ha-card {
+            position: relative;
+          }
+        `;
+      ]]]
+
+  # P2: Media player tile with track info
+  gh_media_tile:
+    template: gh_device_tile
+    custom_fields:
+      track: >
+        [[[
+          const state = states[entity].state;
+          const track = states[entity].attributes.media_title;
+          if (state === 'playing') {
+            return `<div style="font-size:12px;color:var(--secondary-text-color);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;">${track || 'Playing'}</div>`;
+          }
+          return `<div style="font-size:12px;color:var(--disabled-text-color);">${state === 'paused' ? 'Paused' : 'Idle'}</div>`;
+        ]]]
+    styles:
+      icon:
+        - icon: >
+            [[[
+              if (states[entity].state === 'playing') return 'mdi:speaker-play';
+              if (states[entity].state === 'paused') return 'mdi:speaker-pause';
+              return 'mdi:speaker';
+            ]]]
+        - color: >
+            [[[
+              if (states[entity].state === 'playing') return '#1A73E8';
+              return '#5F6368';
+            ]]]
+
+  # P3: Energy metric display tile
+  gh_energy_tile:
+    template: gh_theme_base
+    custom_fields:
+      metric: >
+        [[[
+          const val = states[entity].state;
+          const unit = states[entity].attributes.unit_of_measurement || '';
+          return `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;">
+              <div style="font-size:45px;font-weight:400;line-height:52px;color:var(--primary-text-color,#202124);">
+                ${val || '--'}
+              </div>
+              <div style="font-size:14px;line-height:20px;color:var(--secondary-text-color,#5F6368);">
+                ${unit}
+              </div>
+            </div>
+          `;
+        ]]]
+    styles:
+      card:
+        - min-height: 120px
+        - border-radius: 20px
+        - padding: 0
+        - background: '#FFFFFF'
+      name:
+        - display: none
+      state:
+        - display: none
+
+  # P3: Shimmer loading placeholder
+  gh_skeleton:
+    template: gh_theme_base
+    styles:
+      card:
+        - min-height: 110px
+        - border-radius: 20px
+        - background: >
+            linear-gradient(90deg, #F1F3F4 25%, #E8EAED 50%, #F1F3F4 75%)
+        - background-size: 200% 100%
+        - animation: shimmer 1.5s infinite linear
+    custom_fields:
+      placeholder: >
+        [[[
+          return `<div style="height:100%;width:100%;" aria-busy="true" aria-label="Loading"></div>`;
+        ]]]

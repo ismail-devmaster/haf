@@ -1,0 +1,379 @@
+Lit is in dev mode. Not recommended for production! See https://lit.dev/msg/dev-mode for more information. reactive-element.js:99:15
+⬆️ Sent #29 
+Object { type: "brands/access_token", id: 29 }
+websocket.ts:20:13
+⬆️ Sent #33 
+Object { type: "frontend/get_translations", language: "en", category: "entity_component", integration: undefined, config_flow: undefined, id: 33 }
+websocket.ts:20:13
+⬆️ Sent #34 
+Object { type: "frontend/get_translations", language: "en", category: "entity", integration: undefined, config_flow: undefined, id: 34 }
+websocket.ts:20:13
+⬆️ Sent #35 
+Object { type: "sensor/numeric_device_classes", id: 35 }
+websocket.ts:20:13
+⬇️ Received #29 
+Object { token: "3494a5189e695ab16d13096eaa32032767ca70d329faa1f77752ef949be85e21" }
+websocket.ts:25:13
+⬇️ Received #33 
+Object { resources: {…} }
+websocket.ts:25:13
+⬇️ Received #34 
+Object { resources: {…} }
+websocket.ts:25:13
+⬇️ Received #35 
+Object { numeric_device_classes: (57) […] }
+websocket.ts:25:13
+Element ha-sidebar scheduled an update (generally because a property was set) after an update completed, causing a new update to be scheduled. This is inefficient and should be avoided unless the next update can only be scheduled as a side effect of the previous update. See https://lit.dev/msg/change-in-update for more information. reactive-element.js:99:15
+Element ha-button scheduled an update (generally because a property was set) after an update completed, causing a new update to be scheduled. This is inefficient and should be avoided unless the next update can only be scheduled as a side effect of the previous update. See https://lit.dev/msg/change-in-update for more information. reactive-element.js:99:15
+unreachable code after return statement src_panels_lovelace_ha-panel-lovelace_ts.js:178:1
+Error loading page dashboard-user ReferenceError: arn is not defined
+    <anonymous> webpack-internal:///./src/resources/home-assistant-logo-svg.ts:6
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1805
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/data/icons.ts:41
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/data/icons.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:861
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/components/ha-state-icon.ts:13
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/components/ha-state-icon.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:721
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/components/entity/ha-state-label-badge.ts:22
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/components/entity/ha-state-label-badge.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:461
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/panels/lovelace/views/hui-view.ts:19
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/panels/lovelace/views/hui-view.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1793
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/panels/lovelace/hui-root.ts:70
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/panels/lovelace/hui-root.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1721
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/panels/lovelace/ha-panel-lovelace.ts:32
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/panels/lovelace/ha-panel-lovelace.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1705
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    promise callback*lovelace webpack-internal:///./src/layouts/partial-panel-resolver.ts:34
+    update webpack-internal:///./src/layouts/hass-router-page.ts:99
+    performUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:865
+    scheduleUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:786
+    __enqueueUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:759
+    requestUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:704
+    __initialize webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:502
+    ReactiveElement webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:1040
+    HassRouterPage webpack-internal:///./src/layouts/hass-router-page.ts:232
+    PartialPanelResolver webpack-internal:///./src/layouts/partial-panel-resolver.ts:178
+    J webpack-internal:///./node_modules/@webcomponents/scoped-custom-element-registry/scoped-custom-element-registry.min.js:423
+    b webpack-internal:///./node_modules/@webcomponents/scoped-custom-element-registry/scoped-custom-element-registry.min.js:300
+    _clone webpack-internal:///./node_modules/lit-html/development/lit-html.js:687
+    _commitTemplateResult webpack-internal:///./node_modules/lit-html/development/lit-html.js:945
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:827
+    _update webpack-internal:///./node_modules/lit-html/development/lit-html.js:736
+    _commitTemplateResult webpack-internal:///./node_modules/lit-html/development/lit-html.js:942
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:827
+    render webpack-internal:///./node_modules/lit-html/development/lit-html.js:1395
+    update webpack-internal:///./node_modules/lit-element/development/lit-element.js:157
+    performUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:865
+    scheduleUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:786
+    __enqueueUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:759
+    requestUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:704
+    set webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:348
+    _commitValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:1201
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:1140
+    _update webpack-internal:///./node_modules/lit-html/development/lit-html.js:736
+    _commitTemplateResult webpack-internal:///./node_modules/lit-html/development/lit-html.js:942
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:827
+    render webpack-internal:///./node_modules/lit-html/development/lit-html.js:1395
+    update webpack-internal:///./node_modules/lit-element/development/lit-element.js:157
+    performUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:865
+    performUpdate webpack-internal:///./src/common/decorators/storage.ts:124
+    scheduleUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:786
+    __enqueueUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:759
+    requestUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:704
+    set webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:348
+    _updateHass webpack-internal:///./src/state/hass-base-mixin.ts:54
+    _updateHass webpack-internal:///./src/state/context-mixin.ts:37
+    hassConnected webpack-internal:///./src/state/connection-mixin.ts:260
+    _handleMessage webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:244
+    _handleMessage webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:236
+    _setSocket webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:36
+    Connection webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:357
+    createConnection webpack-internal:///./node_modules/home-assistant-js-websocket/dist/index.js:70
+    connProm webpack-internal:///./src/entrypoints/core.ts:79
+    promise callback* webpack-internal:///./src/entrypoints/core.ts:117
+    ts http://localhost:8124/frontend_latest/core.js:135
+    __webpack_require__ http://localhost:8124/frontend_latest/core.js:724
+    <anonymous> http://localhost:8124/frontend_latest/core.js:855
+hass-router-page.ts:108:15
+    update hass-router-page.ts:157
+    (Async: promise callback)
+    update hass-router-page.ts:155
+    performUpdate reactive-element.ts:1514
+    scheduleUpdate reactive-element.ts:1410
+    __enqueueUpdate reactive-element.ts:1382
+    requestUpdate reactive-element.ts:1321
+    __initialize reactive-element.ts:1055
+    ReactiveElement reactive-element.ts:1038
+    HassRouterPage hass-router-page.ts:47
+    PartialPanelResolver partial-panel-resolver.ts:42
+    J scoped-custom-element-registry.ts:642
+    b scoped-custom-element-registry.ts:406
+    _clone lit-html.ts:1223
+    _commitTemplateResult lit-html.ts:1644
+    _$setValue lit-html.ts:1480
+    _update lit-html.ts:1287
+    _commitTemplateResult lit-html.ts:1641
+    _$setValue lit-html.ts:1480
+    render lit-html.ts:2283
+    update lit-element.ts:171
+    performUpdate reactive-element.ts:1514
+    scheduleUpdate reactive-element.ts:1410
+    __enqueueUpdate reactive-element.ts:1382
+    requestUpdate reactive-element.ts:1321
+    set reactive-element.ts:789
+    _commitValue lit-html.ts:1992
+    _$setValue lit-html.ts:1932
+    _update lit-html.ts:1287
+    _commitTemplateResult lit-html.ts:1641
+    _$setValue lit-html.ts:1480
+    render lit-html.ts:2283
+    update lit-element.ts:171
+    performUpdate reactive-element.ts:1514
+    performUpdate storage.ts:172
+    scheduleUpdate reactive-element.ts:1410
+    __enqueueUpdate reactive-element.ts:1382
+    requestUpdate reactive-element.ts:1321
+    set reactive-element.ts:789
+    _updateHass hass-base-mixin.ts:50
+    _updateHass context-mixin.ts:220
+    hassConnected connection-mixin.ts:305
+    _handleMessage connection.js:23
+    _handleMessage connection.js:15
+    (Async: EventListener.handleEvent)
+    _setSocket connection.js:148
+    Connection connection.js:139
+    createConnection index.js:18
+    connProm core.ts:73
+    (Async: promise callback)
+    <anonymous> core.ts:102
+    ts core.js:135
+    __webpack_require__ core.js:724
+    <anonymous> core.js:855
+Error loading page fethi-room ReferenceError: arn is not defined
+    <anonymous> webpack-internal:///./src/resources/home-assistant-logo-svg.ts:6
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1805
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/data/icons.ts:41
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/data/icons.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:861
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/components/ha-state-icon.ts:13
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/components/ha-state-icon.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:721
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/components/entity/ha-state-label-badge.ts:22
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/components/entity/ha-state-label-badge.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:461
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/panels/lovelace/views/hui-view.ts:19
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/panels/lovelace/views/hui-view.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1793
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/panels/lovelace/hui-root.ts:70
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/panels/lovelace/hui-root.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1721
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/panels/lovelace/ha-panel-lovelace.ts:32
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/panels/lovelace/ha-panel-lovelace.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1705
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    promise callback*lovelace webpack-internal:///./src/layouts/partial-panel-resolver.ts:34
+    update webpack-internal:///./src/layouts/hass-router-page.ts:99
+    performUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:865
+    scheduleUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:786
+    __enqueueUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:759
+    requestUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:704
+    __initialize webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:502
+    ReactiveElement webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:1040
+    HassRouterPage webpack-internal:///./src/layouts/hass-router-page.ts:232
+    PartialPanelResolver webpack-internal:///./src/layouts/partial-panel-resolver.ts:178
+    J webpack-internal:///./node_modules/@webcomponents/scoped-custom-element-registry/scoped-custom-element-registry.min.js:423
+    b webpack-internal:///./node_modules/@webcomponents/scoped-custom-element-registry/scoped-custom-element-registry.min.js:300
+    _clone webpack-internal:///./node_modules/lit-html/development/lit-html.js:687
+    _commitTemplateResult webpack-internal:///./node_modules/lit-html/development/lit-html.js:945
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:827
+    _update webpack-internal:///./node_modules/lit-html/development/lit-html.js:736
+    _commitTemplateResult webpack-internal:///./node_modules/lit-html/development/lit-html.js:942
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:827
+    render webpack-internal:///./node_modules/lit-html/development/lit-html.js:1395
+    update webpack-internal:///./node_modules/lit-element/development/lit-element.js:157
+    performUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:865
+    scheduleUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:786
+    __enqueueUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:759
+    requestUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:704
+    set webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:348
+    _commitValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:1201
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:1140
+    _update webpack-internal:///./node_modules/lit-html/development/lit-html.js:736
+    _commitTemplateResult webpack-internal:///./node_modules/lit-html/development/lit-html.js:942
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:827
+    render webpack-internal:///./node_modules/lit-html/development/lit-html.js:1395
+    update webpack-internal:///./node_modules/lit-element/development/lit-element.js:157
+    performUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:865
+    performUpdate webpack-internal:///./src/common/decorators/storage.ts:124
+    scheduleUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:786
+    __enqueueUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:759
+    requestUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:704
+    set webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:348
+    _updateHass webpack-internal:///./src/state/hass-base-mixin.ts:54
+    _updateHass webpack-internal:///./src/state/context-mixin.ts:37
+    hassConnected webpack-internal:///./src/state/connection-mixin.ts:260
+    _handleMessage webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:244
+    _handleMessage webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:236
+    _setSocket webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:36
+    Connection webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:357
+    createConnection webpack-internal:///./node_modules/home-assistant-js-websocket/dist/index.js:70
+    connProm webpack-internal:///./src/entrypoints/core.ts:79
+    promise callback* webpack-internal:///./src/entrypoints/core.ts:117
+    ts http://localhost:8124/frontend_latest/core.js:135
+    __webpack_require__ http://localhost:8124/frontend_latest/core.js:724
+    <anonymous> http://localhost:8124/frontend_latest/core.js:855
+hass-router-page.ts:108:15
+Source map error: Error: JSON.parse: unexpected character at line 1 column 1 of the JSON data
+Stack in the worker:parseSourceMapInput@resource://devtools/client/shared/vendor/source-map/lib/util.js:163:15
+_factory@resource://devtools/client/shared/vendor/source-map/lib/source-map-consumer.js:1066:22
+SourceMapConsumer@resource://devtools/client/shared/vendor/source-map/lib/source-map-consumer.js:26:12
+_fetch@resource://devtools/client/shared/source-map-loader/utils/fetchSourceMap.js:83:19
+
+Resource URL: http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js
+Source Map URL: until.js.map
+Source map error: Error: JSON.parse: unexpected character at line 1 column 1 of the JSON data
+Stack in the worker:parseSourceMapInput@resource://devtools/client/shared/vendor/source-map/lib/util.js:163:15
+_factory@resource://devtools/client/shared/vendor/source-map/lib/source-map-consumer.js:1066:22
+SourceMapConsumer@resource://devtools/client/shared/vendor/source-map/lib/source-map-consumer.js:26:12
+_fetch@resource://devtools/client/shared/source-map-loader/utils/fetchSourceMap.js:83:19
+
+Resource URL: http://localhost:8124/frontend_latest/app.js
+Source Map URL: static-html.js.map
+Uncaught (in promise) ReferenceError: arn is not defined
+    <anonymous> webpack-internal:///./src/resources/home-assistant-logo-svg.ts:6
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1805
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/data/icons.ts:41
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/data/icons.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:861
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/components/ha-state-icon.ts:13
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/components/ha-state-icon.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:721
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/components/entity/ha-state-label-badge.ts:22
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/components/entity/ha-state-label-badge.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:461
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/panels/lovelace/views/hui-view.ts:19
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/panels/lovelace/views/hui-view.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1793
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/panels/lovelace/hui-root.ts:70
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/panels/lovelace/hui-root.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1721
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    <anonymous> webpack-internal:///./src/panels/lovelace/ha-panel-lovelace.ts:32
+    a http://localhost:8124/frontend_latest/app.js:2537
+    <anonymous> webpack-internal:///./src/panels/lovelace/ha-panel-lovelace.ts:1
+    ts http://localhost:8124/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1705
+    __webpack_require__ http://localhost:8124/frontend_latest/app.js:2432
+    promise callback*lovelace webpack-internal:///./src/layouts/partial-panel-resolver.ts:34
+    update webpack-internal:///./src/layouts/hass-router-page.ts:99
+    performUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:865
+    scheduleUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:786
+    __enqueueUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:759
+    requestUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:704
+    __initialize webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:502
+    ReactiveElement webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:1040
+    HassRouterPage webpack-internal:///./src/layouts/hass-router-page.ts:232
+    PartialPanelResolver webpack-internal:///./src/layouts/partial-panel-resolver.ts:178
+    J webpack-internal:///./node_modules/@webcomponents/scoped-custom-element-registry/scoped-custom-element-registry.min.js:423
+    b webpack-internal:///./node_modules/@webcomponents/scoped-custom-element-registry/scoped-custom-element-registry.min.js:300
+    _clone webpack-internal:///./node_modules/lit-html/development/lit-html.js:687
+    _commitTemplateResult webpack-internal:///./node_modules/lit-html/development/lit-html.js:945
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:827
+    _update webpack-internal:///./node_modules/lit-html/development/lit-html.js:736
+    _commitTemplateResult webpack-internal:///./node_modules/lit-html/development/lit-html.js:942
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:827
+    render webpack-internal:///./node_modules/lit-html/development/lit-html.js:1395
+    update webpack-internal:///./node_modules/lit-element/development/lit-element.js:157
+    performUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:865
+    scheduleUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:786
+    __enqueueUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:759
+    requestUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:704
+    set webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:348
+    _commitValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:1201
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:1140
+    _update webpack-internal:///./node_modules/lit-html/development/lit-html.js:736
+    _commitTemplateResult webpack-internal:///./node_modules/lit-html/development/lit-html.js:942
+    _$setValue webpack-internal:///./node_modules/lit-html/development/lit-html.js:827
+    render webpack-internal:///./node_modules/lit-html/development/lit-html.js:1395
+    update webpack-internal:///./node_modules/lit-element/development/lit-element.js:157
+    performUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:865
+    performUpdate webpack-internal:///./src/common/decorators/storage.ts:124
+    scheduleUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:786
+    __enqueueUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:759
+    requestUpdate webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:704
+    set webpack-internal:///./node_modules/@lit/reactive-element/development/reactive-element.js:348
+    _updateHass webpack-internal:///./src/state/hass-base-mixin.ts:54
+    _updateHass webpack-internal:///./src/state/context-mixin.ts:37
+    hassConnected webpack-internal:///./src/state/connection-mixin.ts:260
+    _handleMessage webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:244
+    _handleMessage webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:236
+    _setSocket webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:36
+    Connection webpack-internal:///./node_modules/home-assistant-js-websocket/dist/connection.js:357
+    createConnection webpack-internal:///./node_modules/home-assistant-js-websocket/dist/index.js:70
+    connProm webpack-internal:///./src/entrypoints/core.ts:79
+    promise callback* webpack-internal:///./src/entrypoints/core.ts:117
+    ts http://localhost:8124/frontend_latest/core.js:135
+    __webpack_require__ http://localhost:8124/frontend_latest/core.js:724
+    <anonymous> http://localhost:8124/frontend_latest/core.js:855
+src_panels_lovelace_ha-panel-lovelace_ts.js line 1805 > eval:6:1
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/resources/home-assistant-logo-svg.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/data/icons.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/components/ha-state-icon.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/components/entity/ha-state-label-badge.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/panels/lovelace/views/hui-view.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/panels/lovelace/hui-root.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/panels/lovelace/ha-panel-lovelace.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/layouts/partial-panel-resolver.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/layouts/hass-router-page.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///node_modules/@lit/reactive-element/development/reactive-element.js. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///node_modules/@webcomponents/scoped-custom-element-registry/scoped-custom-element-registry.min.js. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///node_modules/lit-html/development/lit-html.js. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///node_modules/lit-element/development/lit-element.js. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/common/decorators/storage.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/state/hass-base-mixin.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/state/context-mixin.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/state/connection-mixin.ts. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///node_modules/home-assistant-js-websocket/dist/connection.js. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///node_modules/home-assistant-js-websocket/dist/index.js. (Reason: CORS request not http).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at webpack-internal:///src/entrypoints/core.ts. (Reason: CORS request not http).
+Calling service system_log write 
+Object { logger: "frontend.js_dev.modern.202604290", message: "Unhandled promise rejection from Firefox 140.0 on Linux\nReferenceError: arn is not defined\n/src/resources/home-assistant-logo-svg.ts:6:1\n./src/resources/home-assistant-logo-svg.ts (/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:1805:1)\n__webpack_require__ (/frontend_latest/app.js:2432:31)\n/src/data/icons.ts:41:92\n__webpack_require__.a (/frontend_latest/app.js:2537:6)\n/src/data/icons.ts:1:22\n./src/data/icons.ts (/frontend_latest/src_panels_lovelace_ha-panel-lovelace_ts.js:861:1)\n__webpack_require__ (/frontend_latest/app.js:2432:31)\n/src/components/ha-state-icon.ts:13:68\n__webpack_require__.a (/frontend_latest/app.js:2537:6)", level: "debug" }
+ undefined connection-mixin.ts:104:21

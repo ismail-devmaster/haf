@@ -1,0 +1,11 @@
+resources:
+  - type: module
+    url: /hacsfiles/lovelace-layout-card/layout-card.js
+  - type: module
+    url: /hacsfiles/lovelace-card-mod/card-mod.js
+  - type: module
+    url: /hacsfiles/button-card/button-card.js
+  - type: module
+    url: /hacsfiles/mini-graph-card/mini-graph-card.js
+  - type: module
+    url: /hacsfiles/mushroom/mushroom.js

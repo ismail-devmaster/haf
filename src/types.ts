@@ -343,6 +343,16 @@ export interface Domolux
   services: HassServices;
 }
 
+// Backward compatibility aliases
+export type HomeAssistant = Domolux;
+export type HomeAssistantUI = DomoluxUI;
+export type HomeAssistantConfig = DomoluxConfig;
+export type HomeAssistantRegistries = DomoluxRegistries;
+export type HomeAssistantInternationalization = DomoluxInternationalization;
+export type HomeAssistantFormatters = DomoluxFormatters;
+export type HomeAssistantConnection = DomoluxConnection;
+export type HomeAssistantApi = DomoluxApi;
+
 export interface Route {
   prefix: string;
   path: string;

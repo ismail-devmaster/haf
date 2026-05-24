@@ -122,15 +122,17 @@ class HaConfigInfo extends LitElement {
               href=${documentationUrl(this.hass, "")}
               target="_blank"
               rel="noreferrer"
+              class="logo-link"
             >
               <ha-logo-svg
+                .darkMode=${isDark}
                 title=${this.hass.localize(
                   "ui.panel.config.info.home_assistant_logo"
                 )}
               >
               </ha-logo-svg>
             </a>
-            <p>Domolux</p>
+            <p class="brand-name">Domolux</p>
             <ul class="versions">
               <li>
                 <span class="version-label"
@@ -310,9 +312,27 @@ class HaConfigInfo extends LitElement {
           margin: 0 auto;
         }
 
+        .logo-link {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-decoration: none;
+          border-radius: var(--ha-border-radius-xl);
+          transition: transform 200ms ease, box-shadow 200ms ease;
+        }
+
+        .logo-link:hover {
+          transform: scale(1.03);
+        }
+
+        .logo-link:focus-visible {
+          outline: 2px solid var(--primary-color);
+          outline-offset: 4px;
+        }
+
         ha-logo-svg {
-          height: 56px;
-          width: 56px;
+          --logo-width: 80px;
+          --logo-height: 80px;
         }
 
         ha-card {
@@ -327,15 +347,16 @@ class HaConfigInfo extends LitElement {
           flex-direction: column;
           justify-content: center;
           align-items: center;
-          padding: 32px 8px 16px 8px;
+          padding: 40px 8px 20px 8px;
         }
 
-        .header p {
-          font-size: var(--ha-font-size-xl);
-          font-weight: var(--ha-font-weight-normal);
+        .brand-name {
+          font-size: var(--ha-font-size-2xl);
+          font-weight: var(--ha-font-weight-semibold);
           line-height: var(--ha-line-height-condensed);
           text-align: center;
-          margin: 24px;
+          margin: 20px 24px 24px;
+          color: var(--primary-text-color);
         }
 
         .ohf {

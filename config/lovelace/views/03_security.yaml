@@ -1,0 +1,72 @@
+title: Security
+path: security
+icon: mdi:shield-home
+type: sections
+max_cols: 2
+dense: false
+cards:
+  - type: custom:button-card
+    template: gh_theme_base
+    name: Security
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 16px 0 8px 0
+      name:
+        - font-size: 22px
+        - font-weight: 400
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: lock.front_door
+        name: Front Door
+        icon: mdi:lock
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: lock.back_door
+        name: Back Door
+        icon: mdi:lock
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: lock.garage_door
+        name: Garage Door
+        icon: mdi:garage-lock
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: binary_sensor.front_door_contact
+        name: Front Door Sensor
+        icon: mdi:door
+
+  - type: custom:button-card
+    template: gh_theme_base
+    name: Cameras
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 16px 0 8px 0
+      name:
+        - font-size: 22px
+        - font-weight: 400
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: camera.front_door
+        name: Front Door Cam
+        icon: mdi:camera
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: camera.backyard
+        name: Backyard Cam
+        icon: mdi:camera

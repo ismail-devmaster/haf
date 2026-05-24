@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Home Assistant Cast</title>
+    <title>Domolux Cast</title>
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" href="/images/ha-cast-icon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/images/ha-cast-icon.png" />
     <%= renderTemplate("../../../src/html/_style_base.html.template") %>
     <style>
       body {

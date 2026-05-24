@@ -47,6 +47,21 @@ export const coreStyles = css`
     --ha-animation-duration-fast: 150ms;
     --ha-animation-duration-normal: 250ms;
     --ha-animation-duration-slow: 350ms;
+
+    /* Logo / Branding */
+    --logo-width: 24px;
+    --logo-height: 24px;
+    --logo-display: inline-flex;
+    --logo-sidebar-width: 24px;
+    --logo-sidebar-height: 24px;
+    --logo-sidebar-expanded-width: 28px;
+    --logo-sidebar-expanded-height: 28px;
+    --logo-header-width: 56px;
+    --logo-header-height: 56px;
+    --logo-splash-width: 112px;
+    --logo-splash-height: auto;
+    --logo-bottom-nav-width: 22px;
+    --logo-bottom-nav-height: 22px;
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -1,0 +1,136 @@
+title: Home
+path: home
+icon: mdi:home
+type: sections
+max_cols: 2
+dense: false
+cards:
+  # Greeting section
+  - type: custom:button-card
+    template: gh_greeting
+    entity: sensor.time
+    custom_fields:
+      subtext: >
+        [[[ return states['sensor.date'].state + ' · ' + states['sensor.weather_temperature'].state + '° · ' + states['sensor.weather_condition'].state; ]]]
+
+  # Scene chips row (horizontal scroll container)
+  - type: horizontal-stack
+    cards:
+      - type: custom:button-card
+        template: gh_scene_chip
+        entity: scene.goodnight
+        name: Good Night
+        icon: mdi:weather-night
+      - type: custom:button-card
+        template: gh_scene_chip
+        entity: scene.movie_time
+        name: Movie
+        icon: mdi:movie-open
+      - type: custom:button-card
+        template: gh_scene_chip
+        entity: scene.morning_routine
+        name: Morning
+        icon: mdi:weather-sunset-up
+      - type: custom:button-card
+        template: gh_scene_chip
+        entity: scene.away_mode
+        name: Away
+        icon: mdi:exit-run
+
+  # Section header: Rooms
+  - type: custom:button-card
+    template: gh_theme_base
+    name: Rooms
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 16px 0 8px 0
+      name:
+        - font-size: 22px
+        - font-weight: 400
+        - color: var(--primary-text-color, "#202124")
+
+  # Room cards grid (2 columns)
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        template: gh_room_card
+        entity: light.living_room_lights
+        name: Living Room
+        icon: mdi:sofa
+        variables:
+          room: living_room
+      - type: custom:button-card
+        template: gh_room_card
+        entity: light.kitchen_lights
+        name: Kitchen
+        icon: mdi:fridge
+      - type: custom:button-card
+        template: gh_room_card
+        entity: light.bedroom_lights
+        name: Bedroom
+        icon: mdi:bed
+      - type: custom:button-card
+        template: gh_room_card
+        entity: light.office_lights
+        name: Office
+        icon: mdi:desk
+
+  # More rooms row 2
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: custom:button-card
+        template: gh_room_card
+        entity: light.garage_lights
+        name: Garage
+        icon: mdi:garage
+      - type: custom:button-card
+        template: gh_room_card
+        entity: light.bathroom_lights
+        name: Bathroom
+        icon: mdi:bathtub
+
+  # Section header: Favorites
+  - type: custom:button-card
+    template: gh_theme_base
+    name: Favorites
+    styles:
+      card:
+        - background: none
+        - box-shadow: none
+        - border: none
+        - padding: 16px 0 8px 0
+      name:
+        - font-size: 22px
+        - font-weight: 400
+        - color: var(--primary-text-color, "#202124")
+
+  # Favorites horizontal scroll strip
+  - type: horizontal-stack
+    cards:
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: light.living_room_main_light
+        name: Main Light
+        icon: mdi:lightbulb
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: switch.living_room_tv
+        name: TV
+        icon: mdi:television
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: fan.living_room_ceiling_fan
+        name: Ceiling Fan
+        icon: mdi:fan
+      - type: custom:button-card
+        template: gh_device_tile
+        entity: cover.living_room_blinds
+        name: Blinds
+        icon: mdi:blinds

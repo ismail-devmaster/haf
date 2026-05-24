@@ -11,44 +11,44 @@ export const colorStyles = css`
     --text-light-primary-color: #1f1f1f;
     --disabled-text-color: #9e9e9e;
 
-    /* main interface colors - Google Home inspired */
-    --primary-color: #006D6D;
-    --md-sys-color-primary-container: #E0F2F2;
-    --md-sys-color-on-primary-container: #004D4D;
-    --dark-primary-color: #005757;
-    --darker-primary-color: #004040;
-    --light-primary-color: #B8E6E6;
-    --accent-color: #4285F4;
-    --divider-color: rgba(0, 0, 0, 0.08);
-    --outline-color: rgba(0, 0, 0, 0.10);
-    --outline-hover-color: rgba(0, 0, 0, 0.20);
-    --shadow-color: rgba(0, 0, 0, 0.12);
+    /* main interface colors - Google Home */
+    --primary-color: #1a73e8;
+    --md-sys-color-primary-container: #d2e3fc;
+    --md-sys-color-on-primary-container: #041e49;
+    --dark-primary-color: #1557b0;
+    --darker-primary-color: #0d47a1;
+    --light-primary-color: #d2e3fc;
+    --accent-color: #4285f4;
+    --divider-color: rgba(0, 0, 0, 0.06);
+    --outline-color: rgba(0, 0, 0, 0.08);
+    --outline-hover-color: rgba(0, 0, 0, 0.18);
+    --shadow-color: rgba(0, 0, 0, 0.10);
 
     /* rgb */
-    --rgb-primary-color: 0, 109, 109;
+    --rgb-primary-color: 26, 115, 232;
     --rgb-accent-color: 66, 133, 244;
     --rgb-primary-text-color: 31, 31, 31;
-    --rgb-secondary-text-color: 94, 94, 94;
+    --rgb-secondary-text-color: 95, 99, 104;
     --rgb-text-primary-color: 255, 255, 255;
     --rgb-card-background-color: 255, 255, 255;
 
-    --rgb-warning-color: 255, 166, 0;
-    --rgb-error-color: 219, 68, 55;
+    --rgb-warning-color: 249, 171, 0;
+    --rgb-error-color: 217, 48, 37;
     --rgb-success-color: 30, 142, 62;
     --rgb-info-color: 26, 115, 232;
 
     --scrollbar-thumb-color: rgb(194, 194, 194);
 
-    --error-color: #db4437;
-    --warning-color: #ffa600;
+    --error-color: #d93025;
+    --warning-color: #f9ab00;
     --success-color: #1e8e3e;
     --info-color: #1a73e8;
 
-    /* backgrounds - Google Home light palette */
+    /* backgrounds - Google Home light */
     --card-background-color: #ffffff;
-    --primary-background-color: #f2f4f7;
-    --secondary-background-color: #e8eaed;
-    --clear-background-color: #f2f4f7;
+    --primary-background-color: #f0f4f8;
+    --secondary-background-color: #e3e8ed;
+    --clear-background-color: #f0f4f8;
 
     /* for label-badge */
     --label-badge-grey: #9e9e9e;
