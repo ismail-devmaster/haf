@@ -8,51 +8,53 @@ export const colorStyles = css`
     --primary-text-color: var(--ha-color-text-primary);
     --secondary-text-color: var(--ha-color-text-secondary);
     --text-primary-color: #ffffff;
-    --text-light-primary-color: #212121;
-    --disabled-text-color: #bdbdbd;
+    --text-light-primary-color: #1f1f1f;
+    --disabled-text-color: #9e9e9e;
 
-    /* main interface colors */
-    --primary-color: var(--ha-color-primary-40);
-    --dark-primary-color: #0288d1;
-    --darker-primary-color: #016194;
-    --light-primary-color: #b3e5fc;
-    --accent-color: #ff9800;
-    --divider-color: rgba(0, 0, 0, 0.12);
-    --outline-color: rgba(0, 0, 0, 0.12);
-    --outline-hover-color: rgba(0, 0, 0, 0.24);
-    --shadow-color: rgba(0, 0, 0, 0.16);
+    /* main interface colors - Google Home inspired */
+    --primary-color: #006D6D;
+    --md-sys-color-primary-container: #E0F2F2;
+    --md-sys-color-on-primary-container: #004D4D;
+    --dark-primary-color: #005757;
+    --darker-primary-color: #004040;
+    --light-primary-color: #B8E6E6;
+    --accent-color: #4285F4;
+    --divider-color: rgba(0, 0, 0, 0.08);
+    --outline-color: rgba(0, 0, 0, 0.10);
+    --outline-hover-color: rgba(0, 0, 0, 0.20);
+    --shadow-color: rgba(0, 0, 0, 0.12);
 
     /* rgb */
-    --rgb-primary-color: 0, 154, 199;
-    --rgb-accent-color: 255, 152, 0;
-    --rgb-primary-text-color: 33, 33, 33;
-    --rgb-secondary-text-color: 114, 114, 114;
+    --rgb-primary-color: 0, 109, 109;
+    --rgb-accent-color: 66, 133, 244;
+    --rgb-primary-text-color: 31, 31, 31;
+    --rgb-secondary-text-color: 94, 94, 94;
     --rgb-text-primary-color: 255, 255, 255;
     --rgb-card-background-color: 255, 255, 255;
 
     --rgb-warning-color: 255, 166, 0;
     --rgb-error-color: 219, 68, 55;
-    --rgb-success-color: 67, 160, 71;
-    --rgb-info-color: 3, 155, 229;
+    --rgb-success-color: 30, 142, 62;
+    --rgb-info-color: 26, 115, 232;
 
     --scrollbar-thumb-color: rgb(194, 194, 194);
 
     --error-color: #db4437;
     --warning-color: #ffa600;
-    --success-color: #43a047;
-    --info-color: #039be5;
+    --success-color: #1e8e3e;
+    --info-color: #1a73e8;
 
-    /* backgrounds */
+    /* backgrounds - Google Home light palette */
     --card-background-color: #ffffff;
-    --primary-background-color: #fafafa;
-    --secondary-background-color: #e5e5e5;
-    --clear-background-color: #ffffff;
+    --primary-background-color: #f2f4f7;
+    --secondary-background-color: #e8eaed;
+    --clear-background-color: #f2f4f7;
 
     /* for label-badge */
     --label-badge-grey: #9e9e9e;
 
     /* states icon */
-    --state-icon-color: #44739e;
+    --state-icon-color: #5f6368;
     /* an error state is anything that would be considered an error */
     /* --state-icon-error-color: #db4437; derived from error-color */
 
@@ -341,17 +343,21 @@ export const colorStyles = css`
 
 export const darkColorStyles = css`
   html {
-    --primary-background-color: #111111;
-    --card-background-color: #1c1c1c;
-    --secondary-background-color: #282828;
-    --clear-background-color: #111111;
-    --primary-text-color: #e1e1e1;
-    --secondary-text-color: #9b9b9b;
-    --disabled-text-color: #6f6f6f;
-    --divider-color: rgba(225, 225, 225, 0.12);
-    --outline-color: rgba(225, 225, 225, 0.12);
-    --outline-hover-color: rgba(225, 225, 225, 0.24);
+    --md-sys-color-primary-container: #004D4D;
+    --md-sys-color-on-primary-container: #A8E6E6;
+    --primary-background-color: #1a1a1c;
+    --card-background-color: #2a2a2d;
+    --secondary-background-color: #222224;
+    --clear-background-color: #1a1a1c;
+    --primary-text-color: #e3e3e3;
+    --secondary-text-color: #9aa0a6;
+    --disabled-text-color: #5f6368;
+    --primary-color: #00A8A8;
+    --divider-color: rgba(227, 227, 227, 0.10);
+    --outline-color: rgba(227, 227, 227, 0.12);
+    --outline-hover-color: rgba(227, 227, 227, 0.24);
     --shadow-color: rgba(0, 0, 0, 0.48);
+    --rgb-primary-color: 0, 168, 168;
 
     --scrollbar-thumb-color: rgb(110, 110, 110);
 
@@ -392,6 +398,9 @@ export const darkColorStyles = css`
     --energy-grid-return-color: #a280db;
     --map-filter: invert(0.9) hue-rotate(170deg) brightness(1.5) contrast(1.2) saturate(0.3);
     --disabled-color: #464646;
+
+    --state-icon-color: #9aa0a6;
+    --sidebar-icon-color: #9aa0a6;
 
     --ha-button-primary-light-color: #4082a040;
     --ha-button-warning-light-color: #917b54c1;

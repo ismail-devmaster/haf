@@ -1287,7 +1287,7 @@ class HUIRoot extends LitElement {
         }
         .header {
           background-color: var(--app-header-background-color);
-          color: var(--app-header-text-color, white);
+          color: var(--app-header-text-color, var(--primary-text-color));
           position: fixed;
           top: 0;
           width: calc(
@@ -1296,11 +1296,12 @@ class HUIRoot extends LitElement {
                 0px
               )
           );
-          -webkit-backdrop-filter: var(--app-header-backdrop-filter, none);
-          backdrop-filter: var(--app-header-backdrop-filter, none);
+          -webkit-backdrop-filter: blur(20px) saturate(180%);
+          backdrop-filter: blur(20px) saturate(180%);
           padding-top: var(--safe-area-inset-top);
           padding-right: var(--safe-area-inset-right);
           z-index: 4;
+          border-bottom: 1px solid rgba(0,0,0,0.04);
         }
         .narrow .header {
           width: calc(
@@ -1312,26 +1313,22 @@ class HUIRoot extends LitElement {
           padding-left: var(--safe-area-inset-left);
         }
         :host([scrolled]) .header {
-          box-shadow: var(
-            --mdc-top-app-bar-fixed-box-shadow,
-            0px 2px 4px -1px rgba(0, 0, 0, 0.2),
-            0px 4px 5px 0px rgba(0, 0, 0, 0.14),
-            0px 1px 10px 0px rgba(0, 0, 0, 0.12)
-          );
+          box-shadow: 0 1px 3px 0 rgba(0,0,0,0.04);
         }
         .edit-mode .header {
           background-color: var(--app-header-edit-background-color, #455a64);
           color: var(--app-header-edit-text-color, white);
         }
         .toolbar {
-          border-bottom: var(--app-header-border-bottom, none);
+          border-bottom: none;
           height: var(--header-height);
           display: flex;
           align-items: center;
-          font-size: var(--ha-font-size-xl);
+          font-size: 16px;
           padding: 0px 12px;
-          font-weight: var(--ha-font-weight-normal);
+          font-weight: 500;
           box-sizing: border-box;
+          font-family: 'Google Sans', 'Product Sans', sans-serif;
         }
         .edit-mode .toolbar {
           border-bottom: none;
@@ -1340,28 +1337,29 @@ class HUIRoot extends LitElement {
           padding: 0 4px;
         }
         .main-title {
-          margin-inline-start: var(--ha-space-6);
-          line-height: var(--ha-line-height-normal);
+          margin-inline-start: 16px;
+          line-height: 1.4;
           flex-grow: 1;
           text-overflow: ellipsis;
           overflow: hidden;
           white-space: nowrap;
           min-width: 0;
+          font-size: 18px;
+          font-weight: 500;
+          font-family: 'Google Sans', 'Product Sans', sans-serif;
         }
         .narrow .main-title {
-          margin-inline-start: var(--ha-space-2);
+          margin-inline-start: 8px;
         }
         .action-items {
           white-space: nowrap;
           display: flex;
           align-items: center;
+          gap: 2px;
         }
         ha-tab-group {
-          --ha-tab-indicator-color: var(
-            --app-header-selection-bar-color,
-            var(--app-header-text-color, white)
-          );
-          --ha-tab-active-text-color: var(--app-header-text-color, white);
+          --ha-tab-indicator-color: var(--primary-color, #006D6D);
+          --ha-tab-active-text-color: var(--primary-color, #006D6D);
           --ha-tab-track-color: transparent;
           align-self: flex-end;
           flex-grow: 1;

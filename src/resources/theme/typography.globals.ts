@@ -3,9 +3,9 @@ import { extractDerivedVars, extractVar } from "../../common/style/derived-css-v
 
 export const typographyStyles = css`
   html {
-    --ha-font-family-body: Roboto, Noto, sans-serif;
+    --ha-font-family-body: 'Google Sans', 'Product Sans', Roboto, Noto, sans-serif;
     --ha-font-family-code: monospace;
-    --ha-font-family-longform: ui-sans-serif, system-ui, sans-serif;
+    --ha-font-family-longform: 'Google Sans Text', 'Product Sans', ui-sans-serif, system-ui, sans-serif;
 
     font-size: 14px;
     --ha-font-size-scale: 1;

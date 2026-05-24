@@ -11,64 +11,66 @@ export class HaCard extends LitElement {
     :host {
       background: var(
         --ha-card-background,
-        var(--card-background-color, white)
+        rgba(255, 255, 255, 0.85)
       );
-      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none);
-      backdrop-filter: var(--ha-card-backdrop-filter, none);
-      box-shadow: var(--ha-card-box-shadow, none);
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, blur(2px));
+      backdrop-filter: var(--ha-card-backdrop-filter, blur(2px));
+      box-shadow: var(--ha-card-box-shadow, 0 1px 3px 0 rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.04));
       box-sizing: border-box;
-      border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg));
-      border-width: var(--ha-card-border-width, 1px);
-      border-style: solid;
-      border-color: var(--ha-card-border-color, var(--divider-color, #e0e0e0));
+      border-radius: var(--ha-card-border-radius, 24px);
+      border: none;
       color: var(--primary-text-color);
       display: block;
-      transition: all 0.3s ease-out;
+      transition: box-shadow 200ms ease, transform 200ms ease;
       position: relative;
+      will-change: transform;
+    }
+
+    :host(:hover) {
+      box-shadow: 0 4px 12px 0 rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.05);
     }
 
     :host([raised]) {
       border: none;
-      box-shadow: var(
-        --ha-card-box-shadow,
-        0px 2px 1px -1px rgba(0, 0, 0, 0.2),
-        0px 1px 1px 0px rgba(0, 0, 0, 0.14),
-        0px 1px 3px 0px rgba(0, 0, 0, 0.12)
-      );
+      box-shadow: var(--ha-card-box-shadow, 0 4px 12px 0 rgba(0,0,0,0.06), 0 2px 4px -2px rgba(0,0,0,0.04));
+    }
+
+    :host([raised]:hover) {
+      box-shadow: 0 6px 20px 0 rgba(0,0,0,0.10), 0 3px 6px -3px rgba(0,0,0,0.06);
     }
 
     .card-header,
     :host ::slotted(.card-header) {
       color: var(--ha-card-header-color, var(--primary-text-color));
-      font-family: var(--ha-card-header-font-family, inherit);
-      font-size: var(--ha-card-header-font-size, var(--ha-font-size-2xl));
-      letter-spacing: -0.012em;
-      line-height: var(--ha-line-height-expanded);
-      padding: var(--ha-space-3) var(--ha-space-4) var(--ha-space-4);
+      font-family: var(--ha-card-header-font-family, 'Google Sans', 'Product Sans', var(--ha-font-family-heading, inherit));
+      font-size: var(--ha-card-header-font-size, 18px);
+      letter-spacing: -0.01em;
+      line-height: 1.4;
+      padding: 20px 20px 8px;
       display: block;
       margin-block-start: 0;
       margin-block-end: 0;
-      font-weight: var(--ha-font-weight-normal);
+      font-weight: 500;
     }
-
-    /* clean-css ignore:start */
-    :host
-      ::slotted(
-        .card-content:not(:nth-child(1 of .card-content, .card-header))
-      ),
-    slot:not(:first-child)::slotted(.card-content) {
-      padding-top: 0;
-      margin-top: calc(var(--ha-space-2) * -1);
-    }
-    /* clean-css ignore:end */
 
     :host ::slotted(.card-content) {
-      padding: var(--ha-space-4);
+      padding: 16px 20px;
+    }
+
+    :host ::slotted(.card-content:first-child) {
+      padding-top: 20px;
+    }
+
+    :host ::slotted(.card-content:last-child) {
+      padding-bottom: 20px;
     }
 
     :host ::slotted(.card-actions) {
-      border-top: 1px solid var(--divider-color, #e8e8e8);
-      padding: var(--ha-space-2);
+      border-top: 1px solid rgba(0,0,0,0.06);
+      padding: 12px 16px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
     }
   `;
 

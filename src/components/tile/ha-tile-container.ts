@@ -73,6 +73,10 @@ export class HaTileContainer extends LitElement {
       display: flex;
       flex-direction: column;
       justify-content: space-between;
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+    :host(:hover) {
+      transform: translateY(-1px);
     }
     .background {
       position: absolute;
@@ -80,12 +84,10 @@ export class HaTileContainer extends LitElement {
       left: 0;
       bottom: 0;
       right: 0;
-      border-radius: var(--ha-card-border-radius, var(--ha-border-radius-lg));
-      margin: calc(-1 * var(--ha-card-border-width, 1px));
+      border-radius: 20px;
       overflow: hidden;
     }
     .container {
-      margin: calc(-1 * var(--ha-card-border-width, 1px));
       display: flex;
       flex-direction: column;
       flex: 1;
@@ -99,13 +101,13 @@ export class HaTileContainer extends LitElement {
       display: flex;
       flex-direction: row;
       align-items: center;
-      padding: 0 10px;
+      padding: 0 14px;
       min-height: var(--row-height, 56px);
       flex: 1;
       min-width: 0;
       box-sizing: border-box;
       pointer-events: none;
-      gap: 10px;
+      gap: 12px;
     }
 
     .vertical {
@@ -134,14 +136,14 @@ export class HaTileContainer extends LitElement {
       box-sizing: border-box;
     }
     ::slotted([slot="features"]) {
-      padding: 0 var(--ha-space-3) var(--ha-space-3) var(--ha-space-3);
+      padding: 0 14px 14px 14px;
     }
 
     .container.horizontal ::slotted([slot="features"]) {
-      width: calc(50% - var(--column-gap, 0px) / 2 - var(--ha-space-3));
+      width: calc(50% - var(--column-gap, 0px) / 2 - 12px);
       flex: none;
-      --feature-height: var(--ha-space-9);
-      padding: 0 var(--ha-space-3);
+      --feature-height: 36px;
+      padding: 0 12px;
       padding-inline-start: 0;
     }
     [role="button"] {

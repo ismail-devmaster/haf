@@ -644,7 +644,7 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
           padding: 0 var(--ha-space-1);
           border-bottom: 1px solid transparent;
           white-space: nowrap;
-          font-weight: var(--ha-font-weight-normal);
+          font-weight: 500;
           color: var(
             --sidebar-menu-button-text-color,
             var(--primary-text-color)
@@ -654,10 +654,10 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
             --sidebar-menu-button-background-color,
             inherit
           );
-          font-size: var(--ha-font-size-xl);
+          font-size: 18px;
           align-items: center;
           overflow: hidden;
-          width: calc(56px + var(--safe-area-inset-left, 0px));
+          width: calc(80px + var(--safe-area-inset-left, 0px));
           padding-left: calc(
             var(--ha-space-1) + var(--safe-area-inset-left, 0px)
           );
@@ -669,7 +669,7 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
           transition: width var(--ha-animation-duration-normal) ease;
         }
         :host([expanded]) .menu {
-          width: calc(256px + var(--safe-area-inset-left, 0px));
+          width: calc(260px + var(--safe-area-inset-left, 0px));
         }
         :host([narrow][expanded]) .menu {
           width: 100%;
@@ -678,13 +678,15 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
           color: var(--sidebar-icon-color);
         }
         .title {
-          margin-left: 3px;
-          margin-inline-start: 3px;
+          font-family: 'Google Sans', 'Product Sans', sans-serif;
+          margin-left: 4px;
+          margin-inline-start: 4px;
           margin-inline-end: initial;
           flex: 1;
           min-width: 0;
           max-width: 0;
           opacity: 0;
+          font-weight: 500;
           transition:
             max-width var(--ha-animation-duration-normal) ease,
             opacity var(--ha-animation-duration-normal) ease;
@@ -698,14 +700,14 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
           opacity: 1;
           transition-delay: 0ms, 80ms;
         }
-
+ 
         .panels-list {
           display: flex;
           flex-direction: column;
           min-height: 0;
           flex: 1;
         }
-
+ 
         ha-fade-in {
           padding: var(--ha-space-1) 0;
           box-sizing: border-box;
@@ -715,13 +717,13 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
           min-height: 0;
           flex: 1;
         }
-
+ 
         ha-list-nav {
           overflow-x: hidden;
           margin-left: var(--safe-area-inset-left, 0px);
-          margin-block: var(--ha-space-2);
+          margin-block: 4px;
         }
-
+ 
         .wrapper {
           position: relative;
           display: flex;
@@ -736,33 +738,40 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
           padding-top: 0;
           min-height: fit-content;
         }
-
+ 
         ha-list-item-button {
           flex-shrink: 0;
-          margin: 0 var(--ha-space-1) var(--ha-space-1);
-          border-radius: var(--ha-border-radius-sm);
-          --ha-row-item-min-height: var(--ha-space-10);
+          margin: 0 6px 2px;
+          border-radius: 28px;
+          --ha-row-item-min-height: 44px;
           --ha-row-item-padding-block: 0;
-          --ha-row-item-padding-inline: var(--ha-space-3);
-          width: var(--ha-space-12);
+          --ha-row-item-padding-inline: 14px;
+          width: 68px;
           position: relative;
-          transition: width var(--ha-animation-duration-normal) ease;
+          transition: width var(--ha-animation-duration-normal) ease,
+                      margin var(--ha-animation-duration-normal) ease,
+                      background-color 150ms ease;
         }
         ha-list-item-button::part(headline) {
           color: var(--sidebar-text-color);
+          font-size: 14px;
+          font-weight: 500;
         }
         :host([expanded]) ha-list-item-button {
           width: 248px;
+          --ha-row-item-padding-inline: 14px;
         }
         :host([narrow][expanded]) ha-list-item-button {
-          width: calc(240px - var(--safe-area-inset-left, 0px));
+          width: calc(248px - var(--safe-area-inset-left, 0px));
+          --ha-row-item-padding-inline: 14px;
         }
-
+ 
         ha-list-item-button.selected::part(headline) {
-          color: var(--sidebar-selected-icon-color);
+          color: var(--primary-color);
+          font-weight: 500;
         }
         ha-list-item-button.selected::before {
-          border-radius: var(--ha-border-radius-sm);
+          border-radius: 28px;
           position: absolute;
           top: 0;
           right: 0;
@@ -770,22 +779,26 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
           left: 0;
           pointer-events: none;
           content: "";
-          transition: opacity 15ms linear;
-          will-change: opacity;
-          background-color: var(--sidebar-selected-icon-color);
-          opacity: var(--dark-divider-opacity);
+          transition: opacity 150ms ease;
+          background-color: var(--md-sys-color-primary-container);
+          opacity: 1;
         }
 
+        ha-list-item-button:not(.selected):hover {
+          background-color: rgba(0,0,0,0.04);
+        }
+ 
         ha-icon[slot="start"],
         ha-svg-icon[slot="start"] {
-          width: var(--ha-space-6);
+          width: 22px;
+          height: 22px;
           flex-shrink: 0;
           color: var(--sidebar-icon-color);
         }
-
+ 
         ha-list-item-button.selected ha-svg-icon[slot="start"],
         ha-list-item-button.selected ha-icon[slot="start"] {
-          color: var(--sidebar-selected-icon-color);
+          color: var(--primary-color);
         }
 
         ha-list-item-button .item-text {
@@ -795,8 +808,8 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
           overflow: hidden;
           white-space: nowrap;
           text-overflow: ellipsis;
-          font-size: var(--ha-font-size-m);
-          font-weight: var(--ha-font-weight-medium);
+          font-size: 14px;
+          font-weight: 500;
           transition:
             max-width var(--ha-animation-duration-normal) ease,
             opacity var(--ha-animation-duration-normal) ease;
@@ -815,13 +828,15 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
           display: flex;
           justify-content: center;
           align-items: center;
-          min-width: var(--ha-space-2);
-          border-radius: var(--ha-border-radius-xl);
-          font-weight: var(--ha-font-weight-normal);
+          min-width: 18px;
+          height: 18px;
+          border-radius: 9px;
+          font-weight: 500;
           line-height: normal;
+          font-size: 11px;
           background-color: var(--accent-color);
-          padding: 2px 6px;
-          color: var(--text-accent-color, var(--text-primary-color));
+          padding: 0 6px;
+          color: var(--text-primary-color);
           transition:
             opacity var(--ha-animation-duration-normal) ease,
             transform var(--ha-animation-duration-normal) ease;
@@ -829,12 +844,14 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
 
         ha-svg-icon + .badge {
           position: absolute;
-          top: var(--ha-space-1);
-          left: 26px;
-          border-radius: var(--ha-border-radius-md);
-          font-size: 0.65em;
-          line-height: var(--ha-line-height-expanded);
-          padding: 0 var(--ha-space-1);
+          top: 2px;
+          left: 28px;
+          border-radius: 8px;
+          font-size: 10px;
+          line-height: 1;
+          padding: 1px 4px;
+          min-width: 14px;
+          height: 14px;
         }
         :host([expanded]) .badge[slot="start"],
         :host(:not([expanded])) .badge[slot="end"] {
@@ -844,12 +861,12 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
         }
 
         ha-user-badge {
-          width: 40px;
-          height: 40px;
+          width: 36px;
+          height: 36px;
         }
 
         ha-list-item-button.user {
-          --ha-row-item-padding-inline: var(--ha-space-1) 0;
+          --ha-row-item-padding-inline: 4px 0;
         }
 
         .spacer {

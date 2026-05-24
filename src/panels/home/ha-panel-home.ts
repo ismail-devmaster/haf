@@ -382,15 +382,18 @@ class PanelHome extends LitElement {
   static readonly styles: CSSResultGroup = css`
     :host {
       display: block;
+      height: 100%;
+      width: 100%;
+      background: var(--md-sys-color-background, var(--primary-background-color, #f2f4f7));
     }
     .banner {
       display: flex;
       align-items: center;
       flex-wrap: wrap;
-      padding: var(--ha-space-2) var(--ha-space-4);
-      background-color: var(--primary-color);
+      padding: 10px 20px;
+      background-color: var(--primary-color, #006D6D);
       color: var(--text-primary-color);
-      gap: var(--ha-space-2);
+      gap: 12px;
       position: fixed;
       top: var(--header-height, 56px);
       left: var(--ha-sidebar-width, 0px);
@@ -400,22 +403,23 @@ class PanelHome extends LitElement {
     .banner-content {
       display: flex;
       align-items: center;
-      gap: var(--ha-space-2);
+      gap: 10px;
       flex: 1;
       min-width: 200px;
     }
     .banner ha-svg-icon {
-      --mdc-icon-size: 24px;
+      --mdc-icon-size: 22px;
       flex-shrink: 0;
     }
     .banner-text {
       font-size: 14px;
       font-weight: 500;
+      font-family: 'Google Sans', 'Product Sans', sans-serif;
     }
     .banner-actions {
       display: flex;
       flex: none;
-      gap: var(--ha-space-2);
+      gap: 8px;
       align-items: center;
       margin-inline-start: auto;
     }

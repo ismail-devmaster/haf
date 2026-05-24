@@ -15,30 +15,30 @@ export const coreColorStyles = css`
     --ha-color-white: #ffffff;
 
     /* primary */
-    --ha-color-primary-05: #001721;
-    --ha-color-primary-10: #002e3e;
-    --ha-color-primary-20: #004156;
-    --ha-color-primary-30: #006787;
-    --ha-color-primary-40: #009ac7;
-    --ha-color-primary-50: #18bcf2;
-    --ha-color-primary-60: #37c8fd;
-    --ha-color-primary-70: #7bd4fb;
-    --ha-color-primary-80: #b9e6fc;
-    --ha-color-primary-90: #dff3fc;
-    --ha-color-primary-95: #eff9fe;
+    --ha-color-primary-05: #001533;
+    --ha-color-primary-10: #042159;
+    --ha-color-primary-20: #0842a0;
+    --ha-color-primary-30: #0a4cba;
+    --ha-color-primary-40: #0b57d0;
+    --ha-color-primary-50: #1a73e8;
+    --ha-color-primary-60: #4285f4;
+    --ha-color-primary-70: #7baaf7;
+    --ha-color-primary-80: #a8c7fa;
+    --ha-color-primary-90: #d3e3fd;
+    --ha-color-primary-95: #eaf1ff;
 
     /* neutral */
-    --ha-color-neutral-05: #141414;
-    --ha-color-neutral-10: #202020;
-    --ha-color-neutral-20: #363636;
-    --ha-color-neutral-30: #4a4a4a;
-    --ha-color-neutral-40: #5e5e5e;
-    --ha-color-neutral-50: #7a7a7a;
-    --ha-color-neutral-60: #989898;
-    --ha-color-neutral-70: #b1b1b1;
-    --ha-color-neutral-80: #cccccc;
-    --ha-color-neutral-90: #e6e6e6;
-    --ha-color-neutral-95: #f3f3f3;
+    --ha-color-neutral-05: #111314;
+    --ha-color-neutral-10: #1f1f1f;
+    --ha-color-neutral-20: #2e3132;
+    --ha-color-neutral-30: #444746;
+    --ha-color-neutral-40: #5e6061;
+    --ha-color-neutral-50: #747775;
+    --ha-color-neutral-60: #8e918f;
+    --ha-color-neutral-70: #c4c7c5;
+    --ha-color-neutral-80: #e1e2e4;
+    --ha-color-neutral-90: #f2f3f3;
+    --ha-color-neutral-95: #fafdfd;
 
     /* orange */
     --ha-color-orange-05: #280700;
@@ -54,30 +54,30 @@ export const coreColorStyles = css`
     --ha-color-orange-95: #fff0e4;
 
     /* red */
-    --ha-color-red-05: #2a040b;
-    --ha-color-red-10: #3e0913;
-    --ha-color-red-20: #631323;
-    --ha-color-red-30: #8a132c;
-    --ha-color-red-40: #b30532;
-    --ha-color-red-50: #dc3146;
-    --ha-color-red-60: #f3676c;
-    --ha-color-red-70: #fd8f90;
-    --ha-color-red-80: #ffb8b6;
-    --ha-color-red-90: #ffdedc;
-    --ha-color-red-95: #fff0ef;
+    --ha-color-red-05: #310001;
+    --ha-color-red-10: #410002;
+    --ha-color-red-20: #680005;
+    --ha-color-red-30: #93000a;
+    --ha-color-red-40: #b3261e;
+    --ha-color-red-50: #dc362e;
+    --ha-color-red-60: #e46962;
+    --ha-color-red-70: #ec928e;
+    --ha-color-red-80: #f2b8b5;
+    --ha-color-red-90: #f9dedc;
+    --ha-color-red-95: #fceeee;
 
     /* green */
-    --ha-color-green-05: #031608;
-    --ha-color-green-10: #052310;
-    --ha-color-green-20: #0a3a1d;
-    --ha-color-green-30: #0a5027;
-    --ha-color-green-40: #036730;
-    --ha-color-green-50: #00883c;
-    --ha-color-green-60: #00ac49;
-    --ha-color-green-70: #5dc36f;
-    --ha-color-green-80: #93da98;
-    --ha-color-green-90: #c2f2c1;
-    --ha-color-green-95: #e3f9e3;
+    --ha-color-green-05: #002107;
+    --ha-color-green-10: #003912;
+    --ha-color-green-20: #00521c;
+    --ha-color-green-30: #006e28;
+    --ha-color-green-40: #146c2e;
+    --ha-color-green-50: #1e873b;
+    --ha-color-green-60: #3ca253;
+    --ha-color-green-70: #5dbb70;
+    --ha-color-green-80: #81c995;
+    --ha-color-green-90: #bde9c9;
+    --ha-color-green-95: #def6e4;
   }
 `;
 
