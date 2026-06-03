@@ -7,6 +7,37 @@ views:
         columns: 1
         cards:
           - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: |
+              [[[
+                const userName = user && user.name ? user.name : 'User';
+                const initial = userName.charAt(0).toUpperCase();
+                const hour = new Date().getHours();
+                const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+                return `<div style="display:flex; justify-content:space-between; align-items:center; height:100%;">
+                  <div>
+                    <div style="font-size:10px; font-weight:400; color:rgba(255,255,255,0.75); letter-spacing:0.3px;">${greeting}</div>
+                    <div style="font-size:16px; font-weight:400; color:#fff; letter-spacing:-0.3px;">${userName}</div>
+                  </div>
+                  <div style="width:24px; height:24px; border-radius:50%; background:linear-gradient(135deg,#4285f4,#34a853); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:500; color:#fff;">${initial}</div>
+                </div>`;
+              ]]]
+            styles:
+              card:
+                - background: "linear-gradient(100deg, #4285f4 0%, #34a853 100%)"
+                - border-radius: 10px
+                - border: none
+                - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
+                - padding: 4px 8px
+                - height: 36px
+                - width: 100%
+                - box-sizing: border-box
+              name:
+                - text-align: left
+                - width: 100%
+          - type: custom:button-card
             name: >
               <div style="display:flex; align-items:center; gap:12px;
               width:100%; font-family:'Google

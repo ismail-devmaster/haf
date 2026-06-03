@@ -4,49 +4,53 @@ views:
     type: sections
     max_columns: 2
     sections:
-      # COLUMN 1: PROFILE, NAV & CLIMATE CONTROL
       - type: grid
         columns: 1
         square: false
         cards:
-          # Top Profile & Greeting Banner
           - type: custom:button-card
             show_name: true
             show_icon: false
             show_state: false
-            name: >
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                  <div style="font-size:11px; font-weight:400; color:rgba(255,255,255,0.75); letter-spacing:0.3px; margin-bottom:0px;">Good evening</div>
-                  <div style="font-size:18px; font-weight:400; color:#fff; letter-spacing:-0.3px;">Domolux</div>
-                </div>
-                <div style="width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,#4285f4,#34a853); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:500; color:#fff;">F</div>
-              </div>
+            name: |
+              [[[
+                const userName = user && user.name ? user.name : 'User';
+                const initial = userName.charAt(0).toUpperCase();
+                const hour = new Date().getHours();
+                const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+                return `<div style="display:flex; justify-content:space-between; align-items:center; height:100%;">
+                  <div>
+                    <div style="font-size:10px; font-weight:400; color:rgba(255,255,255,0.75); letter-spacing:0.3px;">${greeting}</div>
+                    <div style="font-size:16px; font-weight:400; color:#fff; letter-spacing:-0.3px;">${userName}</div>
+                  </div>
+                  <div style="width:24px; height:24px; border-radius:50%; background:linear-gradient(135deg,#4285f4,#34a853); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:500; color:#fff;">${initial}</div>
+                </div>`;
+              ]]]
             styles:
               card:
                 - background: "linear-gradient(100deg, #4285f4 0%, #34a853 100%)"
-                - border-radius: 12px
+                - border-radius: 10px
                 - border: none
                 - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
-                - padding: 6px 10px
+                - padding: 4px 8px
+                - height: 36px
                 - width: 100%
                 - box-sizing: border-box
               name:
                 - text-align: left
                 - width: 100%
 
-          # Back to Home Navigation - User Space
           - type: custom:button-card
             name: >
-              <div style="display:flex; align-items:center; gap:4px; width:100%;">
-                <div style="width:26px;height:26px;border-radius:6px;background:#e8f0fe;display:flex;align-items:center;justify-content:center;">
-                  <ha-icon icon="mdi:arrow-left" style="color:#4285f4;width:16px;height:16px;"></ha-icon>
+              <div style="display:flex; align-items:center; gap:4px; width:100%; height:100%;">
+                <div style="width:20px;height:20px;border-radius:4px;background:#e8f0fe;display:flex;align-items:center;justify-content:center;">
+                  <ha-icon icon="mdi:arrow-left" style="color:#4285f4;width:12px;height:12px;"></ha-icon>
                 </div>
                 <div style="flex:1;">
-                  <div style="font-size:13px;font-weight:500;color:#202124;">User Space</div>
-                  <div style="font-size:11px;color:#5f6368;margin-top:0px;">Dashboard overview</div>
+                  <div style="font-size:11px;font-weight:500;color:#202124;">User Space</div>
+                  <div style="font-size:9px;color:#5f6368;">Dashboard overview</div>
                 </div>
-                <div style="font-size:10px; font-weight:500; background:#e6f4ea; color:#34a853; padding:2px 6px; border-radius:20px;">Back to Home</div>
+                <div style="font-size:9px; font-weight:500; background:#e6f4ea; color:#34a853; padding:1px 4px; border-radius:20px;">Back</div>
               </div>
             show_icon: false
             tap_action:
@@ -55,55 +59,49 @@ views:
             styles:
               card:
                 - background: "#ffffff"
-                - border-radius: 12px
+                - border-radius: 10px
                 - border: "0.5px solid #dadce0"
                 - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
-                - padding: 4px 8px
-                - transition: all 0.2s ease
+                - padding: 2px 4px
+                - height: 32px
                 - width: 100%
                 - box-sizing: border-box
 
-          # Climate Control Section Heading
-          - type: heading
-            heading: Climate control
-            heading_style: subtitle
-
-          # Climate AC Running Status Indicator
           - type: custom:button-card
             entity: input_boolean.ac_power
             show_name: true
             show_icon: false
             show_state: false
-            name: >
+            name: |
               [[[
                 const isOn = entity && entity.state === 'on';
                 const tempEnt = states['input_number.ac_temperature'];
                 const tempVal = tempEnt && tempEnt.state ? Math.round(parseFloat(tempEnt.state)) : '--';
                 const dotColor = isOn ? '#34a853' : '#9aa0a6';
-                const glow = isOn ? 'box-shadow:0 0 0 3px rgba(52,168,83,0.25);' : '';
-                const textColor = '#202124';
-                const label = isOn ? 'AC Running · ' + tempVal + '°C' : 'AC Stopped';
-                return `<div style="display:flex;align-items:center;gap:4px;padding:0 0 2px;">
-                  <div style="width:10px;height:10px;border-radius:50%;background:${dotColor};${glow}transition:all 0.3s ease;"></div>
-                  <span style="font-size:13px;font-weight:500;color:${textColor};letter-spacing:0.1px;transition:all 0.3s ease;">AC Power</span>
-                  <span style="margin-left:auto;font-size:11px;color:#5f6368;">${label}</span>
+                const label = isOn ? 'Running · ' + tempVal + '°C' : 'Stopped · ' + tempVal + '°C';
+                return `<div style="display:flex;align-items:center;gap:4px;height:100%;padding:0 2px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};transition:all 0.3s ease;"></div>
+                  <span style="font-size:12px;font-weight:500;color:#202124;">AC Power</span>
+                  <span style="margin-left:auto;font-size:10px;color:#5f6368;">${label}</span>
                 </div>`;
               ]]]
             styles:
               card:
-                - background: "transparent"
+                - height: 28px
+                - background: transparent
                 - box-shadow: none
                 - border: none
-                - padding: 2px 4px 0px
+                - padding: 0
                 - width: 100%
                 - box-sizing: border-box
 
-          # AC Quick Power Grid (Horizontal Buttons)
-          - type: horizontal-stack
+          - type: grid
+            columns: 2
+            square: false
             cards:
               - type: custom:button-card
                 entity: input_boolean.ac_power
-                name: Power On
+                name: On
                 icon: mdi:power
                 show_state: false
                 tap_action:
@@ -111,18 +109,18 @@ views:
                   service: script.ac_turn_on
                 styles:
                   card:
-                    - height: 36px
+                    - height: 28px
                     - background: "#ffffff"
-                    - border-radius: 8px
+                    - border-radius: 6px
                     - border: "1px solid #dadce0"
                     - box-shadow: none
-                    - transition: all 0.3s ease
+                    - padding: 0
                   icon:
                     - color: "#34a853"
-                    - width: 18px
+                    - width: 14px
                   name:
                     - color: "#202124"
-                    - font-size: 12px
+                    - font-size: 10px
                     - font-weight: 500
                 state:
                   - value: "on"
@@ -136,7 +134,7 @@ views:
 
               - type: custom:button-card
                 entity: input_boolean.ac_power
-                name: Power Off
+                name: Off
                 icon: mdi:power-off
                 show_state: false
                 tap_action:
@@ -144,18 +142,18 @@ views:
                   service: script.ac_turn_off
                 styles:
                   card:
-                    - height: 36px
+                    - height: 28px
                     - background: "#ffffff"
-                    - border-radius: 8px
+                    - border-radius: 6px
                     - border: "1px solid #dadce0"
                     - box-shadow: none
-                    - transition: all 0.3s ease
+                    - padding: 0
                   icon:
                     - color: "#e53935"
-                    - width: 18px
+                    - width: 14px
                   name:
                     - color: "#202124"
-                    - font-size: 12px
+                    - font-size: 10px
                     - font-weight: 500
                 state:
                   - value: "off"
@@ -167,30 +165,9 @@ views:
                         - color: "#e53935"
                         - font-weight: 600
 
-          # Target Temperature Setup Card
-          - type: custom:button-card
-            entity: input_number.ac_temperature
-            show_name: false
-            show_icon: false
-            show_state: false
-            name: >
-              [[[
-                const temp = entity && entity.state ? Math.round(parseFloat(entity.state)) : '--';
-                return `<div style="text-align:center; padding:0;">
-                  <div style="font-size:11px;font-weight:500;color:#5f6368;margin-bottom:2px;">Target temperature</div>
-                  <div style="font-size:32px;font-weight:400;color:#202124;letter-spacing:-1px;">${temp}°</div>
-                </div>`;
-              ]]]
-            styles:
-              card:
-                - background: "#ffffff"
-                - border-radius: 12px
-                - border: "0.5px solid #dadce0"
-                - box-shadow: 0 1px 2px rgba(0,0,0,0.05)
-                - padding: 4px
-                - width: 100%
-                - box-sizing: border-box
-          - type: horizontal-stack
+          - type: grid
+            columns: 3
+            square: false
             cards:
               - type: custom:button-card
                 show_name: false
@@ -201,13 +178,36 @@ views:
                   service: script.ac_temperature_down
                 styles:
                   card:
-                    - height: 32px
+                    - height: 28px
                     - border-radius: 6px
                     - background: "#e8f0fe"
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   icon:
                     - color: "#4285f4"
-                    - width: 18px
+                    - width: 14px
+
+              - type: custom:button-card
+                entity: input_number.ac_temperature
+                show_name: false
+                show_icon: false
+                show_state: false
+                name: |
+                  [[[
+                    const temp = entity && entity.state ? Math.round(parseFloat(entity.state)) : '--';
+                    return `<div style="display:flex;align-items:center;justify-content:center;height:100%;">
+                      <span style="font-size:13px;font-weight:500;color:#202124;">${temp}°C</span>
+                    </div>`;
+                  ]]]
+                styles:
+                  card:
+                    - height: 28px
+                    - background: "#f8f9fa"
+                    - border-radius: 6px
+                    - border: "0.5px solid #dadce0"
+                    - padding: 0
+                    - box-shadow: none
+
               - type: custom:button-card
                 show_name: false
                 show_icon: true
@@ -217,47 +217,212 @@ views:
                   service: script.ac_temperature_up
                 styles:
                   card:
-                    - height: 32px
+                    - height: 28px
                     - border-radius: 6px
                     - background: "#fef3e2"
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   icon:
                     - color: "#f9ab00"
-                    - width: 18px
+                    - width: 14px
 
-      # COLUMN 2: LIGHTING, DEVICES & BLINDS
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:button-card
+                entity: switch.meeting_room_controller_switch_1
+                show_name: true
+                show_icon: false
+                show_state: false
+                name: |
+                  [[[
+                    const isOn = entity && entity.state === 'on';
+                    return `<div style="display:flex; align-items:center; gap:4px; width:100%; height:100%;">
+                      <div style="width:20px;height:20px;border-radius:50%;background:${isOn ? '#f3e8ff' : '#f1f3f4'};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
+                        <ha-icon icon="mdi:power-plug" style="color:${isOn ? '#9c27b0' : '#5f6368'};width:12px;height:12px;"></ha-icon>
+                      </div>
+                      <div style="flex:1; text-align:left;">
+                        <div style="font-size:11px;font-weight:500;color:#202124;">Meeting Room</div>
+                      </div>
+                      <div style="display:inline-block; position:relative; width:28px; height:16px; background:${isOn ? '#9c27b0' : '#dadce0'}; border-radius:8px; transition:all 0.3s ease;">
+                        <div style="position:absolute; top:1px; ${isOn ? 'right:1px;' : 'left:1px;'} width:14px; height:14px; border-radius:50%; background:#ffffff; box-shadow:0 1px 2px rgba(0,0,0,0.15); transition:all 0.3s ease;"></div>
+                      </div>
+                    </div>`;
+                  ]]]
+                tap_action:
+                  action: toggle
+                styles:
+                  card:
+                    - height: 28px
+                    - background: "#ffffff"
+                    - border-radius: 8px
+                    - border: "0.5px solid #dadce0"
+                    - padding: 2px 4px
+                    - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
+                    - width: 100%
+                    - box-sizing: border-box
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background: "#f3e8ff"
+
+              - type: custom:button-card
+                entity: switch.fethi_room_controller_switch_2
+                show_name: true
+                show_icon: false
+                show_state: false
+                name: |
+                  [[[
+                    const isOn = entity && entity.state === 'on';
+                    return `<div style="display:flex; align-items:center; gap:4px; width:100%; height:100%;">
+                      <div style="width:20px;height:20px;border-radius:50%;background:${isOn ? '#e6f4ea' : '#f1f3f4'};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
+                        <ha-icon icon="mdi:power-plug" style="color:${isOn ? '#34a853' : '#5f6368'};width:12px;height:12px;"></ha-icon>
+                      </div>
+                      <div style="flex:1; text-align:left;">
+                        <div style="font-size:11px;font-weight:500;color:#202124;">Fethi's Room</div>
+                      </div>
+                      <div style="display:inline-block; position:relative; width:28px; height:16px; background:${isOn ? '#34a853' : '#dadce0'}; border-radius:8px; transition:all 0.3s ease;">
+                        <div style="position:absolute; top:1px; ${isOn ? 'right:1px;' : 'left:1px;'} width:14px; height:14px; border-radius:50%; background:#ffffff; box-shadow:0 1px 2px rgba(0,0,0,0.15); transition:all 0.3s ease;"></div>
+                      </div>
+                    </div>`;
+                  ]]]
+                tap_action:
+                  action: toggle
+                styles:
+                  card:
+                    - height: 28px
+                    - background: "#ffffff"
+                    - border-radius: 8px
+                    - border: "0.5px solid #dadce0"
+                    - padding: 2px 4px
+                    - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
+                    - width: 100%
+                    - box-sizing: border-box
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background: "#e6f4ea"
+
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:button-card
+                entity: binary_sensor.0xf4b3b1fffe495048_occupancy
+                show_name: true
+                show_icon: false
+                show_state: false
+                name: |
+                  [[[
+                    const isOn = entity && entity.state === 'on';
+                    const icon = isOn ? 'mdi:motion-sensor' : 'mdi:motion-sensor-off';
+                    const iconBg = isOn ? '#188038' : '#F8F9FA';
+                    const iconColor = isOn ? '#FFFFFF' : '#5F6368';
+                    const pillBg = isOn ? '#188038' : '#F8F9FA';
+                    const pillColor = isOn ? '#FFFFFF' : '#5F6368';
+                    const pillBorder = isOn ? '#188038' : '#DADCE0';
+                    return `<div style="display:flex; align-items:center; gap:4px; width:100%; height:100%;">
+                      <div style="width:20px;height:20px;border-radius:50%;background:${iconBg};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
+                        <ha-icon icon="${icon}" style="color:${iconColor};width:12px;height:12px;"></ha-icon>
+                      </div>
+                      <div style="flex:1; text-align:left;">
+                        <div style="font-size:11px;font-weight:500;color:#202124;">Occupancy</div>
+                      </div>
+                      <div style="font-size:9px;font-weight:500;color:${pillColor};background:${pillBg};padding:1px 4px;border-radius:9999px;border:1px solid ${pillBorder};transition:all 0.3s ease;flex-shrink:0;">${isOn ? 'Active' : 'Inactive'}</div>
+                    </div>`;
+                  ]]]
+                tap_action:
+                  action: more-info
+                styles:
+                  card:
+                    - height: 28px
+                    - background: "#ffffff"
+                    - border-radius: 8px
+                    - border: "0.5px solid #dadce0"
+                    - padding: 2px 4px
+                    - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
+                    - width: 100%
+                    - box-sizing: border-box
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background: "#E6F4EA"
+                        - border: "1px solid #188038"
+
+              - type: custom:button-card
+                entity: binary_sensor.0xa4c138997d10233c_contact
+                show_name: true
+                show_icon: false
+                show_state: false
+                name: |
+                  [[[
+                    const isOn = entity && entity.state === 'on';
+                    const icon = isOn ? 'mdi:door-open' : 'mdi:door-closed';
+                    const iconBg = isOn ? '#F9AB00' : '#E8F0FE';
+                    const iconColor = isOn ? '#FFFFFF' : '#1A73E8';
+                    const pillBg = isOn ? '#F9AB00' : '#E8F0FE';
+                    const pillColor = isOn ? '#FFFFFF' : '#1A73E8';
+                    const pillBorder = isOn ? '#F9AB00' : '#1A73E8';
+                    return `<div style="display:flex; align-items:center; gap:4px; width:100%; height:100%;">
+                      <div style="width:20px;height:20px;border-radius:50%;background:${iconBg};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
+                        <ha-icon icon="${icon}" style="color:${iconColor};width:12px;height:12px;"></ha-icon>
+                      </div>
+                      <div style="flex:1; text-align:left;">
+                        <div style="font-size:11px;font-weight:500;color:#202124;">Door</div>
+                      </div>
+                      <div style="font-size:9px;font-weight:500;color:${pillColor};background:${pillBg};padding:1px 4px;border-radius:9999px;border:1px solid ${pillBorder};transition:all 0.3s ease;flex-shrink:0;">${isOn ? 'Open' : 'Closed'}</div>
+                    </div>`;
+                  ]]]
+                tap_action:
+                  action: more-info
+                styles:
+                  card:
+                    - height: 28px
+                    - background: "#ffffff"
+                    - border-radius: 8px
+                    - border: "0.5px solid #dadce0"
+                    - padding: 2px 4px
+                    - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
+                    - width: 100%
+                    - box-sizing: border-box
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background: "#FFF3E0"
+                        - border: "1px solid #F9AB00"
+
       - type: grid
         columns: 1
         square: false
         cards:
-          - type: heading
-            heading: Lighting
-            heading_style: subtitle
-
-          # Desk Lamp Control Card
           - type: custom:button-card
             entity: light.0xa4c138ad2b20ea12
             show_name: true
             show_icon: false
             show_state: false
-            name: >
+            name: |
               [[[
                 const isOn = entity && entity.state === 'on';
                 const brightness = (entity && entity.attributes && entity.attributes.brightness) || 0;
                 const pct = Math.round((brightness / 255) * 100);
-                const status = isOn ? 'Brightness · ' + pct + '%' : 'Off';
+                const status = isOn ? 'On · ' + pct + '%' : 'Off';
                 const iconBg = isOn ? '#fef3e2' : '#f1f3f4';
                 const iconColor = isOn ? '#f9ab00' : '#5f6368';
-                return `<div style="display:flex; align-items:center; gap:4px; width:100%;">
-                  <div style="width:32px;height:32px;border-radius:50%;background:${iconBg};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
-                    <ha-icon icon="mdi:desk-lamp" style="color:${iconColor};width:16px;height:16px;"></ha-icon>
+                return `<div style="display:flex; align-items:center; gap:4px; width:100%; height:100%;">
+                  <div style="width:20px;height:20px;border-radius:50%;background:${iconBg};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
+                    <ha-icon icon="mdi:desk-lamp" style="color:${iconColor};width:12px;height:12px;"></ha-icon>
                   </div>
                   <div style="flex:1; text-align:left;">
-                    <div style="font-size:13px;font-weight:500;color:#202124;">Desk Lamp</div>
-                    <div style="font-size:11px;color:#5f6368;margin-top:0px;">${status}</div>
+                    <div style="font-size:11px;font-weight:500;color:#202124;">Desk Lamp</div>
+                    <div style="font-size:9px;color:#5f6368;margin-top:0px;">${status}</div>
                   </div>
-                  <div style="display:inline-block; position:relative; width:36px; height:20px; background:${isOn ? '#4285f4' : '#dadce0'}; border-radius:10px; transition:all 0.3s ease;">
-                    <div style="position:absolute; top:2px; ${isOn ? 'right:2px;' : 'left:2px;'} width:16px; height:16px; border-radius:50%; background:#ffffff; box-shadow:0 1px 3px rgba(0,0,0,0.15); transition:all 0.3s ease;"></div>
+                  <div style="display:inline-block; position:relative; width:28px; height:16px; background:${isOn ? '#4285f4' : '#dadce0'}; border-radius:8px; transition:all 0.3s ease;">
+                    <div style="position:absolute; top:1px; ${isOn ? 'right:1px;' : 'left:1px;'} width:14px; height:14px; border-radius:50%; background:#ffffff; box-shadow:0 1px 2px rgba(0,0,0,0.15); transition:all 0.3s ease;"></div>
                   </div>
                 </div>`;
               ]]]
@@ -265,11 +430,12 @@ views:
               action: toggle
             styles:
               card:
+                - height: 32px
                 - background: "#ffffff"
-                - border-radius: 12px
+                - border-radius: 8px
                 - border: "0.5px solid #dadce0"
+                - padding: 2px 4px
                 - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
-                - padding: 4px 8px
                 - width: 100%
                 - box-sizing: border-box
             state:
@@ -278,8 +444,9 @@ views:
                   card:
                     - background: "#fef3e2"
 
-          # Light Brightness Preset Selector Blocks
-          - type: horizontal-stack
+          - type: grid
+            columns: 4
+            square: false
             cards:
               - type: custom:button-card
                 entity: light.0xa4c138ad2b20ea12
@@ -295,17 +462,18 @@ views:
                     brightness_pct: 25
                 styles:
                   card:
-                    - height: 32px
+                    - height: 28px
                     - background: "#ffffff"
                     - border-radius: 6px
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   name:
                     - color: "#5f6368"
-                    - font-size: 11px
+                    - font-size: 10px
                     - font-weight: 500
                 state:
                   - operator: template
-                    value: >-
+                    value: |
                       [[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === "on" && Math.round((b / 255) * 100) === 25; ]]]
                     styles:
                       card:
@@ -328,17 +496,18 @@ views:
                     brightness_pct: 50
                 styles:
                   card:
-                    - height: 32px
+                    - height: 28px
                     - background: "#ffffff"
                     - border-radius: 6px
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   name:
                     - color: "#5f6368"
-                    - font-size: 11px
+                    - font-size: 10px
                     - font-weight: 500
                 state:
                   - operator: template
-                    value: >-
+                    value: |
                       [[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === "on" && Math.round((b / 255) * 100) === 50; ]]]
                     styles:
                       card:
@@ -361,17 +530,18 @@ views:
                     brightness_pct: 75
                 styles:
                   card:
-                    - height: 32px
+                    - height: 28px
                     - background: "#ffffff"
                     - border-radius: 6px
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   name:
                     - color: "#5f6368"
-                    - font-size: 11px
+                    - font-size: 10px
                     - font-weight: 500
                 state:
                   - operator: template
-                    value: >-
+                    value: |
                       [[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === "on" && Math.round((b / 255) * 100) === 75; ]]]
                     styles:
                       card:
@@ -394,17 +564,18 @@ views:
                     brightness_pct: 100
                 styles:
                   card:
-                    - height: 32px
+                    - height: 28px
                     - background: "#ffffff"
                     - border-radius: 6px
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   name:
                     - color: "#5f6368"
-                    - font-size: 11px
+                    - font-size: 10px
                     - font-weight: 500
                 state:
                   - operator: template
-                    value: >-
+                    value: |
                       [[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === "on" && Math.round((b / 255) * 100) === 100; ]]]
                     styles:
                       card:
@@ -413,258 +584,80 @@ views:
                       name:
                         - color: "#e67c00"
 
-          # Dimmer / Step Layout Subview Segment
-          - type: heading
-            heading: Dimmer
-            heading_style: subtitle
           - type: custom:button-card
             show_name: true
             show_icon: false
             show_state: false
             name: >
-              <div style="display:flex; justify-content:space-between; align-items:center; text-align:center; width:100%; gap:4px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; text-align:center; width:100%; height:100%; gap:4px;">
                 <div style="flex:1;">
-                  <ha-icon icon="mdi:brightness-4" style="color:#5f6368; width:18px; height:18px;"></ha-icon>
-                  <div style="font-size:10px; color:#5f6368; margin-top:1px;">Low</div>
+                  <ha-icon icon="mdi:brightness-4" style="color:#5f6368; width:14px; height:14px;"></ha-icon>
+                  <div style="font-size:9px; color:#5f6368; margin-top:1px;">Low</div>
                 </div>
                 <div style="flex:1;">
-                  <ha-icon icon="mdi:brightness-5" style="color:#5f6368; width:18px; height:18px;"></ha-icon>
-                  <div style="font-size:10px; color:#5f6368; margin-top:1px;">Med</div>
+                  <ha-icon icon="mdi:brightness-5" style="color:#5f6368; width:14px; height:14px;"></ha-icon>
+                  <div style="font-size:9px; color:#5f6368; margin-top:1px;">Med</div>
                 </div>
                 <div style="flex:1;">
-                  <ha-icon icon="mdi:brightness-6" style="color:#5f6368; width:18px; height:18px;"></ha-icon>
-                  <div style="font-size:10px; color:#5f6368; margin-top:1px;">High</div>
+                  <ha-icon icon="mdi:brightness-6" style="color:#5f6368; width:14px; height:14px;"></ha-icon>
+                  <div style="font-size:9px; color:#5f6368; margin-top:1px;">High</div>
                 </div>
                 <div style="flex:1;">
-                  <ha-icon icon="mdi:brightness-7" style="color:#5f6368; width:18px; height:18px;"></ha-icon>
-                  <div style="font-size:10px; color:#5f6368; margin-top:1px;">Max</div>
+                  <ha-icon icon="mdi:brightness-7" style="color:#5f6368; width:14px; height:14px;"></ha-icon>
+                  <div style="font-size:9px; color:#5f6368; margin-top:1px;">Max</div>
                 </div>
               </div>
             styles:
               card:
+                - height: 28px
                 - background: "#ffffff"
-                - border-radius: 12px
+                - border-radius: 8px
                 - border: "0.5px solid #dadce0"
-                - padding: 4px 6px
+                - padding: 2px 4px
                 - box-shadow: 0 1px 2px rgba(0,0,0,0.05)
                 - width: 100%
                 - box-sizing: border-box
-
-          - type: heading
-            heading: Devices
-            heading_style: subtitle
-
-          # Meeting Room Controller Switch Card
-          - type: custom:button-card
-            entity: switch.meeting_room_controller_switch_1
-            show_name: true
-            show_icon: false
-            show_state: false
-            name: >
-              [[[
-                const isOn = entity && entity.state === 'on';
-                return `<div style="display:flex; align-items:center; gap:4px; width:100%;">
-                  <div style="width:32px;height:32px;border-radius:50%;background:${isOn ? '#f3e8ff' : '#f1f3f4'};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
-                    <ha-icon icon="mdi:power-plug" style="color:${isOn ? '#9c27b0' : '#5f6368'};width:16px;height:16px;"></ha-icon>
-                  </div>
-                  <div style="flex:1; text-align:left;">
-                    <div style="font-size:13px;font-weight:500;color:#202124;">Meeting Room</div>
-                    <div style="font-size:11px;color:#5f6368;margin-top:0px;">controller wifi switch 1</div>
-                  </div>
-                  <div style="display:inline-block; position:relative; width:36px; height:20px; background:${isOn ? '#9c27b0' : '#dadce0'}; border-radius:10px; transition:all 0.3s ease;">
-                    <div style="position:absolute; top:2px; ${isOn ? 'right:2px;' : 'left:2px;'} width:16px; height:16px; border-radius:50%; background:#ffffff; box-shadow:0 1px 3px rgba(0,0,0,0.15); transition:all 0.3s ease;"></div>
-                  </div>
-                </div>`;
-              ]]]
-            tap_action:
-              action: toggle
-            styles:
-              card:
-                - background: "#ffffff"
-                - border-radius: 12px
-                - border: "0.5px solid #dadce0"
-                - padding: 4px 8px
-                - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
-                - width: 100%
-                - box-sizing: border-box
-            state:
-              - value: "on"
-                styles:
-                  card:
-                    - background: "#f3e8ff"
-
-          # Fethi's Room Controller Switch Card
-          - type: custom:button-card
-            entity: switch.fethi_room_controller_switch_2
-            show_name: true
-            show_icon: false
-            show_state: false
-            name: >
-              [[[
-                const isOn = entity && entity.state === 'on';
-                return `<div style="display:flex; align-items:center; gap:4px; width:100%;">
-                  <div style="width:32px;height:32px;border-radius:50%;background:${isOn ? '#e6f4ea' : '#f1f3f4'};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
-                    <ha-icon icon="mdi:power-plug" style="color:${isOn ? '#34a853' : '#5f6368'};width:16px;height:16px;"></ha-icon>
-                  </div>
-                  <div style="flex:1; text-align:left;">
-                    <div style="font-size:13px;font-weight:500;color:#202124;">Fethi's Room</div>
-                    <div style="font-size:11px;color:#5f6368;margin-top:0px;">controller wifi switch 2</div>
-                  </div>
-                  <div style="display:inline-block; position:relative; width:36px; height:20px; background:${isOn ? '#34a853' : '#dadce0'}; border-radius:10px; transition:all 0.3s ease;">
-                    <div style="position:absolute; top:2px; ${isOn ? 'right:2px;' : 'left:2px;'} width:16px; height:16px; border-radius:50%; background:#ffffff; box-shadow:0 1px 3px rgba(0,0,0,0.15); transition:all 0.3s ease;"></div>
-                  </div>
-                </div>`;
-              ]]]
-            tap_action:
-              action: toggle
-            styles:
-              card:
-                - background: "#ffffff"
-                - border-radius: 12px
-                - border: "0.5px solid #dadce0"
-                - padding: 4px 8px
-                - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
-                - width: 100%
-                - box-sizing: border-box
-            state:
-              - value: "on"
-                styles:
-                  card:
-                    - background: "#e6f4ea"
-
-          # Salle de Bain Occupancy Sensor
-          - type: custom:button-card
-            entity: binary_sensor.0xf4b3b1fffe495048_occupancy
-            show_name: true
-            show_icon: false
-            show_state: false
-            name: >
-              [[[
-                const isOn = entity && entity.state === 'on';
-                const icon = isOn ? 'mdi:motion-sensor' : 'mdi:motion-sensor-off';
-                const iconBg = isOn ? '#188038' : '#F8F9FA';
-                const iconColor = isOn ? '#FFFFFF' : '#5F6368';
-                const status = isOn ? 'Motion detected' : 'Clear';
-                const pillBg = isOn ? '#188038' : '#F8F9FA';
-                const pillColor = isOn ? '#FFFFFF' : '#5F6368';
-                const pillBorder = isOn ? '#188038' : '#DADCE0';
-                return `<div style="display:flex; align-items:center; gap:4px; width:100%;">
-                  <div style="width:32px;height:32px;border-radius:50%;background:${iconBg};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
-                    <ha-icon icon="${icon}" style="color:${iconColor};width:16px;height:16px;"></ha-icon>
-                  </div>
-                  <div style="flex:1; text-align:left;">
-                    <div style="font-size:13px;font-weight:500;color:#202124;">Occupancy</div>
-                    <div style="font-size:11px;color:#5f6368;margin-top:0px;">${status}</div>
-                  </div>
-                  <div style="font-size:10px;font-weight:500;color:${pillColor};background:${pillBg};padding:2px 6px;border-radius:9999px;border:1px solid ${pillBorder};transition:all 0.3s ease;flex-shrink:0;">${isOn ? 'Active' : 'Inactive'}</div>
-                </div>`;
-              ]]]
-            tap_action:
-              action: more-info
-            styles:
-              card:
-                - background: "#ffffff"
-                - border-radius: 12px
-                - border: "0.5px solid #dadce0"
-                - padding: 4px 8px
-                - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
-                - width: 100%
-                - box-sizing: border-box
-            state:
-              - value: "on"
-                styles:
-                  card:
-                    - background: "#E6F4EA"
-                    - border: "1px solid #188038"
-
-          # Salle de Bain Door Sensor
-          - type: custom:button-card
-            entity: binary_sensor.0xa4c138997d10233c_contact
-            show_name: true
-            show_icon: false
-            show_state: false
-            name: >
-              [[[
-                const isOn = entity && entity.state === 'on';
-                const icon = isOn ? 'mdi:door-open' : 'mdi:door-closed';
-                const iconBg = isOn ? '#F9AB00' : '#E8F0FE';
-                const iconColor = isOn ? '#FFFFFF' : '#1A73E8';
-                const status = isOn ? 'Open' : 'Closed';
-                const pillBg = isOn ? '#F9AB00' : '#E8F0FE';
-                const pillColor = isOn ? '#FFFFFF' : '#1A73E8';
-                const pillBorder = isOn ? '#F9AB00' : '#1A73E8';
-                return `<div style="display:flex; align-items:center; gap:4px; width:100%;">
-                  <div style="width:32px;height:32px;border-radius:50%;background:${iconBg};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;">
-                    <ha-icon icon="${icon}" style="color:${iconColor};width:16px;height:16px;"></ha-icon>
-                  </div>
-                  <div style="flex:1; text-align:left;">
-                    <div style="font-size:13px;font-weight:500;color:#202124;">Door</div>
-                    <div style="font-size:11px;color:#5f6368;margin-top:0px;">${status}</div>
-                  </div>
-                  <div style="font-size:10px;font-weight:500;color:${pillColor};background:${pillBg};padding:2px 6px;border-radius:9999px;border:1px solid ${pillBorder};transition:all 0.3s ease;flex-shrink:0;">${status}</div>
-                </div>`;
-              ]]]
-            tap_action:
-              action: more-info
-            styles:
-              card:
-                - background: "#ffffff"
-                - border-radius: 12px
-                - border: "0.5px solid #dadce0"
-                - padding: 4px 8px
-                - box-shadow: 0 1px 2px rgba(0,0,0,0.06)
-                - width: 100%
-                - box-sizing: border-box
-            state:
-              - value: "on"
-                styles:
-                  card:
-                    - background: "#FFF3E0"
-                    - border: "1px solid #F9AB00"
-
-          # Kitchen Yellow Blind Shutter Controls
-          - type: heading
-            heading: Yellow Blind
-            heading_style: subtitle
 
           - type: custom:button-card
             entity: cover.yellow_switch
             show_name: true
             show_icon: false
             show_state: false
-            name: >
+            name: |
               [[[
                 const pos = entity && entity.attributes ? (entity.attributes.current_position || 0) : 0;
                 const status = entity && entity.state === 'closed' ? 'Closed' : 'Open ' + pos + '%';
-                return `<div style="display:flex; align-items:center; gap:4px; width:100%;">
-                  <div style="width:32px;height:32px;border-radius:50%;background:#fef3e2;display:flex;align-items:center;justify-content:center;">
-                    <ha-icon icon="mdi:window-shutter" style="color:#f9ab00;width:16px;height:16px;"></ha-icon>
+                return `<div style="display:flex; align-items:center; gap:4px; width:100%; height:100%;">
+                  <div style="width:20px;height:20px;border-radius:50%;background:#fef3e2;display:flex;align-items:center;justify-content:center;">
+                    <ha-icon icon="mdi:window-shutter" style="color:#f9ab00;width:12px;height:12px;"></ha-icon>
                   </div>
                   <div style="flex:1; text-align:left;">
-                    <div style="font-size:13px;font-weight:500;color:#202124;">Yellow Switch</div>
-                    <div style="font-size:11px;color:#5f6368;margin-top:0px;">cover.yellow_switch</div>
+                    <div style="font-size:11px;font-weight:500;color:#202124;">Yellow Blind</div>
+                    <div style="font-size:9px;color:#5f6368;margin-top:0px;">${status}</div>
                   </div>
-                  <div style="font-size:12px;font-weight:500;color:#f9ab00;transition:all 0.3s ease;">${status}</div>
                 </div>`;
               ]]]
             tap_action:
               action: none
             styles:
               card:
+                - height: 28px
                 - background: "#ffffff"
-                - border-radius: 12px
+                - border-radius: 8px
                 - border: "0.5px solid #dadce0"
+                - padding: 2px 4px
                 - box-shadow: 0 1px 2px rgba(0,0,0,0.05)
-                - padding: 4px 8px
                 - width: 100%
                 - box-sizing: border-box
 
-          # Shutter Actions (Open, Pause, Close, and Presets)
-          - type: horizontal-stack
+          - type: grid
+            columns: 4
+            square: false
             cards:
               - type: custom:button-card
                 entity: cover.yellow_switch
                 icon: mdi:arrow-up
+                show_name: false
                 tap_action:
                   action: call-service
                   service: cover.open_cover
@@ -672,17 +665,19 @@ views:
                     entity_id: cover.yellow_switch
                 styles:
                   card:
-                    - height: 32px
+                    - height: 28px
                     - background: "#ffffff"
                     - border-radius: 6px
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   icon:
                     - color: "#f9ab00"
-                    - width: 18px
+                    - width: 14px
 
               - type: custom:button-card
                 entity: cover.yellow_switch
                 icon: mdi:pause
+                show_name: false
                 tap_action:
                   action: call-service
                   service: cover.stop_cover
@@ -690,17 +685,19 @@ views:
                     entity_id: cover.yellow_switch
                 styles:
                   card:
-                    - height: 32px
+                    - height: 28px
                     - background: "#ffffff"
                     - border-radius: 6px
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   icon:
                     - color: "#202124"
-                    - width: 18px
+                    - width: 14px
 
               - type: custom:button-card
                 entity: cover.yellow_switch
                 icon: mdi:close
+                show_name: false
                 tap_action:
                   action: call-service
                   service: cover.close_cover
@@ -708,17 +705,19 @@ views:
                     entity_id: cover.yellow_switch
                 styles:
                   card:
-                    - height: 32px
+                    - height: 28px
                     - background: "#ffffff"
                     - border-radius: 6px
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   icon:
                     - color: "#5f6368"
-                    - width: 18px
+                    - width: 14px
 
               - type: custom:button-card
                 entity: cover.yellow_switch
                 icon: mdi:arrow-down
+                show_name: false
                 tap_action:
                   action: call-service
                   service: cover.close_cover
@@ -726,16 +725,18 @@ views:
                     entity_id: cover.yellow_switch
                 styles:
                   card:
-                    - height: 32px
+                    - height: 28px
                     - background: "#ffffff"
                     - border-radius: 6px
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   icon:
                     - color: "#5f6368"
-                    - width: 18px
+                    - width: 14px
 
-          # Shutter Percentage Quick Toggles
-          - type: horizontal-stack
+          - type: grid
+            columns: 4
+            square: false
             cards:
               - type: custom:button-card
                 entity: cover.yellow_switch
@@ -754,9 +755,10 @@ views:
                     - background: "#f1f3f4"
                     - border-radius: 4px
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   name:
                     - color: "#202124"
-                    - font-size: 11px
+                    - font-size: 10px
                     - font-weight: 500
 
               - type: custom:button-card
@@ -776,9 +778,10 @@ views:
                     - background: "#f1f3f4"
                     - border-radius: 4px
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   name:
                     - color: "#202124"
-                    - font-size: 11px
+                    - font-size: 10px
                     - font-weight: 500
 
               - type: custom:button-card
@@ -798,9 +801,10 @@ views:
                     - background: "#f1f3f4"
                     - border-radius: 4px
                     - border: "1px solid #dadce0"
+                    - padding: 0
                   name:
                     - color: "#202124"
-                    - font-size: 11px
+                    - font-size: 10px
                     - font-weight: 500
 
               - type: custom:button-card
@@ -820,7 +824,8 @@ views:
                     - background: "#e8f0fe"
                     - border-radius: 4px
                     - border: "1px solid #4285f4"
+                    - padding: 0
                   name:
                     - color: "#4285f4"
-                    - font-size: 11px
+                    - font-size: 10px
                     - font-weight: 600
