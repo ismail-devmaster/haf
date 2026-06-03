@@ -13,7 +13,6 @@ import {
   loadTokens,
   saveTokens,
 } from "../common/auth/token_storage";
-import { applyThemesOnElement } from "../common/dom/apply_themes_on_element";
 import type { HASSDomEvent } from "../common/dom/fire_event";
 import { mainWindow } from "../common/dom/get_main_window";
 import { navigate } from "../common/navigate";
@@ -247,23 +246,6 @@ class HaOnboarding extends litLocalizeLiteMixin(HassElement) {
     if (changedProps.has("hass")) {
       const oldHass = changedProps.get("hass") as HomeAssistant | undefined;
       this.hassChanged(this.hass!, oldHass);
-      if (oldHass?.themes !== this.hass!.themes) {
-        if (matchMedia("(prefers-color-scheme: dark)").matches) {
-          applyThemesOnElement(
-            document.documentElement,
-            {
-              default_theme: "default",
-              default_dark_theme: null,
-              themes: {},
-              darkMode: true,
-              theme: "default",
-            },
-            undefined,
-            undefined,
-            true
-          );
-        }
-      }
     }
   }
 
@@ -274,10 +256,9 @@ class HaOnboarding extends litLocalizeLiteMixin(HassElement) {
   private async _fetchInstallationType(): Promise<void> {
     try {
       const response = await fetchInstallationType();
-      this._supervisor = [
-        "Domolux OS",
-        "Domolux Supervised",
-      ].includes(response.installation_type);
+      this._supervisor = ["Domolux OS", "Domolux Supervised"].includes(
+        response.installation_type
+      );
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.error(

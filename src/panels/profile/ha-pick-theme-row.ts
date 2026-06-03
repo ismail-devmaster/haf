@@ -120,7 +120,7 @@ export class HaPickThemeRow extends SubscribeMixin(LitElement) {
                 "ui.panel.profile.themes.theme_mode"
               )}
               .value=${themeSettings?.dark === undefined
-                ? "auto"
+                ? "light"
                 : themeSettings.dark
                   ? "dark"
                   : "light"}

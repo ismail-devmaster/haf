@@ -4,7 +4,6 @@ import type { PropertyValues } from "lit";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import punycode from "punycode";
-import { applyThemesOnElement } from "../common/dom/apply_themes_on_element";
 import { extractSearchParamsObject } from "../common/url/search-params";
 import "../components/ha-alert";
 import "../components/ha-button";
@@ -241,22 +240,6 @@ export class HaAuthorize extends litLocalizeLiteMixin(LitElement) {
     }
 
     this._fetchAuthProviders();
-
-    if (matchMedia("(prefers-color-scheme: dark)").matches) {
-      applyThemesOnElement(
-        document.documentElement,
-        {
-          default_theme: "default",
-          default_dark_theme: null,
-          themes: {},
-          darkMode: true,
-          theme: "default",
-        },
-        undefined,
-        undefined,
-        true
-      );
-    }
 
     if (
       window.innerWidth > 450 &&

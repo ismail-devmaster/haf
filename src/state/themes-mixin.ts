@@ -49,14 +49,14 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
         );
       });
       mql.addListener((ev) => this._applyTheme(ev.matches));
-      if (!this._themeApplied && mql.matches) {
+      if (!this._themeApplied) {
         applyThemesOnElement(
           document.documentElement,
           {
             default_theme: "default",
             default_dark_theme: null,
             themes: {},
-            darkMode: true,
+            darkMode: false,
             theme: "default",
           },
           undefined,
@@ -92,7 +92,7 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
       });
     }
 
-    private _applyTheme(darkPreferred: boolean) {
+    private _applyTheme(_darkPreferred: boolean) {
       if (!this.hass?.config || !this.hass.themes) {
         return;
       }
@@ -112,7 +112,7 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
           : this.hass.selectedTheme;
 
       let darkMode =
-        themeSettings?.dark === undefined ? darkPreferred : themeSettings.dark;
+        themeSettings?.dark === undefined ? false : themeSettings.dark;
 
       const themeName =
         themeSettings?.theme ||
