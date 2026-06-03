@@ -244,7 +244,24 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
       });
 
       subscribeEntities(conn, (states) => this._updateHass({ states }));
+      // Non-admin users may not have permission to read entity/device/area/floor
+      // registries. The backend can reject these subscriptions or return
+      // unauthorized. The collection wrapper does not surface a promise to
+      // `.catch()`, so we install a setTimeout-based fallback: if the
+      // callback hasn't fired within 5 seconds (and the registry is still
+      // its initial null), set it to an empty object so cards that deref
+      // the registry don't throw "Cannot read properties of null".
+      const entitiesFallbackTimeout = window.setTimeout(() => {
+        if (this.hass && this.hass.entities === null) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "Entity registry did not load in time; defaulting to empty"
+          );
+          this._updateHass({ entities: {} });
+        }
+      }, 5000);
       subscribeEntityRegistryDisplay(conn, (entityReg) => {
+        window.clearTimeout(entitiesFallbackTimeout);
         const entities: HomeAssistant["entities"] = {};
         for (const entity of entityReg.entities) {
           entities[entity.ei] = {
@@ -267,21 +284,51 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
         }
         this._updateHass({ entities });
       });
+      const devicesFallbackTimeout = window.setTimeout(() => {
+        if (this.hass && this.hass.devices === null) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "Device registry did not load in time; defaulting to empty"
+          );
+          this._updateHass({ devices: {} });
+        }
+      }, 5000);
       subscribeDeviceRegistry(conn, (deviceReg) => {
+        window.clearTimeout(devicesFallbackTimeout);
         const devices: HomeAssistant["devices"] = {};
         for (const device of deviceReg) {
           devices[device.id] = device;
         }
         this._updateHass({ devices });
       });
+      const areasFallbackTimeout = window.setTimeout(() => {
+        if (this.hass && this.hass.areas === null) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "Area registry did not load in time; defaulting to empty"
+          );
+          this._updateHass({ areas: {} });
+        }
+      }, 5000);
       subscribeAreaRegistry(conn, (areaReg) => {
+        window.clearTimeout(areasFallbackTimeout);
         const areas: HomeAssistant["areas"] = {};
         for (const area of areaReg) {
           areas[area.area_id] = area;
         }
         this._updateHass({ areas });
       });
+      const floorsFallbackTimeout = window.setTimeout(() => {
+        if (this.hass && this.hass.floors === null) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            "Floor registry did not load in time; defaulting to empty"
+          );
+          this._updateHass({ floors: {} });
+        }
+      }, 5000);
       subscribeFloorRegistry(conn, (floorReg) => {
+        window.clearTimeout(floorsFallbackTimeout);
         const floors: HomeAssistant["floors"] = {};
         for (const floor of floorReg) {
           floors[floor.floor_id] = floor;

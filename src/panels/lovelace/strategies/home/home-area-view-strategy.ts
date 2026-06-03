@@ -41,6 +41,13 @@ export class HomeAreaViewStrategy extends ReactiveElement {
       throw new Error("Area not provided");
     }
 
+    // If the area registry is not yet loaded (or has fallen back to empty
+    // for a non-admin), bail out with an empty view so we don't throw and
+    // produce a red error section.
+    if (!hass.areas) {
+      return { type: "panel", cards: [] };
+    }
+
     const area = hass.areas[config.area];
 
     if (!area) {

@@ -1,0 +1,302 @@
+views:
+  - title: Salle de Bain
+    path: salle-de-bain
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: >
+              <div style="display:flex; align-items:center; gap:12px;
+              width:100%;">
+                <div style="width:36px; height:36px; border-radius:50%; background:#F8F9FA; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                  <ha-icon icon="mdi:arrow-left" style="color:#5F6368; width:20px; height:20px;"></ha-icon>
+                </div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-family:'Google Sans',sans-serif; font-size:14px; font-weight:500; line-height:20px; color:#202124; letter-spacing:0.15px;">Back to Home</div>
+                  <div style="font-family:'Roboto',sans-serif; font-size:12px; font-weight:400; line-height:16px; color:#5F6368; margin-top:0px; letter-spacing:0.25px;">Dashboard overview</div>
+                </div>
+                <ha-icon icon="mdi:chevron-right" style="color:#DADCE0; width:18px; height:18px; flex-shrink:0;"></ha-icon>
+              </div>
+            tap_action:
+              action: navigate
+              navigation_path: /dashboard-user/0
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#FFFFFF"
+                - border-radius: 16px
+                - border: "0.5px solid #DADCE0"
+                - padding: 10px 12px
+                - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 1px 3px 1px rgba(60,64,67,0.04)
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                - display: flex
+                - align-items: center
+                - width: 100%
+                - height: 100%
+                - box-sizing: border-box
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 16px
+                - font-weight: 500
+                - line-height: 24px
+                - color: "#202124"
+                - text-align: left
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 2px 6px 2px rgba(60,64,67,0.04);
+                transform: translateY(-1px);
+              }
+              ha-card:active {
+                background: #F8F9FA;
+              }
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: |
+              <div style="padding:0;">
+                <div style="width:48px; height:48px; border-radius:14px; background:#E3F9F7; display:flex; align-items:center; justify-content:center; margin-bottom:8px;">
+                  <ha-icon icon="mdi:bathtub" style="color:#0097A7; width:26px; height:26px;"></ha-icon>
+                </div>
+                <div style="font-family:'Google Sans',sans-serif; font-size:20px; font-weight:400; color:#202124; margin-bottom:2px; line-height:28px; letter-spacing:0px;">Salle de Bain</div>
+                <div style="font-family:'Roboto',sans-serif; font-size:12px; font-weight:400; color:#5F6368; line-height:16px; letter-spacing:0.25px;"></div>
+              </div>
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#FFFFFF"
+                - border: none
+                - box-shadow: none
+                - padding: 8px 12px
+                - width: 100%
+                - height: 100%
+                - box-sizing: border-box
+              name:
+                - text-align: left
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: Sensors
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: transparent
+                - box-shadow: none
+                - border: none
+                - padding: 16px 4px 4px
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 22px
+                - font-weight: 400
+                - line-height: 28px
+                - color: "#202124"
+                - text-align: left
+          - type: custom:button-card
+            entity: binary_sensor.0xf4b3b1fffe495048_occupancy
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: |-
+              [[[
+                const isOn = entity && entity.state === 'on';
+                const icon = isOn ? 'mdi:motion-sensor' : 'mdi:motion-sensor-off';
+                const iconBg = isOn ? '#188038' : '#F8F9FA';
+                const iconColor = isOn ? '#FFFFFF' : '#5F6368';
+                const status = isOn ? 'Motion detected' : 'Clear';
+                const pillBg = isOn ? '#188038' : '#F8F9FA';
+                const pillColor = isOn ? '#FFFFFF' : '#5F6368';
+                const pillBorder = isOn ? '#188038' : '#DADCE0';
+                return `<div style="display:flex; align-items:center; gap:12px; width:100%;">
+                  <div style="width:40px; height:40px; border-radius:12px; background:${iconBg}; display:flex; align-items:center; justify-content:center; transition:all 0.3s ease; flex-shrink:0;">
+                    <ha-icon icon="${icon}" style="color:${iconColor}; width:22px; height:22px;"></ha-icon>
+                  </div>
+                  <div style="flex:1; min-width:0; text-align:left;">
+                    <div style="font-family:'Google Sans',sans-serif; font-size:14px; font-weight:500; line-height:20px; color:#202124; letter-spacing:0.15px;">Occupancy</div>
+                    <div style="font-family:'Roboto',sans-serif; font-size:12px; font-weight:400; line-height:16px; color:#5F6368; margin-top:1px; letter-spacing:0.25px;">${status}</div>
+                  </div>
+                  <div style="font-family:'Google Sans',sans-serif; font-size:10px; font-weight:500; color:${pillColor}; background:${pillBg}; padding:3px 10px; border-radius:9999px; border:1px solid ${pillBorder}; transition:all 0.3s ease; flex-shrink:0;">${isOn ? 'Active' : 'Inactive'}</div>
+                </div>`;
+              ]]]
+            tap_action:
+              action: more-info
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#F8F9FA"
+                - border-radius: 16px
+                - border: "1px solid #DADCE0"
+                - padding: 16px
+                - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 1px 3px 1px rgba(60,64,67,0.04)
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                - position: relative
+                - overflow: hidden
+                - width: 100%
+                - height: 100%
+                - box-sizing: border-box
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 16px
+                - font-weight: 500
+                - line-height: 24px
+                - color: "#202124"
+                - text-align: left
+              state:
+                - font-family: "'Roboto', sans-serif"
+                - font-size: 14px
+                - font-weight: 400
+                - line-height: 20px
+                - color: "#5F6368"
+                - text-align: left
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 2px 6px 2px rgba(60,64,67,0.04);
+                transform: translateY(-1px);
+              }
+              ha-card:active {
+                background: #F8F9FA;
+              }
+            state:
+              - value: "on"
+                styles:
+                  card:
+                    - background: "#E6F4EA"
+                    - border: "1px solid #188038"
+          - type: custom:button-card
+            entity: binary_sensor.0xa4c138997d10233c_contact
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: |-
+              [[[
+                const isOn = entity && entity.state === 'on';
+                const icon = isOn ? 'mdi:door-open' : 'mdi:door-closed';
+                const iconBg = isOn ? '#F9AB00' : '#E8F0FE';
+                const iconColor = isOn ? '#FFFFFF' : '#1A73E8';
+                const status = isOn ? 'Open' : 'Closed';
+                const pillBg = isOn ? '#F9AB00' : '#E8F0FE';
+                const pillColor = isOn ? '#FFFFFF' : '#1A73E8';
+                const pillBorder = isOn ? '#F9AB00' : '#1A73E8';
+                return `<div style="display:flex; align-items:center; gap:12px; width:100%;">
+                  <div style="width:40px; height:40px; border-radius:12px; background:${iconBg}; display:flex; align-items:center; justify-content:center; transition:all 0.3s ease; flex-shrink:0;">
+                    <ha-icon icon="${icon}" style="color:${iconColor}; width:22px; height:22px;"></ha-icon>
+                  </div>
+                  <div style="flex:1; min-width:0; text-align:left;">
+                    <div style="font-family:'Google Sans',sans-serif; font-size:14px; font-weight:500; line-height:20px; color:#202124; letter-spacing:0.15px;">Door</div>
+                    <div style="font-family:'Roboto',sans-serif; font-size:12px; font-weight:400; line-height:16px; color:#5F6368; margin-top:1px; letter-spacing:0.25px;">${status}</div>
+                  </div>
+                  <div style="font-family:'Google Sans',sans-serif; font-size:10px; font-weight:500; color:${pillColor}; background:${pillBg}; padding:3px 10px; border-radius:9999px; border:1px solid ${pillBorder}; transition:all 0.3s ease; flex-shrink:0;">${status}</div>
+                </div>`;
+              ]]]
+            tap_action:
+              action: more-info
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#F8F9FA"
+                - border-radius: 16px
+                - border: "1px solid #DADCE0"
+                - padding: 16px
+                - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 1px 3px 1px rgba(60,64,67,0.04)
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                - position: relative
+                - overflow: hidden
+                - width: 100%
+                - height: 100%
+                - box-sizing: border-box
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 16px
+                - font-weight: 500
+                - line-height: 24px
+                - color: "#202124"
+                - text-align: left
+              state:
+                - font-family: "'Roboto', sans-serif"
+                - font-size: 14px
+                - font-weight: 400
+                - line-height: 20px
+                - color: "#5F6368"
+                - text-align: left
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 2px 6px 2px rgba(60,64,67,0.04);
+                transform: translateY(-1px);
+              }
+              ha-card:active {
+                background: #F8F9FA;
+              }
+            state:
+              - value: "on"
+                styles:
+                  card:
+                    - background: "#FFF3E0"
+                    - border: "1px solid #F9AB00"
+      - type: grid
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            icon: mdi:microphone
+            show_name: false
+            show_icon: true
+            tap_action:
+              action: navigate
+              navigation_path: /voice
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - width: 64px
+                - height: 64px
+                - border-radius: 9999px
+                - background: "#1A73E8"
+                - box-shadow: 0 1px 3px 0 rgba(60,64,67,0.08), 0 4px 8px 3px rgba(60,64,67,0.04)
+                - display: flex
+                - align-items: center
+                - justify-content: center
+                - position: fixed
+                - bottom: 16px
+                - right: 16px
+                - z-index: 100
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+              icon:
+                - color: "#FFFFFF"
+                - width: 28px
+                - height: 28px
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 3px 0 rgba(60,64,67,0.08), 0 6px 10px 4px rgba(60,64,67,0.04);
+                transform: scale(1.05);
+              }
+              ha-card:active {
+                box-shadow: 0 4px 4px 0 rgba(60,64,67,0.08), 0 8px 16px 6px rgba(60,64,67,0.04);
+                transform: scale(0.95);
+              }
+              @keyframes listening-pulse {
+                0% { transform: scale(1); opacity: 0.6; }
+                50% { transform: scale(1.15); opacity: 0.3; }
+                100% { transform: scale(1.3); opacity: 0; }
+              }

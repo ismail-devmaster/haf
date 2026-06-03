@@ -1,0 +1,961 @@
+views:
+  - title: Working Space
+    path: working-space
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        column_span: 2
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: >
+              <div style="display:flex; align-items:center; gap:16px;
+              width:100%;">
+                <div style="width:40px; height:40px; border-radius:50%; background:#F8F9FA; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                  <ha-icon icon="mdi:arrow-left" style="color:#5F6368; width:22px; height:22px;"></ha-icon>
+                </div>
+                <div style="width:48px; height:48px; border-radius:16px; background:#E6F4EA; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                  <ha-icon icon="mdi:desk" style="color:#188038; width:26px; height:26px;"></ha-icon>
+                </div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-family:'Google Sans',sans-serif; font-size:20px; font-weight:400; line-height:26px; color:#202124;">Working Space</div>
+                  <div style="font-family:'Roboto',sans-serif; font-size:13px; font-weight:400; line-height:18px; color:#5F6368; letter-spacing:0.25px;">Back to Home · Dashboard overview</div>
+                </div>
+                <ha-icon icon="mdi:chevron-right" style="color:#DADCE0; width:20px; height:20px; flex-shrink:0;"></ha-icon>
+              </div>
+            tap_action:
+              action: navigate
+              navigation_path: /dashboard-user/0
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#FFFFFF"
+                - border-radius: 14px
+                - border: "0.5px solid #DADCE0"
+                - padding: 12px 16px
+                - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 1px 3px 1px rgba(60,64,67,0.04)
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                - display: flex
+                - align-items: center
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 15px
+                - font-weight: 500
+                - line-height: 22px
+                - color: "#202124"
+                - text-align: left
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 2px 6px 2px rgba(60,64,67,0.04);
+                transform: translateY(-1px);
+              }
+              ha-card:active { background: #F8F9FA; }
+      - type: grid
+        column_span: 1
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: Climate control
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: transparent
+                - box-shadow: none
+                - border: none
+                - padding: 4px 4px 6px
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 16px
+                - font-weight: 500
+                - line-height: 22px
+                - color: "#202124"
+                - text-align: left
+          - type: custom:button-card
+            entity: input_boolean.ac_power
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: |-
+              [[[
+                const isOn = entity && entity.state === 'on';
+                const tempEnt = states['input_number.ac_temperature'];
+                const tempVal = tempEnt && tempEnt.state ? Math.round(parseFloat(tempEnt.state)) : '--';
+                const dotColor = isOn ? '#188038' : '#9AA0A6';
+                const glow = isOn ? 'box-shadow:0 0 0 3px rgba(24,128,56,0.25);' : '';
+                const label = isOn ? 'AC Running · ' + tempVal + '°C' : 'AC Stopped';
+                return `<div style="display:flex; align-items:center; gap:12px; padding:0 4px;">
+                  <div style="width:10px; height:10px; border-radius:50%; background:${dotColor}; ${glow} transition:all 0.3s ease; flex-shrink:0;"></div>
+                  <span style="font-family:'Google Sans',sans-serif; font-size:14px; font-weight:500; color:#202124; letter-spacing:0.1px;">AC Power</span>
+                  <span style="margin-left:auto; font-family:'Roboto',sans-serif; font-size:12px; font-weight:400; color:#5F6368; line-height:16px; letter-spacing:0.4px;">${label}</span>
+                </div>`;
+              ]]]
+            styles:
+              card:
+                - background: transparent
+                - box-shadow: none
+                - border: none
+                - padding: 4px 4px 0px
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: input_boolean.ac_power
+                name: Power On
+                icon: mdi:power
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: script.ac_turn_on
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#E8EAED"
+                    - border-radius: 14px
+                    - height: 72px
+                    - padding: 0 24px
+                    - box-shadow: none
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 14px
+                    - font-weight: 500
+                    - line-height: 20px
+                    - letter-spacing: 0.1px
+                    - color: "#3C4043"
+                  icon:
+                    - color: "#5F6368"
+                    - width: 26px
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background: "#188038"
+                        - border: "1px solid #188038"
+                      name:
+                        - color: "#FFFFFF"
+                        - font-weight: 600
+                      icon:
+                        - color: "#FFFFFF"
+                extra_styles: |
+                  ha-card:hover { opacity: 0.92; }
+                  ha-card:active { transform: scale(0.97); }
+              - type: custom:button-card
+                entity: input_boolean.ac_power
+                name: Power Off
+                icon: mdi:power-off
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: script.ac_turn_off
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#E8EAED"
+                    - border-radius: 14px
+                    - height: 72px
+                    - padding: 0 24px
+                    - box-shadow: none
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 14px
+                    - font-weight: 500
+                    - line-height: 20px
+                    - letter-spacing: 0.1px
+                    - color: "#3C4043"
+                  icon:
+                    - color: "#5F6368"
+                    - width: 26px
+                state:
+                  - value: "off"
+                    styles:
+                      card:
+                        - background: "#D93025"
+                        - border: "1px solid #D93025"
+                      name:
+                        - color: "#FFFFFF"
+                        - font-weight: 600
+                      icon:
+                        - color: "#FFFFFF"
+                extra_styles: |
+                  ha-card:hover { opacity: 0.92; }
+                  ha-card:active { transform: scale(0.97); }
+          - type: custom:button-card
+            entity: input_number.ac_temperature
+            show_name: false
+            show_icon: false
+            show_state: false
+            name: |-
+              [[[
+                const temp = entity && entity.state ? Math.round(parseFloat(entity.state)) : '--';
+                return `<div style="text-align:center; padding:4px 0;">
+                  <div style="font-family:'Google Sans',sans-serif; font-size:10px; font-weight:500; color:#5F6368; margin-bottom:8px; line-height:14px; letter-spacing:2px; text-transform:uppercase;">Target Temperature</div>
+                  <div style="font-family:'Google Sans',sans-serif; font-size:40px; font-weight:300; color:#202124; letter-spacing:-2px; line-height:44px;">${temp}°</div>
+                </div>`;
+              ]]]
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#F8F9FA"
+                - border-radius: 18px
+                - border: "1px solid #DADCE0"
+                - padding: 16px
+                - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 1px 3px 1px rgba(60,64,67,0.04)
+                - text-align: center
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 2px 6px 2px rgba(60,64,67,0.04);
+                transform: translateY(-1px);
+              }
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                show_name: false
+                show_icon: true
+                icon: mdi:minus
+                tap_action:
+                  action: call-service
+                  service: script.ac_temperature_down
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - width: 48px
+                    - height: 48px
+                    - border-radius: 9999px
+                    - background: "#E8F0FE"
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 150ms ease
+                  icon:
+                    - width: 24px
+                    - color: "#1A73E8"
+                extra_styles: |
+                  ha-card:hover { background: rgba(26,115,232,0.12); }
+                  ha-card:active { transform: scale(0.97); }
+              - type: custom:button-card
+                show_name: false
+                show_icon: true
+                icon: mdi:plus
+                tap_action:
+                  action: call-service
+                  service: script.ac_temperature_up
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - width: 48px
+                    - height: 48px
+                    - border-radius: 9999px
+                    - background: "#FEF3E2"
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 150ms ease
+                  icon:
+                    - width: 24px
+                    - color: "#E67C00"
+                extra_styles: |
+                  ha-card:hover { background: rgba(249,171,0,0.12); }
+                  ha-card:active { transform: scale(0.97); }
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: Temperature presets
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: transparent
+                - box-shadow: none
+                - border: none
+                - padding: 4px 4px 6px
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 16px
+                - font-weight: 500
+                - line-height: 22px
+                - color: "#202124"
+                - text-align: left
+          - type: grid
+            columns: 5
+            square: false
+            cards:
+              - type: custom:button-card
+                entity: input_number.ac_temperature
+                name: 18°
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: script.ac_set_temperature
+                  data:
+                    temperature: 18
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - height: 44px
+                    - border-radius: 10px
+                    - padding: 0 12px
+                    - background: "#F8F9FA"
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 150ms ease
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 16px
+                    - letter-spacing: 0.5px
+                    - color: "#5F6368"
+                state:
+                  - operator: template
+                    value: >-
+                      [[[ return Math.round(parseFloat((entity && entity.state)
+                      || 0)) === 18; ]]]
+                    styles:
+                      card:
+                        - background: "#D3E3FD"
+                        - border: "1px solid #1A73E8"
+              - type: custom:button-card
+                entity: input_number.ac_temperature
+                name: 20°
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: script.ac_set_temperature
+                  data:
+                    temperature: 20
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - height: 44px
+                    - border-radius: 10px
+                    - padding: 0 12px
+                    - background: "#F8F9FA"
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 150ms ease
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 16px
+                    - letter-spacing: 0.5px
+                    - color: "#5F6368"
+                state:
+                  - operator: template
+                    value: >-
+                      [[[ return Math.round(parseFloat((entity && entity.state)
+                      || 0)) === 20; ]]]
+                    styles:
+                      card:
+                        - background: "#D3E3FD"
+                        - border: "1px solid #1A73E8"
+              - type: custom:button-card
+                entity: input_number.ac_temperature
+                name: 22°
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: script.ac_set_temperature
+                  data:
+                    temperature: 22
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - height: 44px
+                    - border-radius: 10px
+                    - padding: 0 12px
+                    - background: "#F8F9FA"
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 150ms ease
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 16px
+                    - letter-spacing: 0.5px
+                    - color: "#5F6368"
+                state:
+                  - operator: template
+                    value: >-
+                      [[[ return Math.round(parseFloat((entity && entity.state)
+                      || 0)) === 22; ]]]
+                    styles:
+                      card:
+                        - background: "#E6F4EA"
+                        - border: "1px solid #188038"
+              - type: custom:button-card
+                entity: input_number.ac_temperature
+                name: 24°
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: script.ac_set_temperature
+                  data:
+                    temperature: 24
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - height: 44px
+                    - border-radius: 10px
+                    - padding: 0 12px
+                    - background: "#F8F9FA"
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 150ms ease
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 16px
+                    - letter-spacing: 0.5px
+                    - color: "#5F6368"
+                state:
+                  - operator: template
+                    value: >-
+                      [[[ return Math.round(parseFloat((entity && entity.state)
+                      || 0)) === 24; ]]]
+                    styles:
+                      card:
+                        - background: "#FFF3E0"
+                        - border: "1px solid #F9AB00"
+              - type: custom:button-card
+                entity: input_number.ac_temperature
+                name: 26°
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: script.ac_set_temperature
+                  data:
+                    temperature: 26
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - height: 44px
+                    - border-radius: 10px
+                    - padding: 0 12px
+                    - background: "#F8F9FA"
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 150ms ease
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 16px
+                    - letter-spacing: 0.5px
+                    - color: "#5F6368"
+                state:
+                  - operator: template
+                    value: >-
+                      [[[ return Math.round(parseFloat((entity && entity.state)
+                      || 0)) === 26; ]]]
+                    styles:
+                      card:
+                        - background: "#FFF3E0"
+                        - border: "1px solid #F9AB00"
+      - type: grid
+        column_span: 1
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: Lighting
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: transparent
+                - box-shadow: none
+                - border: none
+                - padding: 4px 4px 6px
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 16px
+                - font-weight: 500
+                - line-height: 22px
+                - color: "#202124"
+                - text-align: left
+          - type: custom:button-card
+            entity: light.0xa4c138ad2b20ea12
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: |-
+              [[[
+                const isOn = entity && entity.state === 'on';
+                const brightness = (entity && entity.attributes && entity.attributes.brightness) || 0;
+                const pct = Math.round((brightness / 255) * 100);
+                const status = isOn ? (brightness > 0 ? pct + '% brightness' : 'On') : 'Turned off';
+                const iconBg = isOn ? '#FEF3E2' : '#F8F9FA';
+                const iconColor = isOn ? '#F9AB00' : '#5F6368';
+                const trackBg = isOn ? '#D3E3FD' : '#F8F9FA';
+                const trackBorder = isOn ? '#1A73E8' : '#DADCE0';
+                const thumbBg = isOn ? '#FFFFFF' : '#DADCE0';
+                const thumbPos = isOn ? 'right:2px;' : 'left:2px;';
+                return `<div style="display:flex; align-items:center; gap:14px; width:100%;">
+                  <div style="width:44px; height:44px; border-radius:14px; background:${iconBg}; display:flex; align-items:center; justify-content:center; transition:all 0.3s ease; flex-shrink:0;">
+                    <ha-icon icon="mdi:desk-lamp" style="color:${iconColor}; width:24px; height:24px;"></ha-icon>
+                  </div>
+                  <div style="flex:1; min-width:0; text-align:left;">
+                    <div style="font-family:'Google Sans',sans-serif; font-size:15px; font-weight:500; line-height:22px; color:#202124; letter-spacing:0.15px;">Desk Lamp</div>
+                    <div style="font-family:'Roboto',sans-serif; font-size:13px; font-weight:400; line-height:18px; color:#5F6368; margin-top:2px; letter-spacing:0.25px;">${status}</div>
+                  </div>
+                  <div style="display:inline-block; position:relative; width:52px; height:32px; background:${trackBg}; border-radius:9999px; border:2px solid ${trackBorder}; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); flex-shrink:0;">
+                    <div style="position:absolute; top:2px; ${thumbPos} width:16px; height:16px; border-radius:50%; background:${thumbBg}; box-shadow:0 1px 3px rgba(0,0,0,0.15); transition:all 0.2s cubic-bezier(0.4,0,0.2,1);"></div>
+                  </div>
+                </div>`;
+              ]]]
+            tap_action:
+              action: toggle
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#F8F9FA"
+                - border-radius: 14px
+                - border: "1px solid #DADCE0"
+                - padding: 12px
+                - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 1px 3px 1px rgba(60,64,67,0.04)
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                - position: relative
+                - overflow: hidden
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 14px
+                - font-weight: 500
+                - line-height: 20px
+                - letter-spacing: 0.15px
+                - color: "#202124"
+                - text-align: left
+              state:
+                - font-family: "'Roboto', sans-serif"
+                - font-size: 13px
+                - font-weight: 400
+                - line-height: 18px
+                - letter-spacing: 0.25px
+                - color: "#5F6368"
+                - text-align: left
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 2px 6px 2px rgba(60,64,67,0.04);
+                transform: translateY(-1px);
+              }
+              ha-card:active { background: #F8F9FA; }
+          - type: custom:button-card
+            entity: light.0xa4c138ad2b20ea12
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: |-
+              [[[
+                const isOn = entity && entity.state === 'on';
+                const brightness = (entity && entity.attributes && entity.attributes.brightness) || 0;
+                const pct = Math.round((brightness / 255) * 100);
+                const barWidth = isOn ? pct + '%' : '0%';
+                return `<div style="width:100%;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <span style="font-family:'Google Sans',sans-serif; font-size:13px; font-weight:500; color:#5F6368; line-height:20px;">Brightness</span>
+                    <span style="font-family:'Google Sans',sans-serif; font-size:13px; font-weight:500; color:#202124; line-height:20px;">${isOn ? pct + '%' : 'Off'}</span>
+                  </div>
+                  <div style="width:100%; height:6px; background:#F1F3F4; border-radius:3px; overflow:hidden;">
+                    <div style="width:${barWidth}; height:100%; background:#F9AB00; border-radius:3px; transition:width 0.3s ease;"></div>
+                  </div>
+                </div>`;
+              ]]]
+            tap_action:
+              action: none
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#F8F9FA"
+                - border-radius: 14px
+                - border: "1px solid #DADCE0"
+                - padding: 12px
+                - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 1px 3px 1px rgba(60,64,67,0.04)
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                - position: relative
+                - overflow: hidden
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 14px
+                - font-weight: 500
+                - line-height: 20px
+                - letter-spacing: 0.15px
+                - color: "#202124"
+                - text-align: left
+              state:
+                - font-family: "'Roboto', sans-serif"
+                - font-size: 13px
+                - font-weight: 400
+                - line-height: 18px
+                - letter-spacing: 0.25px
+                - color: "#5F6368"
+                - text-align: left
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 2px 6px 2px rgba(60,64,67,0.04);
+                transform: translateY(-1px);
+              }
+          - type: grid
+            columns: 4
+            square: false
+            cards:
+              - type: custom:button-card
+                entity: light.0xa4c138ad2b20ea12
+                name: 25%
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: light.turn_on
+                  target:
+                    entity_id: light.0xa4c138ad2b20ea12
+                  data:
+                    brightness_pct: 25
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - height: 44px
+                    - border-radius: 10px
+                    - padding: 0 12px
+                    - background: "#F8F9FA"
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 150ms ease
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 16px
+                    - letter-spacing: 0.5px
+                    - color: "#5F6368"
+                state:
+                  - operator: template
+                    value: >-
+                      [[[ const b = (entity && entity.attributes &&
+                      entity.attributes.brightness) || 0; return entity.state
+                      === "on" && Math.round((b / 255) * 100) === 25; ]]]
+                    styles:
+                      card:
+                        - background: "#FEF3E2"
+                        - border: "1px solid #F9AB00"
+                      name:
+                        - color: "#E67C00"
+                        - font-weight: 600
+              - type: custom:button-card
+                entity: light.0xa4c138ad2b20ea12
+                name: 50%
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: light.turn_on
+                  target:
+                    entity_id: light.0xa4c138ad2b20ea12
+                  data:
+                    brightness_pct: 50
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - height: 44px
+                    - border-radius: 10px
+                    - padding: 0 12px
+                    - background: "#F8F9FA"
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 150ms ease
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 16px
+                    - letter-spacing: 0.5px
+                    - color: "#5F6368"
+                state:
+                  - operator: template
+                    value: >-
+                      [[[ const b = (entity && entity.attributes &&
+                      entity.attributes.brightness) || 0; return entity.state
+                      === "on" && Math.round((b / 255) * 100) === 50; ]]]
+                    styles:
+                      card:
+                        - background: "#FEF3E2"
+                        - border: "1px solid #F9AB00"
+                      name:
+                        - color: "#E67C00"
+                        - font-weight: 600
+              - type: custom:button-card
+                entity: light.0xa4c138ad2b20ea12
+                name: 75%
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: light.turn_on
+                  target:
+                    entity_id: light.0xa4c138ad2b20ea12
+                  data:
+                    brightness_pct: 75
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - height: 44px
+                    - border-radius: 10px
+                    - padding: 0 12px
+                    - background: "#F8F9FA"
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 150ms ease
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 16px
+                    - letter-spacing: 0.5px
+                    - color: "#5F6368"
+                state:
+                  - operator: template
+                    value: >-
+                      [[[ const b = (entity && entity.attributes &&
+                      entity.attributes.brightness) || 0; return entity.state
+                      === "on" && Math.round((b / 255) * 100) === 75; ]]]
+                    styles:
+                      card:
+                        - background: "#FEF3E2"
+                        - border: "1px solid #F9AB00"
+                      name:
+                        - color: "#E67C00"
+                        - font-weight: 600
+              - type: custom:button-card
+                entity: light.0xa4c138ad2b20ea12
+                name: 100%
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: light.turn_on
+                  target:
+                    entity_id: light.0xa4c138ad2b20ea12
+                  data:
+                    brightness_pct: 100
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - height: 44px
+                    - border-radius: 10px
+                    - padding: 0 12px
+                    - background: "#F8F9FA"
+                    - border: "1px solid #DADCE0"
+                    - display: flex
+                    - align-items: center
+                    - justify-content: center
+                    - transition: all 150ms ease
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 16px
+                    - letter-spacing: 0.5px
+                    - color: "#5F6368"
+                state:
+                  - operator: template
+                    value: >-
+                      [[[ const b = (entity && entity.attributes &&
+                      entity.attributes.brightness) || 0; return entity.state
+                      === "on" && Math.round((b / 255) * 100) === 100; ]]]
+                    styles:
+                      card:
+                        - background: "#FEF3E2"
+                        - border: "1px solid #F9AB00"
+                      name:
+                        - color: "#E67C00"
+                        - font-weight: 600
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: >
+              <div style="display:flex; justify-content:space-between;
+              align-items:center; text-align:center; width:100%; gap:8px;">
+                <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
+                  <div style="width:40px; height:40px; border-radius:50%; background:#F8F9FA; display:flex; align-items:center; justify-content:center;">
+                    <ha-icon icon="mdi:brightness-4" style="color:#5F6368; width:22px; height:22px;"></ha-icon>
+                  </div>
+                  <div style="font-family:'Google Sans',sans-serif; font-size:11px; font-weight:500; color:#5F6368; line-height:16px; letter-spacing:0.5px;">Low</div>
+                </div>
+                <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
+                  <div style="width:40px; height:40px; border-radius:50%; background:#F8F9FA; display:flex; align-items:center; justify-content:center;">
+                    <ha-icon icon="mdi:brightness-5" style="color:#5F6368; width:22px; height:22px;"></ha-icon>
+                  </div>
+                  <div style="font-family:'Google Sans',sans-serif; font-size:11px; font-weight:500; color:#5F6368; line-height:16px; letter-spacing:0.5px;">Med</div>
+                </div>
+                <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
+                  <div style="width:40px; height:40px; border-radius:50%; background:#F8F9FA; display:flex; align-items:center; justify-content:center;">
+                    <ha-icon icon="mdi:brightness-6" style="color:#5F6368; width:22px; height:22px;"></ha-icon>
+                  </div>
+                  <div style="font-family:'Google Sans',sans-serif; font-size:11px; font-weight:500; color:#5F6368; line-height:16px; letter-spacing:0.5px;">High</div>
+                </div>
+                <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
+                  <div style="width:40px; height:40px; border-radius:50%; background:#F8F9FA; display:flex; align-items:center; justify-content:center;">
+                    <ha-icon icon="mdi:brightness-7" style="color:#5F6368; width:22px; height:22px;"></ha-icon>
+                  </div>
+                  <div style="font-family:'Google Sans',sans-serif; font-size:11px; font-weight:500; color:#5F6368; line-height:16px; letter-spacing:0.5px;">Max</div>
+                </div>
+              </div>
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#F8F9FA"
+                - border-radius: 14px
+                - border: "1px solid #DADCE0"
+                - padding: 12px
+                - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 1px 3px 1px rgba(60,64,67,0.04)
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                - position: relative
+                - overflow: hidden
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 14px
+                - font-weight: 500
+                - line-height: 20px
+                - letter-spacing: 0.15px
+                - color: "#202124"
+                - text-align: left
+              state:
+                - font-family: "'Roboto', sans-serif"
+                - font-size: 13px
+                - font-weight: 400
+                - line-height: 18px
+                - letter-spacing: 0.25px
+                - color: "#5F6368"
+                - text-align: left
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 2px 6px 2px rgba(60,64,67,0.04);
+                transform: translateY(-1px);
+              }
+      - type: grid
+        column_span: 2
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            icon: mdi:microphone
+            show_name: false
+            show_icon: true
+            tap_action:
+              action: navigate
+              navigation_path: /voice
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - width: 56px
+                - height: 56px
+                - border-radius: 9999px
+                - background: "#1A73E8"
+                - box-shadow: 0 1px 3px 0 rgba(60,64,67,0.12), 0 4px 8px 3px rgba(60,64,67,0.06)
+                - display: flex
+                - align-items: center
+                - justify-content: center
+                - position: fixed
+                - bottom: 16px
+                - right: 16px
+                - z-index: 100
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+              icon:
+                - color: "#FFFFFF"
+                - width: 26px
+                - height: 26px
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 3px 0 rgba(60,64,67,0.12), 0 6px 12px 4px rgba(60,64,67,0.08);
+                transform: scale(1.06);
+              }
+              ha-card:active { transform: scale(0.94); }

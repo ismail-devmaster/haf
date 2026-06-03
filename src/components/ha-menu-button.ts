@@ -74,10 +74,12 @@ class HaMenuButton extends LitElement {
 
     const oldShowButton =
       oldHass?.kioskMode === false &&
-      (oldNarrow || oldHass?.dockedSidebar === "always_hidden");
+      (oldNarrow || oldHass?.dockedSidebar === "always_hidden") &&
+      oldHass?.user?.is_admin !== false;
     const showButton =
       this.hass.kioskMode === false &&
-      (this.narrow || this.hass.dockedSidebar === "always_hidden");
+      (this.narrow || this.hass.dockedSidebar === "always_hidden") &&
+      this.hass.user?.is_admin !== false;
 
     if (this.hasUpdated && oldShowButton === showButton) {
       return;

@@ -1,0 +1,690 @@
+views:
+  - title: Home
+    path: dashboard-user
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        column_span: 2
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: >
+              <div style="display:flex; justify-content:space-between;
+              align-items:center; width:100%;">
+                <div>
+                  <div style="font-family:'Google Sans',sans-serif; font-size:11px; font-weight:400; color:#5F6368; letter-spacing:0.3px; line-height:13px;">Good evening</div>
+                  <div style="font-family:'Google Sans',sans-serif; font-size:20px; font-weight:400; color:#202124; line-height:24px;">Domolux</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="display:flex; align-items:center; gap:6px; height:32px; padding:0 14px; border-radius:9999px; background:#F8F9FA; border:1px solid #DADCE0;">
+                    <span style="width:6px;height:6px;border-radius:50%;background:#1A73E8;"></span>
+                    <span style="font-family:'Google Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.3px;color:#5F6368;">🌡 23°C · Comfortable</span>
+                  </span>
+                  <span style="display:flex; align-items:center; gap:6px; height:32px; padding:0 14px; border-radius:9999px; background:#F8F9FA; border:1px solid #DADCE0;">
+                    <span style="width:6px;height:6px;border-radius:50%;background:#188038;"></span>
+                    <span style="font-family:'Google Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.3px;color:#5F6368;">🏠 2 devices on</span>
+                  </span>
+                  <span style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#1A73E8,#34A853); display:flex; align-items:center; justify-content:center; font-family:'Google Sans',sans-serif; font-size:14px; font-weight:500; color:#FFFFFF;">F</span>
+                </div>
+              </div>
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#FFFFFF"
+                - border-radius: 16px
+                - border: "1px solid #DADCE0"
+                - box-shadow: "0 1px 2px 0 rgba(60,64,67,0.10), 0 1px 3px 1px rgba(60,64,67,0.05)"
+                - padding: 12px 20px
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+              }
+      - type: grid
+        column_span: 1
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: Scenes
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: transparent
+                - box-shadow: none
+                - border: none
+                - padding: 8px 4px 4px
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 14px
+                - font-weight: 500
+                - line-height: 18px
+                - color: "#202124"
+                - text-align: left
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:button-card
+                entity: input_select.scene_mode
+                name: Morning
+                icon: mdi:weather-sunny
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: script.morning_mode
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#F8F9FA"
+                    - border-radius: 14px
+                    - border: "1px solid #DADCE0"
+                    - padding: 12px
+                    - height: 72px
+                    - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 1px 3px 1px rgba(60,64,67,0.05)
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                    - display: flex
+                    - flex-direction: column
+                    - justify-content: space-between
+                  icon:
+                    - color: "#5F6368"
+                    - width: 22px
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 15px
+                    - letter-spacing: 0.1px
+                    - color: "#202124"
+                    - text-align: left
+                    - margin-top: auto
+                extra_styles: |
+                  ha-card:hover {
+                    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+                    transform: translateY(-2px);
+                  }
+                  ha-card:active {
+                    background: #F1F3F4;
+                    transform: translateY(0);
+                  }
+                state:
+                  - value: Morning
+                    styles:
+                      card:
+                        - background: "#D3E3FD"
+                        - border: "1px solid #1A73E8"
+                      icon:
+                        - color: "#1A73E8"
+                      name:
+                        - color: "#041E49"
+                        - font-weight: 600
+              - type: custom:button-card
+                entity: input_select.scene_mode
+                name: Night
+                icon: mdi:weather-night
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: script.night_mode
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#F8F9FA"
+                    - border-radius: 14px
+                    - border: "1px solid #DADCE0"
+                    - padding: 12px
+                    - height: 72px
+                    - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 1px 3px 1px rgba(60,64,67,0.05)
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                    - display: flex
+                    - flex-direction: column
+                    - justify-content: space-between
+                  icon:
+                    - color: "#5F6368"
+                    - width: 22px
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 15px
+                    - letter-spacing: 0.1px
+                    - color: "#202124"
+                    - text-align: left
+                    - margin-top: auto
+                extra_styles: |
+                  ha-card:hover {
+                    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+                    transform: translateY(-2px);
+                  }
+                  ha-card:active {
+                    background: #F1F3F4;
+                    transform: translateY(0);
+                  }
+                state:
+                  - value: Night
+                    styles:
+                      card:
+                        - background: "#1A237E"
+                        - border: "1px solid #1A237E"
+                      icon:
+                        - color: "#90CAF9"
+                      name:
+                        - color: "#90CAF9"
+                        - font-weight: 600
+              - type: custom:button-card
+                entity: input_select.scene_mode
+                name: Away
+                icon: mdi:home-export-outline
+                show_state: false
+                tap_action:
+                  action: none
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#F8F9FA"
+                    - border-radius: 14px
+                    - border: "1px solid #DADCE0"
+                    - padding: 12px
+                    - height: 72px
+                    - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 1px 3px 1px rgba(60,64,67,0.05)
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                    - display: flex
+                    - flex-direction: column
+                    - justify-content: space-between
+                  icon:
+                    - color: "#5F6368"
+                    - width: 22px
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 15px
+                    - letter-spacing: 0.1px
+                    - color: "#202124"
+                    - text-align: left
+                    - margin-top: auto
+                extra_styles: |
+                  ha-card:hover {
+                    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+                    transform: translateY(-2px);
+                  }
+                  ha-card:active {
+                    background: #F1F3F4;
+                    transform: translateY(0);
+                  }
+                state:
+                  - value: Away
+                    styles:
+                      card:
+                        - background: "#5F6368"
+                        - border: "1px solid #5F6368"
+                      icon:
+                        - color: "#FFFFFF"
+                      name:
+                        - color: "#FFFFFF"
+                        - font-weight: 600
+              - type: custom:button-card
+                entity: input_select.scene_mode
+                name: Movie
+                icon: mdi:movie-open
+                show_state: false
+                tap_action:
+                  action: none
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#F8F9FA"
+                    - border-radius: 14px
+                    - border: "1px solid #DADCE0"
+                    - padding: 12px
+                    - height: 72px
+                    - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 1px 3px 1px rgba(60,64,67,0.05)
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                    - display: flex
+                    - flex-direction: column
+                    - justify-content: space-between
+                  icon:
+                    - color: "#5F6368"
+                    - width: 22px
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 12px
+                    - font-weight: 500
+                    - line-height: 15px
+                    - letter-spacing: 0.1px
+                    - color: "#202124"
+                    - text-align: left
+                    - margin-top: auto
+                extra_styles: |
+                  ha-card:hover {
+                    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+                    transform: translateY(-2px);
+                  }
+                  ha-card:active {
+                    background: #F1F3F4;
+                    transform: translateY(0);
+                  }
+                state:
+                  - value: Movie
+                    styles:
+                      card:
+                        - background: "#5F6368"
+                        - border: "1px solid #5F6368"
+                      icon:
+                        - color: "#FFFFFF"
+                      name:
+                        - color: "#FFFFFF"
+                        - font-weight: 600
+      - type: grid
+        column_span: 1
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: Rooms
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: transparent
+                - box-shadow: none
+                - border: none
+                - padding: 8px 4px 4px
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 14px
+                - font-weight: 500
+                - line-height: 18px
+                - color: "#202124"
+                - text-align: left
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:button-card
+                name: Overview
+                icon: mdi:view-dashboard-variant
+                tap_action:
+                  action: navigate
+                  navigation_path: /dashboard-home/google-home-dashboard
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#F8F9FA"
+                    - border-radius: 14px
+                    - border: "1px solid #DADCE0"
+                    - padding: 12px
+                    - height: 72px
+                    - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 1px 3px 1px rgba(60,64,67,0.05)
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                    - display: flex
+                    - flex-direction: column
+                    - align-items: flex-start
+                    - justify-content: space-between
+                  icon:
+                    - width: 20px
+                    - padding: 5px
+                    - border-radius: 9px
+                    - margin-bottom: 2px
+                    - color: "#5F6368"
+                    - background: "#F1F3F4"
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 11px
+                    - font-weight: 500
+                    - line-height: 14px
+                    - letter-spacing: 0.15px
+                    - color: "#202124"
+                    - text-align: left
+                extra_styles: |
+                  ha-card:hover {
+                    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+                    transform: translateY(-2px);
+                  }
+                  ha-card:active {
+                    background: #F1F3F4;
+                    transform: translateY(0);
+                  }
+              - type: custom:button-card
+                name: Fethi's Room
+                icon: mdi:bed
+                tap_action:
+                  action: navigate
+                  navigation_path: /fethi-room/0
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#F8F9FA"
+                    - border-radius: 14px
+                    - border: "1px solid #DADCE0"
+                    - padding: 12px
+                    - height: 72px
+                    - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 1px 3px 1px rgba(60,64,67,0.05)
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                    - display: flex
+                    - flex-direction: column
+                    - align-items: flex-start
+                    - justify-content: space-between
+                  icon:
+                    - width: 20px
+                    - padding: 5px
+                    - border-radius: 9px
+                    - margin-bottom: 2px
+                    - color: "#1A73E8"
+                    - background: "#D3E3FD"
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 11px
+                    - font-weight: 500
+                    - line-height: 14px
+                    - letter-spacing: 0.15px
+                    - color: "#202124"
+                    - text-align: left
+                extra_styles: |
+                  ha-card:hover {
+                    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+                    transform: translateY(-2px);
+                  }
+                  ha-card:active {
+                    background: #F1F3F4;
+                    transform: translateY(0);
+                  }
+              - type: custom:button-card
+                name: Kitchen
+                icon: mdi:chef-hat
+                tap_action:
+                  action: navigate
+                  navigation_path: /kitchen-dashboard/0
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#F8F9FA"
+                    - border-radius: 14px
+                    - border: "1px solid #DADCE0"
+                    - padding: 12px
+                    - height: 72px
+                    - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 1px 3px 1px rgba(60,64,67,0.05)
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                    - display: flex
+                    - flex-direction: column
+                    - align-items: flex-start
+                    - justify-content: space-between
+                  icon:
+                    - width: 20px
+                    - padding: 5px
+                    - border-radius: 9px
+                    - margin-bottom: 2px
+                    - color: "#F9AB00"
+                    - background: "#FEF3E2"
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 11px
+                    - font-weight: 500
+                    - line-height: 14px
+                    - letter-spacing: 0.15px
+                    - color: "#202124"
+                    - text-align: left
+                extra_styles: |
+                  ha-card:hover {
+                    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+                    transform: translateY(-2px);
+                  }
+                  ha-card:active {
+                    background: #F1F3F4;
+                    transform: translateY(0);
+                  }
+              - type: custom:button-card
+                name: Meeting Room
+                icon: mdi:presentation
+                tap_action:
+                  action: navigate
+                  navigation_path: /meeting-room/0
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#F8F9FA"
+                    - border-radius: 14px
+                    - border: "1px solid #DADCE0"
+                    - padding: 12px
+                    - height: 72px
+                    - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 1px 3px 1px rgba(60,64,67,0.05)
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                    - display: flex
+                    - flex-direction: column
+                    - align-items: flex-start
+                    - justify-content: space-between
+                  icon:
+                    - width: 20px
+                    - padding: 5px
+                    - border-radius: 9px
+                    - margin-bottom: 2px
+                    - color: "#9C27B0"
+                    - background: "#F3E8FF"
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 11px
+                    - font-weight: 500
+                    - line-height: 14px
+                    - letter-spacing: 0.15px
+                    - color: "#202124"
+                    - text-align: left
+                extra_styles: |
+                  ha-card:hover {
+                    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+                    transform: translateY(-2px);
+                  }
+                  ha-card:active {
+                    background: #F1F3F4;
+                    transform: translateY(0);
+                  }
+              - type: custom:button-card
+                name: Salle de Bain
+                icon: mdi:bathtub
+                tap_action:
+                  action: navigate
+                  navigation_path: /salle-de-bain/0
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#F8F9FA"
+                    - border-radius: 14px
+                    - border: "1px solid #DADCE0"
+                    - padding: 12px
+                    - height: 72px
+                    - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 1px 3px 1px rgba(60,64,67,0.05)
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                    - display: flex
+                    - flex-direction: column
+                    - align-items: flex-start
+                    - justify-content: space-between
+                  icon:
+                    - width: 20px
+                    - padding: 5px
+                    - border-radius: 9px
+                    - margin-bottom: 2px
+                    - color: "#0097A7"
+                    - background: "#E3F9F7"
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 11px
+                    - font-weight: 500
+                    - line-height: 14px
+                    - letter-spacing: 0.15px
+                    - color: "#202124"
+                    - text-align: left
+                extra_styles: |
+                  ha-card:hover {
+                    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+                    transform: translateY(-2px);
+                  }
+                  ha-card:active {
+                    background: #F1F3F4;
+                    transform: translateY(0);
+                  }
+              - type: custom:button-card
+                name: Working Space
+                icon: mdi:desk
+                tap_action:
+                  action: navigate
+                  navigation_path: /working-space/0
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#F8F9FA"
+                    - border-radius: 14px
+                    - border: "1px solid #DADCE0"
+                    - padding: 12px
+                    - height: 72px
+                    - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 1px 3px 1px rgba(60,64,67,0.05)
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                    - display: flex
+                    - flex-direction: column
+                    - align-items: flex-start
+                    - justify-content: space-between
+                  icon:
+                    - width: 20px
+                    - padding: 5px
+                    - border-radius: 9px
+                    - margin-bottom: 2px
+                    - color: "#188038"
+                    - background: "#E6F4EA"
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 11px
+                    - font-weight: 500
+                    - line-height: 14px
+                    - letter-spacing: 0.15px
+                    - color: "#202124"
+                    - text-align: left
+                extra_styles: |
+                  ha-card:hover {
+                    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+                    transform: translateY(-2px);
+                  }
+                  ha-card:active {
+                    background: #F1F3F4;
+                    transform: translateY(0);
+                  }
+              - type: custom:button-card
+                name: More Rooms
+                icon: mdi:plus
+                tap_action:
+                  action: none
+                styles:
+                  card:
+                    - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                    - "-webkit-font-smoothing": antialiased
+                    - "-moz-osx-font-smoothing": grayscale
+                    - background: "#F8F9FA"
+                    - border-radius: 14px
+                    - border: "1px dashed #DADCE0"
+                    - padding: 12px
+                    - height: 72px
+                    - box-shadow: none
+                    - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                    - display: flex
+                    - flex-direction: column
+                    - align-items: flex-start
+                    - justify-content: space-between
+                  icon:
+                    - width: 20px
+                    - padding: 5px
+                    - border-radius: 9px
+                    - margin-bottom: 2px
+                    - color: "#5F6368"
+                    - background: "#F1F3F4"
+                  name:
+                    - font-family: "'Google Sans', sans-serif"
+                    - font-size: 11px
+                    - font-weight: 500
+                    - line-height: 14px
+                    - letter-spacing: 0.15px
+                    - color: "#5F6368"
+                    - text-align: left
+                extra_styles: |
+                  ha-card:hover {
+                    box-shadow: 0 1px 2px 0 rgba(60,64,67,0.10), 0 4px 10px 2px rgba(60,64,67,0.08);
+                    transform: translateY(-2px);
+                  }
+                  ha-card:active {
+                    background: #F1F3F4;
+                    transform: translateY(0);
+                  }
+      - type: grid
+        column_span: 2
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            icon: mdi:microphone
+            show_name: false
+            show_icon: true
+            tap_action:
+              action: navigate
+              navigation_path: /voice
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - width: 48px
+                - height: 48px
+                - border-radius: 9999px
+                - background: "#1A73E8"
+                - box-shadow: 0 1px 3px 0 rgba(60,64,67,0.12), 0 4px 8px 3px rgba(60,64,67,0.06)
+                - display: flex
+                - align-items: center
+                - justify-content: center
+                - position: fixed
+                - bottom: 16px
+                - right: 16px
+                - z-index: 100
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+              icon:
+                - color: "#FFFFFF"
+                - width: 22px
+                - height: 22px
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 3px 0 rgba(60,64,67,0.12), 0 6px 12px 4px rgba(60,64,67,0.08);
+                transform: scale(1.06);
+              }
+              ha-card:active {
+                transform: scale(0.94);
+              }

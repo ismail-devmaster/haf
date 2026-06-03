@@ -28,6 +28,13 @@ export class HomeOtherDevicesViewStrategy extends ReactiveElement {
     config: HomeOtherDevicesViewStrategyConfig,
     hass: HomeAssistant
   ): Promise<LovelaceViewConfig> {
+    // If core registries are not yet loaded (or have fallen back to empty
+    // for a non-admin), bail out with an empty view so we don't throw and
+    // produce a red error section.
+    if (!hass.entities || !hass.devices || !hass.areas || !hass.floors) {
+      return { type: "panel", cards: [] };
+    }
+
     const allEntities = Object.keys(hass.states);
 
     const otherDevicesFilters = OTHER_DEVICES_FILTERS.map((filter) =>

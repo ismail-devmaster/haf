@@ -1,0 +1,245 @@
+views:
+  - title: Fethi's Room
+    path: fethi-room
+    type: sections
+    max_columns: 2
+    sections:
+      - type: grid
+        column_span: 2
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: >
+              <div style="display:flex; align-items:center; gap:12px;
+              width:100%;">
+                <div style="width:36px; height:36px; border-radius:50%; background:#F8F9FA; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                  <ha-icon icon="mdi:arrow-left" style="color:#5F6368; width:20px; height:20px;"></ha-icon>
+                </div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-family:'Google Sans',sans-serif; font-size:14px; font-weight:500; line-height:20px; color:#202124; letter-spacing:0.15px;">Back to Home</div>
+                  <div style="font-family:'Roboto',sans-serif; font-size:12px; font-weight:400; line-height:16px; color:#5F6368; letter-spacing:0.25px;">Dashboard overview</div>
+                </div>
+                <ha-icon icon="mdi:chevron-right" style="color:#DADCE0; width:18px; height:18px; flex-shrink:0;"></ha-icon>
+              </div>
+            tap_action:
+              action: navigate
+              navigation_path: /dashboard-user/0
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#FFFFFF"
+                - border-radius: 14px
+                - border: "0.5px solid #DADCE0"
+                - padding: 10px 12px
+                - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 1px 3px 1px rgba(60,64,67,0.04)
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                - display: flex
+                - align-items: center
+                - width: 100%
+                - height: 100%
+                - box-sizing: border-box
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 14px
+                - font-weight: 500
+                - line-height: 20px
+                - color: "#202124"
+                - text-align: left
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 2px 6px 2px rgba(60,64,67,0.04);
+                transform: translateY(-1px);
+              }
+              ha-card:active { background: #F8F9FA; }
+      - type: grid
+        column_span: 1
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: >
+              <div style="display:flex; flex-direction:column; gap:10px;
+              padding:4px 2px;">
+                <div style="width:52px; height:52px; border-radius:16px; background:#D3E3FD; display:flex; align-items:center; justify-content:center;">
+                  <ha-icon icon="mdi:bed" style="color:#1A73E8; width:28px; height:28px;"></ha-icon>
+                </div>
+                <div style="font-family:'Google Sans',sans-serif; font-size:20px; font-weight:400; color:#202124; line-height:26px;">Fethi's Room</div>
+                <div style="font-family:'Roboto',sans-serif; font-size:12px; font-weight:400; color:#5F6368; line-height:16px; letter-spacing:0.25px;">1 device · Bedroom</div>
+              </div>
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#FFFFFF"
+                - border-radius: 14px
+                - border: "1px solid #DADCE0"
+                - padding: 12px
+                - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 1px 3px 1px rgba(60,64,67,0.04)
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                - position: relative
+                - overflow: hidden
+                - width: 100%
+                - height: 100%
+                - box-sizing: border-box
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 14px
+                - font-weight: 500
+                - line-height: 20px
+                - color: "#202124"
+                - text-align: left
+              state:
+                - font-family: "'Roboto', sans-serif"
+                - font-size: 12px
+                - font-weight: 400
+                - line-height: 16px
+                - color: "#5F6368"
+                - text-align: left
+      - type: grid
+        column_span: 1
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: Devices
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: transparent
+                - box-shadow: none
+                - border: none
+                - padding: 4px 4px 6px
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 16px
+                - font-weight: 500
+                - line-height: 22px
+                - color: "#202124"
+                - text-align: left
+          - type: custom:button-card
+            entity: switch.6_way_controller_wifi_switch_2
+            show_name: true
+            show_icon: false
+            show_state: false
+            name: |-
+              [[[
+                const isOn = entity && entity.state === 'on';
+                const iconBg = isOn ? '#D3E3FD' : '#F8F9FA';
+                const iconColor = isOn ? '#1A73E8' : '#5F6368';
+                const trackBg = isOn ? '#D3E3FD' : '#F8F9FA';
+                const trackBorder = isOn ? '#1A73E8' : '#DADCE0';
+                const thumbBg = isOn ? '#FFFFFF' : '#DADCE0';
+                const thumbPos = isOn ? 'right:2px;' : 'left:2px;';
+                const statusText = isOn ? 'Active' : 'Turned off';
+                return `<div style="display:flex; align-items:center; gap:12px; width:100%;">
+                  <div style="width:40px; height:40px; border-radius:12px; background:${iconBg}; display:flex; align-items:center; justify-content:center; transition:all 0.3s ease; flex-shrink:0;">
+                    <ha-icon icon="mdi:power-plug" style="color:${iconColor}; width:22px; height:22px;"></ha-icon>
+                  </div>
+                  <div style="flex:1; min-width:0; text-align:left;">
+                    <div style="font-family:'Google Sans',sans-serif; font-size:14px; font-weight:500; line-height:20px; color:#202124; letter-spacing:0.15px;">Controller Switch 2</div>
+                    <div style="font-family:'Roboto',sans-serif; font-size:12px; font-weight:400; line-height:16px; color:#5F6368; margin-top:1px; letter-spacing:0.25px;">${statusText}</div>
+                  </div>
+                  <div style="display:inline-block; position:relative; width:48px; height:28px; background:${trackBg}; border-radius:9999px; border:2px solid ${trackBorder}; transition:all 0.2s cubic-bezier(0.4,0,0.2,1); flex-shrink:0;">
+                    <div style="position:absolute; top:2px; ${thumbPos} width:14px; height:14px; border-radius:50%; background:${thumbBg}; box-shadow:0 1px 3px rgba(0,0,0,0.15); transition:all 0.2s cubic-bezier(0.4,0,0.2,1);"></div>
+                  </div>
+                </div>`;
+              ]]]
+            tap_action:
+              action: toggle
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - background: "#F8F9FA"
+                - border-radius: 14px
+                - border: "1px solid #DADCE0"
+                - padding: 12px
+                - box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 1px 3px 1px rgba(60,64,67,0.04)
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+                - position: relative
+                - overflow: hidden
+                - width: 100%
+                - height: 100%
+                - box-sizing: border-box
+              name:
+                - font-family: "'Google Sans', sans-serif"
+                - font-size: 14px
+                - font-weight: 500
+                - line-height: 20px
+                - color: "#202124"
+                - text-align: left
+              state:
+                - font-family: "'Roboto', sans-serif"
+                - font-size: 12px
+                - font-weight: 400
+                - line-height: 16px
+                - color: "#5F6368"
+                - text-align: left
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.08), 0 2px 6px 2px rgba(60,64,67,0.04);
+                transform: translateY(-1px);
+              }
+              ha-card:active { background: #F8F9FA; }
+            state:
+              - value: "on"
+                styles:
+                  card:
+                    - background: "#F8F9FA"
+                    - border: "1px solid #DADCE0"
+      - type: grid
+        column_span: 2
+        columns: 1
+        square: false
+        cards:
+          - type: custom:button-card
+            icon: mdi:microphone
+            show_name: false
+            show_icon: true
+            tap_action:
+              action: navigate
+              navigation_path: /voice
+            styles:
+              card:
+                - font-family: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                - "-webkit-font-smoothing": antialiased
+                - "-moz-osx-font-smoothing": grayscale
+                - width: 56px
+                - height: 56px
+                - border-radius: 9999px
+                - background: "#1A73E8"
+                - box-shadow: 0 1px 3px 0 rgba(60,64,67,0.12), 0 4px 8px 3px rgba(60,64,67,0.06)
+                - display: flex
+                - align-items: center
+                - justify-content: center
+                - position: fixed
+                - bottom: 16px
+                - right: 16px
+                - z-index: 100
+                - transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1)
+              icon:
+                - color: "#FFFFFF"
+                - width: 26px
+                - height: 26px
+            extra_styles: |
+              ha-card:hover {
+                box-shadow: 0 1px 3px 0 rgba(60,64,67,0.12), 0 6px 12px 4px rgba(60,64,67,0.08);
+                transform: scale(1.06);
+              }
+              ha-card:active { transform: scale(0.94); }

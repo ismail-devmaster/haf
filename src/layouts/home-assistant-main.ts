@@ -52,6 +52,10 @@ export class HomeAssistantMain extends LitElement {
     });
   }
 
+  private get _isNonAdmin(): boolean {
+    return this.hass.user?.is_admin === false;
+  }
+
   protected render(): TemplateResult {
     const sidebarNarrow =
       this._sidebarNarrow || this._externalSidebar || this.hass.kioskMode;
@@ -62,28 +66,41 @@ export class HomeAssistantMain extends LitElement {
     return html`
       <ha-snowflakes .hass=${this.hass} .narrow=${this.narrow}></ha-snowflakes>
       <div class="app-shell">
-      <ha-drawer
-        .type=${sidebarNarrow ? "modal" : ""}
-        .open=${sidebarNarrow ? this._drawerOpen : false}
-        .direction=${computeRTLDirection(this.hass)}
-        @hass-drawer-closed=${this._drawerClosed}
-      >
-        <ha-sidebar
-          .hass=${this.hass}
-          .narrow=${sidebarNarrow}
-          .route=${this.route}
-          .alwaysExpand=${sidebarNarrow || this.hass.dockedSidebar === "docked"}
-        ></ha-sidebar>
-        ${isPanelReady
-          ? html`<partial-panel-resolver
-              .narrow=${this.narrow}
-              .hass=${this.hass}
-              .route=${this.route}
-              slot="appContent"
-            ></partial-panel-resolver>`
-          : nothing}
-      </ha-drawer>
-      ${sidebarNarrow && isPanelReady ? this._renderBottomNavigation() : nothing}
+        ${this._isNonAdmin
+          ? isPanelReady
+            ? html`<partial-panel-resolver
+                .narrow=${this.narrow}
+                .hass=${this.hass}
+                .route=${this.route}
+              ></partial-panel-resolver>`
+            : nothing
+          : html`
+              <ha-drawer
+                .type=${sidebarNarrow ? "modal" : ""}
+                .open=${sidebarNarrow ? this._drawerOpen : false}
+                .direction=${computeRTLDirection(this.hass)}
+                @hass-drawer-closed=${this._drawerClosed}
+              >
+                <ha-sidebar
+                  .hass=${this.hass}
+                  .narrow=${sidebarNarrow}
+                  .route=${this.route}
+                  .alwaysExpand=${sidebarNarrow ||
+                  this.hass.dockedSidebar === "docked"}
+                ></ha-sidebar>
+                ${isPanelReady
+                  ? html`<partial-panel-resolver
+                      .narrow=${this.narrow}
+                      .hass=${this.hass}
+                      .route=${this.route}
+                      slot="appContent"
+                    ></partial-panel-resolver>`
+                  : nothing}
+              </ha-drawer>
+              ${sidebarNarrow && isPanelReady
+                ? this._renderBottomNavigation()
+                : nothing}
+            `}
       </div>
     `;
   }
@@ -111,8 +128,18 @@ export class HomeAssistantMain extends LitElement {
 
     const items = [
       { label: "Home", path: "/home/overview", icon: mdiHome, index: 0 },
-      { label: "Devices", path: "/home/other-devices", icon: mdiDevices, index: 1 },
-      { label: "Automations", path: "/config/automation", icon: mdiAutoFix, index: 2 },
+      {
+        label: "Devices",
+        path: "/home/other-devices",
+        icon: mdiDevices,
+        index: 1,
+      },
+      {
+        label: "Automations",
+        path: "/config/automation",
+        icon: mdiAutoFix,
+        index: 2,
+      },
       { label: "Activity", path: "/logbook", icon: mdiClockOutline, index: 3 },
       { label: "Settings", path: "/config", icon: mdiCog, index: 4 },
     ];
@@ -210,6 +237,8 @@ export class HomeAssistantMain extends LitElement {
       "modal",
       this._sidebarNarrow || this._externalSidebar || this.hass.kioskMode
     );
+
+    toggleAttribute(this, "no-sidebar", this._isNonAdmin);
   }
 
   private get _sidebarNarrow() {
@@ -239,6 +268,11 @@ export class HomeAssistantMain extends LitElement {
       --mdc-top-app-bar-width: unset;
       --safe-area-content-inset-left: var(--safe-area-inset-left);
     }
+    :host([no-sidebar]) {
+      --ha-sidebar-width: unset;
+      --mdc-top-app-bar-width: unset;
+      --safe-area-content-inset-left: var(--safe-area-inset-left);
+    }
     :host([modal]) partial-panel-resolver {
       height: calc(100% - 88px);
       display: block;
@@ -261,11 +295,13 @@ export class HomeAssistantMain extends LitElement {
       right: 12px;
       height: 64px;
       border-radius: 32px;
-      background: rgba(255, 255, 255, 0.80);
+      background: rgba(255, 255, 255, 0.8);
       backdrop-filter: blur(20px) saturate(180%);
       -webkit-backdrop-filter: blur(20px) saturate(180%);
       border: 1px solid rgba(255, 255, 255, 0.3);
-      box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08), 0 1px 3px 0 rgba(0, 0, 0, 0.04);
+      box-shadow:
+        0 4px 16px 0 rgba(0, 0, 0, 0.08),
+        0 1px 3px 0 rgba(0, 0, 0, 0.04);
       display: flex;
       justify-content: space-around;
       align-items: center;
@@ -309,7 +345,7 @@ export class HomeAssistantMain extends LitElement {
     }
 
     .nav-item .label {
-      font-family: 'Google Sans Text', 'Product Sans', sans-serif;
+      font-family: "Google Sans Text", "Product Sans", sans-serif;
       font-size: 10px;
       font-weight: 500;
       letter-spacing: 0.1px;
@@ -317,16 +353,16 @@ export class HomeAssistantMain extends LitElement {
     }
 
     .nav-item.active {
-      color: var(--primary-color, #006D6D);
+      color: var(--primary-color, #006d6d);
     }
 
     .nav-item.active .icon-wrapper {
-      background-color: rgba(0, 109, 109, 0.10);
-      color: var(--primary-color, #006D6D);
+      background-color: rgba(0, 109, 109, 0.1);
+      color: var(--primary-color, #006d6d);
     }
 
     .nav-item.active ha-svg-icon {
-      transform: scale(1.0);
+      transform: scale(1);
     }
 
     .logo-item {

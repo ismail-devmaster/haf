@@ -1,0 +1,111 @@
+diff --git a/src/components/ha-menu-button.ts b/src/components/ha-menu-button.ts
+index f0471f719..d9030e676 100644
+--- a/src/components/ha-menu-button.ts
++++ b/src/components/ha-menu-button.ts
+@@ -74,10 +74,12 @@ class HaMenuButton extends LitElement {
+ 
+     const oldShowButton =
+       oldHass?.kioskMode === false &&
+-      (oldNarrow || oldHass?.dockedSidebar === "always_hidden");
++      (oldNarrow || oldHass?.dockedSidebar === "always_hidden") &&
++      oldHass?.user?.is_admin !== false;
+     const showButton =
+       this.hass.kioskMode === false &&
+-      (this.narrow || this.hass.dockedSidebar === "always_hidden");
++      (this.narrow || this.hass.dockedSidebar === "always_hidden") &&
++      this.hass.user?.is_admin !== false;
+ 
+     if (this.hasUpdated && oldShowButton === showButton) {
+       return;
+diff --git a/src/layouts/home-assistant-main.ts b/src/layouts/home-assistant-main.ts
+index 77e663dd7..d4891ced2 100644
+--- a/src/layouts/home-assistant-main.ts
++++ b/src/layouts/home-assistant-main.ts
+@@ -52,6 +52,10 @@ export class HomeAssistantMain extends LitElement {
+     });
+   }
+ 
++  private get _isNonAdmin(): boolean {
++    return this.hass.user?.is_admin === false;
++  }
++
+   protected render(): TemplateResult {
+     const sidebarNarrow =
+       this._sidebarNarrow || this._externalSidebar || this.hass.kioskMode;
+@@ -62,28 +66,38 @@ export class HomeAssistantMain extends LitElement {
+     return html`
+       <ha-snowflakes .hass=${this.hass} .narrow=${this.narrow}></ha-snowflakes>
+       <div class="app-shell">
+-      <ha-drawer
+-        .type=${sidebarNarrow ? "modal" : ""}
+-        .open=${sidebarNarrow ? this._drawerOpen : false}
+-        .direction=${computeRTLDirection(this.hass)}
+-        @hass-drawer-closed=${this._drawerClosed}
+-      >
+-        <ha-sidebar
+-          .hass=${this.hass}
+-          .narrow=${sidebarNarrow}
+-          .route=${this.route}
+-          .alwaysExpand=${sidebarNarrow || this.hass.dockedSidebar === "docked"}
+-        ></ha-sidebar>
+-        ${isPanelReady
++      ${this._isNonAdmin
++        ? isPanelReady
+           ? html`<partial-panel-resolver
+               .narrow=${this.narrow}
+               .hass=${this.hass}
+               .route=${this.route}
+-              slot="appContent"
+             ></partial-panel-resolver>`
+-          : nothing}
+-      </ha-drawer>
+-      ${sidebarNarrow && isPanelReady ? this._renderBottomNavigation() : nothing}
++          : nothing
++        : html`
++            <ha-drawer
++              .type=${sidebarNarrow ? "modal" : ""}
++              .open=${sidebarNarrow ? this._drawerOpen : false}
++              .direction=${computeRTLDirection(this.hass)}
++              @hass-drawer-closed=${this._drawerClosed}
++            >
++              <ha-sidebar
++                .hass=${this.hass}
++                .narrow=${sidebarNarrow}
++                .route=${this.route}
++                .alwaysExpand=${sidebarNarrow || this.hass.dockedSidebar === "docked"}
++              ></ha-sidebar>
++              ${isPanelReady
++                ? html`<partial-panel-resolver
++                    .narrow=${this.narrow}
++                    .hass=${this.hass}
++                    .route=${this.route}
++                    slot="appContent"
++                  ></partial-panel-resolver>`
++                : nothing}
++            </ha-drawer>
++            ${sidebarNarrow && isPanelReady ? this._renderBottomNavigation() : nothing}
++          `}
+       </div>
+     `;
+   }
+@@ -210,6 +224,8 @@ export class HomeAssistantMain extends LitElement {
+       "modal",
+       this._sidebarNarrow || this._externalSidebar || this.hass.kioskMode
+     );
++
++    toggleAttribute(this, "no-sidebar", this._isNonAdmin);
+   }
+ 
+   private get _sidebarNarrow() {
+@@ -239,6 +255,11 @@ export class HomeAssistantMain extends LitElement {
+       --mdc-top-app-bar-width: unset;
+       --safe-area-content-inset-left: var(--safe-area-inset-left);
+     }
++    :host([no-sidebar]) {
++      --ha-sidebar-width: unset;
++      --mdc-top-app-bar-width: unset;
++      --safe-area-content-inset-left: var(--safe-area-inset-left);
++    }
+     :host([modal]) partial-panel-resolver {
+       height: calc(100% - 88px);
+       display: block;
