@@ -1,0 +1,1736 @@
+{
+  "views": [
+    {
+      "title": "Working Space",
+      "path": "working-space",
+      "type": "sections",
+      "max_columns": 2,
+      "sections": [
+        {
+          "type": "grid",
+          "column_span": 2,
+          "columns": 1,
+          "square": false,
+          "cards": [
+            {
+              "type": "custom:button-card",
+              "show_name": true,
+              "show_icon": false,
+              "show_state": false,
+              "name": "[[[\n  const userName = user && user.name ? user.name : 'User';\n  const initial = userName.charAt(0).toUpperCase();\n  const hour = new Date().getHours();\n  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';\n  return `<div style=\"display:flex; align-items:center; gap:10px; width:100%; height:100%;\">\n    <div style=\"width:36px; height:36px; border-radius:12px; background:rgba(255,255,255,0.20); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all 0.2s ease;\">\n      <ha-icon icon=\"mdi:arrow-left\" style=\"color:#fff; width:18px; height:18px;\"></ha-icon>\n    </div>\n    <div style=\"width:36px; height:36px; border-radius:12px; background:linear-gradient(135deg,#E6F4EA,#B7E1C7); display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:0 2px 4px rgba(0,0,0,0.15);\">\n      <ha-icon icon=\"mdi:desk\" style=\"color:#188038; width:20px; height:20px;\"></ha-icon>\n    </div>\n    <div style=\"flex:1; min-width:0; text-align:left;\">\n      <div style=\"font-size:10px; font-weight:400; color:rgba(255,255,255,0.85); letter-spacing:0.3px; line-height:12px;\">${greeting} \u00b7 Working Space</div>\n      <div style=\"font-size:14px; font-weight:500; color:#fff; letter-spacing:-0.2px; line-height:18px; margin-top:1px;\">${userName}</div>\n    </div>\n    <span style=\"display:inline-flex; align-items:center; gap:3px; height:22px; padding:0 8px; border-radius:9999px; background:rgba(255,255,255,0.22); font-size:10px; font-weight:500; color:#fff; line-height:1; flex-shrink:0;\">\n      <span style=\"font-size:10px;\">\ud83c\udf21\ufe0f</span>23\u00b0\n    </span>\n    <span style=\"display:inline-flex; align-items:center; gap:3px; height:22px; padding:0 8px; border-radius:9999px; background:rgba(255,255,255,0.22); font-size:10px; font-weight:500; color:#fff; line-height:1; flex-shrink:0;\">\n      <span style=\"font-size:10px;\">\ud83d\udca1</span>1 on\n    </span>\n    <div style=\"width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.25); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:500; color:#fff; flex-shrink:0; border:1.5px solid rgba(255,255,255,0.4);\"><img src=\"/static/logo_ohf.svg\" width=\"20\" height=\"20\" style=\"display:block; filter:brightness(0) invert(1);\" alt=\"Domolux\"></div>\n  </div>`;\n]]]\n",
+              "tap_action": {
+                "action": "navigate",
+                "navigation_path": "/dashboard-user/0"
+              },
+              "styles": {
+                "card": [
+                  {
+                    "font-family": "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                  },
+                  {
+                    "-webkit-font-smoothing": "antialiased"
+                  },
+                  {
+                    "-moz-osx-font-smoothing": "grayscale"
+                  },
+                  {
+                    "background": "linear-gradient(100deg, #4285f4 0%, #34a853 100%)"
+                  },
+                  {
+                    "border-radius": "28px"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "box-shadow": "0 2px 8px rgba(0,0,0,0.08)"
+                  },
+                  {
+                    "padding": "12px 16px"
+                  },
+                  {
+                    "height": "64px"
+                  },
+                  {
+                    "width": "100%"
+                  },
+                  {
+                    "box-sizing": "border-box"
+                  },
+                  {
+                    "transition": "all 250ms cubic-bezier(0.4, 0, 0.2, 1)"
+                  }
+                ],
+                "name": [
+                  {
+                    "text-align": "left"
+                  },
+                  {
+                    "width": "100%"
+                  }
+                ]
+              },
+              "extra_styles": "ha-card:hover {\n  box-shadow: 0 4px 12px rgba(0,0,0,0.14), 0 2px 4px rgba(0,0,0,0.06);\n  transform: translateY(-1px);\n}\n"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 1,
+          "columns": 1,
+          "square": false,
+          "cards": [
+            {
+              "type": "custom:button-card",
+              "show_name": true,
+              "show_icon": false,
+              "show_state": false,
+              "name": "Climate control",
+              "styles": {
+                "card": [
+                  {
+                    "background": "transparent"
+                  },
+                  {
+                    "box-shadow": "none"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "padding": "4px 4px 4px"
+                  }
+                ],
+                "name": [
+                  {
+                    "font-family": "'Google Sans', sans-serif"
+                  },
+                  {
+                    "font-size": "15px"
+                  },
+                  {
+                    "font-weight": 500
+                  },
+                  {
+                    "line-height": "18px"
+                  },
+                  {
+                    "color": "#202124"
+                  },
+                  {
+                    "text-align": "left"
+                  },
+                  {
+                    "letter-spacing": "0.2px"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "custom:button-card",
+              "entity": "input_boolean.ac_power",
+              "show_name": true,
+              "show_icon": false,
+              "show_state": false,
+              "name": "[[[\n  const isOn = entity && entity.state === 'on';\n  const tempEnt = states['input_number.ac_temperature'];\n  const tempVal = tempEnt && tempEnt.state ? Math.round(parseFloat(tempEnt.state)) : '--';\n  const dotColor = isOn ? '#188038' : '#9AA0A6';\n  const glow = isOn ? 'box-shadow:0 0 0 3px rgba(24,128,56,0.25);' : '';\n  const label = isOn ? 'AC Running \u00b7 ' + tempVal + '\u00b0C' : 'AC Stopped';\n  return `<div style=\"display:flex; align-items:center; gap:8px; padding:0 2px;\">\n    <div style=\"width:8px; height:8px; border-radius:50%; background:${dotColor}; ${glow} transition:all 0.3s ease; flex-shrink:0;\"></div>\n    <span style=\"font-family:'Google Sans',sans-serif; font-size:12px; font-weight:500; color:#202124; letter-spacing:0.1px;\">AC Power</span>\n    <span style=\"margin-left:auto; font-family:'Roboto',sans-serif; font-size:11px; font-weight:400; color:#5F6368; line-height:14px; letter-spacing:0.4px;\">${label}</span>\n  </div>`;\n]]]",
+              "styles": {
+                "card": [
+                  {
+                    "background": "#FFFFFF"
+                  },
+                  {
+                    "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "padding": "16px"
+                  },
+                  {
+                    "width": "100%"
+                  },
+                  {
+                    "box-sizing": "border-box"
+                  },
+                  {
+                    "border-radius": "28px"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "horizontal-stack",
+              "cards": [
+                {
+                  "type": "custom:button-card",
+                  "entity": "input_boolean.ac_power",
+                  "name": "Power On",
+                  "icon": "mdi:power",
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_turn_on"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "height": "60px"
+                      },
+                      {
+                        "padding": "0 16px"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "border": "none"
+                      }
+                    ],
+                    "icon": [
+                      {
+                        "color": "#5F6368"
+                      },
+                      {
+                        "width": "24px"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "font-family": "'Google Sans', sans-serif"
+                      },
+                      {
+                        "font-size": "13px"
+                      },
+                      {
+                        "font-weight": 500
+                      },
+                      {
+                        "line-height": "18px"
+                      },
+                      {
+                        "letter-spacing": "0.1px"
+                      },
+                      {
+                        "color": "#3C4043"
+                      }
+                    ]
+                  },
+                  "state": [
+                    {
+                      "value": "on",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#188038"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(24,128,56,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#FFFFFF"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "color": "#FFFFFF"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "extra_styles": "ha-card:hover { box-shadow: 0 4px 10px rgba(24,128,56,0.20); }\nha-card:active {}\n"
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "input_boolean.ac_power",
+                  "name": "Power Off",
+                  "icon": "mdi:power-off",
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_turn_off"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "height": "60px"
+                      },
+                      {
+                        "padding": "0 16px"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "border": "none"
+                      }
+                    ],
+                    "icon": [
+                      {
+                        "color": "#5F6368"
+                      },
+                      {
+                        "width": "24px"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "font-family": "'Google Sans', sans-serif"
+                      },
+                      {
+                        "font-size": "13px"
+                      },
+                      {
+                        "font-weight": 500
+                      },
+                      {
+                        "line-height": "18px"
+                      },
+                      {
+                        "letter-spacing": "0.1px"
+                      },
+                      {
+                        "color": "#3C4043"
+                      }
+                    ]
+                  },
+                  "state": [
+                    {
+                      "value": "off",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#D93025"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(217,48,37,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#FFFFFF"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "color": "#FFFFFF"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "extra_styles": "ha-card:hover { box-shadow: 0 4px 10px rgba(217,48,37,0.20); }\nha-card:active {}\n"
+                }
+              ]
+            },
+            {
+              "type": "custom:button-card",
+              "entity": "input_number.ac_temperature",
+              "show_name": false,
+              "show_icon": false,
+              "show_state": false,
+              "name": "[[[\n  const temp = entity && entity.state ? Math.round(parseFloat(entity.state)) : '--';\n  return `<div style=\"text-align:center; padding:2px 0;\">\n    <div style=\"font-family:'Google Sans',sans-serif; font-size:9px; font-weight:500; color:#5F6368; margin-bottom:4px; line-height:12px; letter-spacing:1.5px; text-transform:uppercase;\">Target Temperature</div>\n    <div style=\"font-family:'Google Sans',sans-serif; font-size:40px; font-weight:300; color:#202124; letter-spacing:-1.5px; line-height:44px;\">${temp}\u00b0</div>\n  </div>`;\n]]]",
+              "styles": {
+                "card": [
+                  {
+                    "background": "#FFFFFF"
+                  },
+                  {
+                    "border-radius": "28px"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "padding": "16px"
+                  },
+                  {
+                    "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                  },
+                  {
+                    "text-align": "center"
+                  },
+                  {
+                    "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                  },
+                  {
+                    "width": "100%"
+                  },
+                  {
+                    "box-sizing": "border-box"
+                  }
+                ]
+              },
+              "extra_styles": "ha-card:hover {\n  box-shadow: 0 2px 6px rgba(0,0,0,0.08), 0 2px 6px 2px rgba(0,0,0,0.04);\n  transform: translateY(-1px);\n}\n"
+            },
+            {
+              "type": "horizontal-stack",
+              "cards": [
+                {
+                  "type": "custom:button-card",
+                  "show_name": false,
+                  "show_icon": true,
+                  "icon": "mdi:minus",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_temperature_down"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "width": "48px"
+                      },
+                      {
+                        "height": "48px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "icon": [
+                      {
+                        "color": "#1A73E8"
+                      },
+                      {
+                        "width": "24px"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover { background: #D2E3FC; box-shadow: 0 4px 10px rgba(26,115,232,0.25); }\nha-card:active {}\n"
+                },
+                {
+                  "type": "custom:button-card",
+                  "show_name": false,
+                  "show_icon": true,
+                  "icon": "mdi:plus",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_temperature_up"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "width": "48px"
+                      },
+                      {
+                        "height": "48px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "icon": [
+                      {
+                        "color": "#E67C00"
+                      },
+                      {
+                        "width": "24px"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover { background: #FDE7C3; box-shadow: 0 4px 10px rgba(249,171,0,0.30); }\nha-card:active {}\n"
+                }
+              ]
+            },
+            {
+              "type": "custom:button-card",
+              "show_name": true,
+              "show_icon": false,
+              "show_state": false,
+              "name": "Temperature presets",
+              "styles": {
+                "card": [
+                  {
+                    "background": "transparent"
+                  },
+                  {
+                    "box-shadow": "none"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "padding": "4px 4px 4px"
+                  }
+                ],
+                "name": [
+                  {
+                    "font-family": "'Google Sans', sans-serif"
+                  },
+                  {
+                    "font-size": "12px"
+                  },
+                  {
+                    "font-weight": 500
+                  },
+                  {
+                    "line-height": "16px"
+                  },
+                  {
+                    "color": "#5F6368"
+                  },
+                  {
+                    "text-align": "left"
+                  },
+                  {
+                    "letter-spacing": "0.2px"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "grid",
+              "columns": 5,
+              "square": false,
+              "cards": [
+                {
+                  "type": "custom:button-card",
+                  "entity": "input_number.ac_temperature",
+                  "name": "18\u00b0",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_set_temperature",
+                    "data": {
+                      "temperature": 18
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "padding": "0 6px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "font-family": "'Google Sans', sans-serif"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      },
+                      {
+                        "line-height": "14px"
+                      },
+                      {
+                        "letter-spacing": "0.3px"
+                      },
+                      {
+                        "color": "#5F6368"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover { background: #F8FBFF; transform: translateY(-1px); }\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ return Math.round(parseFloat((entity && entity.state) || 0)) === 18; ]]]",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#D3E3FD"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(26,115,232,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#1A73E8"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "input_number.ac_temperature",
+                  "name": "20\u00b0",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_set_temperature",
+                    "data": {
+                      "temperature": 20
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "padding": "0 6px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "font-family": "'Google Sans', sans-serif"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      },
+                      {
+                        "line-height": "14px"
+                      },
+                      {
+                        "letter-spacing": "0.3px"
+                      },
+                      {
+                        "color": "#5F6368"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover { background: #F8FBFF; transform: translateY(-1px); }\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ return Math.round(parseFloat((entity && entity.state) || 0)) === 20; ]]]",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#D3E3FD"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(26,115,232,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#1A73E8"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "input_number.ac_temperature",
+                  "name": "22\u00b0",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_set_temperature",
+                    "data": {
+                      "temperature": 22
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "padding": "0 6px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "font-family": "'Google Sans', sans-serif"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      },
+                      {
+                        "line-height": "14px"
+                      },
+                      {
+                        "letter-spacing": "0.3px"
+                      },
+                      {
+                        "color": "#5F6368"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover { background: #F0F9F4; transform: translateY(-1px); }\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ return Math.round(parseFloat((entity && entity.state) || 0)) === 22; ]]]",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#E6F4EA"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(24,128,56,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#188038"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "input_number.ac_temperature",
+                  "name": "24\u00b0",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_set_temperature",
+                    "data": {
+                      "temperature": 24
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "padding": "0 6px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "font-family": "'Google Sans', sans-serif"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      },
+                      {
+                        "line-height": "14px"
+                      },
+                      {
+                        "letter-spacing": "0.3px"
+                      },
+                      {
+                        "color": "#5F6368"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover { background: #FFFBF0; transform: translateY(-1px); }\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ return Math.round(parseFloat((entity && entity.state) || 0)) === 24; ]]]",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#FFF3E0"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#E67C00"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "input_number.ac_temperature",
+                  "name": "26\u00b0",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_set_temperature",
+                    "data": {
+                      "temperature": 26
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "padding": "0 6px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "font-family": "'Google Sans', sans-serif"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      },
+                      {
+                        "line-height": "14px"
+                      },
+                      {
+                        "letter-spacing": "0.3px"
+                      },
+                      {
+                        "color": "#5F6368"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover { background: #FFFBF0; transform: translateY(-1px); }\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ return Math.round(parseFloat((entity && entity.state) || 0)) === 26; ]]]",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#FFF3E0"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#E67C00"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 1,
+          "columns": 1,
+          "square": false,
+          "cards": [
+            {
+              "type": "custom:button-card",
+              "show_name": true,
+              "show_icon": false,
+              "show_state": false,
+              "name": "Lighting",
+              "styles": {
+                "card": [
+                  {
+                    "background": "transparent"
+                  },
+                  {
+                    "box-shadow": "none"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "padding": "4px 4px 4px"
+                  }
+                ],
+                "name": [
+                  {
+                    "font-family": "'Google Sans', sans-serif"
+                  },
+                  {
+                    "font-size": "15px"
+                  },
+                  {
+                    "font-weight": 500
+                  },
+                  {
+                    "line-height": "18px"
+                  },
+                  {
+                    "color": "#202124"
+                  },
+                  {
+                    "text-align": "left"
+                  },
+                  {
+                    "letter-spacing": "0.2px"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "custom:button-card",
+              "entity": "light.0xa4c138ad2b20ea12",
+              "show_name": true,
+              "show_icon": false,
+              "show_state": false,
+              "name": "[[[\n  const isOn = entity && entity.state === 'on';\n  const brightness = (entity && entity.attributes && entity.attributes.brightness) || 0;\n  const pct = Math.round((brightness / 255) * 100);\n  const status = isOn ? (brightness > 0 ? pct + '% brightness' : 'On') : 'Turned off';\n  const iconBg = isOn ? '#FEF3E2' : '#F1F3F4';\n  const iconColor = isOn ? '#E37400' : '#5F6368';\n  const trackBg = isOn ? '#D3E3FD' : '#E8EAED';\n  const trackBorder = isOn ? '#1A73E8' : '#DADCE0';\n  const thumbBg = isOn ? '#FFFFFF' : '#FFFFFF';\n  const thumbPos = isOn ? 'right:2px;' : 'left:2px;';\n  return `<div style=\"display:flex; align-items:center; gap:10px; width:100%;\">\n    <div style=\"width:36px; height:36px; border-radius:12px; background:${iconBg}; display:flex; align-items:center; justify-content:center; transition:all 0.3s ease; flex-shrink:0;\">\n      <ha-icon icon=\"mdi:desk-lamp\" style=\"color:${iconColor}; width:20px; height:20px;\"></ha-icon>\n    </div>\n    <div style=\"flex:1; min-width:0; text-align:left;\">\n      <div style=\"font-family:'Google Sans',sans-serif; font-size:14px; font-weight:500; line-height:18px; color:#202124; letter-spacing:0.15px;\">Desk Lamp</div>\n      <div style=\"font-family:'Roboto',sans-serif; font-size:11px; font-weight:400; line-height:14px; color:#5F6368; margin-top:2px; letter-spacing:0.25px;\">${status}</div>\n    </div>\n    <div style=\"display:inline-block; position:relative; width:42px; height:24px; background:${trackBg}; border-radius:9999px; border:2px solid ${trackBorder}; transition:all 0.3s cubic-bezier(0.4,0,0.2,1); flex-shrink:0;\">\n      <div style=\"position:absolute; top:1px; ${thumbPos} width:18px; height:18px; border-radius:50%; background:${thumbBg}; box-shadow:0 1px 2px rgba(0,0,0,0.20); transition:all 0.3s cubic-bezier(0.4,0,0.2,1);\"></div>\n    </div>\n  </div>`;\n]]]",
+              "tap_action": {
+                "action": "toggle"
+              },
+              "styles": {
+                "card": [
+                  {
+                    "background": "#FFFFFF"
+                  },
+                  {
+                    "border-radius": "28px"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "padding": "16px"
+                  },
+                  {
+                    "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                  },
+                  {
+                    "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                  },
+                  {
+                    "width": "100%"
+                  },
+                  {
+                    "box-sizing": "border-box"
+                  }
+                ]
+              },
+              "extra_styles": "ha-card:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); transform: translateY(-1px); }\n",
+              "state": [
+                {
+                  "value": "on",
+                  "styles": {
+                    "card": [
+                      {
+                        "background": "#FEF3E2"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "type": "custom:button-card",
+              "entity": "light.0xa4c138ad2b20ea12",
+              "show_name": true,
+              "show_icon": false,
+              "show_state": false,
+              "name": "[[[\n  const isOn = entity && entity.state === 'on';\n  const brightness = (entity && entity.attributes && entity.attributes.brightness) || 0;\n  const pct = Math.round((brightness / 255) * 100);\n  const barWidth = isOn ? pct + '%' : '0%';\n  return `<div style=\"width:100%;\">\n    <div style=\"display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;\">\n      <span style=\"font-family:'Google Sans',sans-serif; font-size:12px; font-weight:500; color:#5F6368; line-height:16px;\">Brightness</span>\n      <span style=\"font-family:'Google Sans',sans-serif; font-size:12px; font-weight:600; color:#202124; line-height:16px;\">${isOn ? pct + '%' : 'Off'}</span>\n    </div>\n    <div style=\"width:100%; height:6px; background:#F1F3F4; border-radius:4px; overflow:hidden;\">\n      <div style=\"width:${barWidth}; height:100%; background:linear-gradient(90deg, #FBBC04 0%, #F9AB00 100%); border-radius:4px; transition:width 0.4s cubic-bezier(0.4, 0, 0.2, 1);\"></div>\n    </div>\n  </div>`;\n]]]",
+              "tap_action": {
+                "action": "none"
+              },
+              "styles": {
+                "card": [
+                  {
+                    "background": "#FFFFFF"
+                  },
+                  {
+                    "border-radius": "28px"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "padding": "16px"
+                  },
+                  {
+                    "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                  },
+                  {
+                    "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                  },
+                  {
+                    "width": "100%"
+                  },
+                  {
+                    "box-sizing": "border-box"
+                  }
+                ]
+              },
+              "extra_styles": "ha-card:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); transform: translateY(-1px); }\n"
+            },
+            {
+              "type": "grid",
+              "columns": 4,
+              "square": false,
+              "cards": [
+                {
+                  "type": "custom:button-card",
+                  "entity": "light.0xa4c138ad2b20ea12",
+                  "name": "25%",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "light.turn_on",
+                    "target": {
+                      "entity_id": "light.0xa4c138ad2b20ea12"
+                    },
+                    "data": {
+                      "brightness_pct": 25
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "padding": "0 8px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "font-family": "'Google Sans', sans-serif"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      },
+                      {
+                        "line-height": "14px"
+                      },
+                      {
+                        "letter-spacing": "0.3px"
+                      },
+                      {
+                        "color": "#5F6368"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover { background: #FFFBF0; transform: translateY(-1px); }\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === \"on\" && Math.round((b / 255) * 100) === 25; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#FEF3E2"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#E67C00"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "light.0xa4c138ad2b20ea12",
+                  "name": "50%",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "light.turn_on",
+                    "target": {
+                      "entity_id": "light.0xa4c138ad2b20ea12"
+                    },
+                    "data": {
+                      "brightness_pct": 50
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "padding": "0 8px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "font-family": "'Google Sans', sans-serif"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      },
+                      {
+                        "line-height": "14px"
+                      },
+                      {
+                        "letter-spacing": "0.3px"
+                      },
+                      {
+                        "color": "#5F6368"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover { background: #FFFBF0; transform: translateY(-1px); }\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === \"on\" && Math.round((b / 255) * 100) === 50; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#FEF3E2"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#E67C00"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "light.0xa4c138ad2b20ea12",
+                  "name": "75%",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "light.turn_on",
+                    "target": {
+                      "entity_id": "light.0xa4c138ad2b20ea12"
+                    },
+                    "data": {
+                      "brightness_pct": 75
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "padding": "0 8px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "font-family": "'Google Sans', sans-serif"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      },
+                      {
+                        "line-height": "14px"
+                      },
+                      {
+                        "letter-spacing": "0.3px"
+                      },
+                      {
+                        "color": "#5F6368"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover { background: #FFFBF0; transform: translateY(-1px); }\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === \"on\" && Math.round((b / 255) * 100) === 75; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#FEF3E2"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#E67C00"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "light.0xa4c138ad2b20ea12",
+                  "name": "100%",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "light.turn_on",
+                    "target": {
+                      "entity_id": "light.0xa4c138ad2b20ea12"
+                    },
+                    "data": {
+                      "brightness_pct": 100
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "padding": "0 8px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "display": "flex"
+                      },
+                      {
+                        "align-items": "center"
+                      },
+                      {
+                        "justify-content": "center"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "font-family": "'Google Sans', sans-serif"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      },
+                      {
+                        "line-height": "14px"
+                      },
+                      {
+                        "letter-spacing": "0.3px"
+                      },
+                      {
+                        "color": "#5F6368"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover { background: #FFFBF0; transform: translateY(-1px); }\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === \"on\" && Math.round((b / 255) * 100) === 100; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#FEF3E2"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#E67C00"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "custom:button-card",
+              "show_name": true,
+              "show_icon": false,
+              "show_state": false,
+              "name": "<div style=\"display:flex; justify-content:space-between; align-items:center; text-align:center; width:100%; gap:6px;\">\n  <div style=\"flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;\">\n    <div style=\"width:32px; height:32px; border-radius:50%; background:#F1F3F4; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease;\">\n      <ha-icon icon=\"mdi:brightness-4\" style=\"color:#5F6368; width:18px; height:18px;\"></ha-icon>\n    </div>\n    <div style=\"font-family:'Google Sans',sans-serif; font-size:10px; font-weight:500; color:#5F6368; line-height:14px; letter-spacing:0.3px;\">Low</div>\n  </div>\n  <div style=\"flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;\">\n    <div style=\"width:32px; height:32px; border-radius:50%; background:#F1F3F4; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease;\">\n      <ha-icon icon=\"mdi:brightness-5\" style=\"color:#5F6368; width:18px; height:18px;\"></ha-icon>\n    </div>\n    <div style=\"font-family:'Google Sans',sans-serif; font-size:10px; font-weight:500; color:#5F6368; line-height:14px; letter-spacing:0.3px;\">Med</div>\n  </div>\n  <div style=\"flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;\">\n    <div style=\"width:32px; height:32px; border-radius:50%; background:#F1F3F4; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease;\">\n      <ha-icon icon=\"mdi:brightness-6\" style=\"color:#5F6368; width:18px; height:18px;\"></ha-icon>\n    </div>\n    <div style=\"font-family:'Google Sans',sans-serif; font-size:10px; font-weight:500; color:#5F6368; line-height:14px; letter-spacing:0.3px;\">High</div>\n  </div>\n  <div style=\"flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;\">\n    <div style=\"width:32px; height:32px; border-radius:50%; background:#F1F3F4; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease;\">\n      <ha-icon icon=\"mdi:brightness-7\" style=\"color:#5F6368; width:18px; height:18px;\"></ha-icon>\n    </div>\n    <div style=\"font-family:'Google Sans',sans-serif; font-size:10px; font-weight:500; color:#5F6368; line-height:14px; letter-spacing:0.3px;\">Max</div>\n  </div>\n</div>\n",
+              "styles": {
+                "card": [
+                  {
+                    "background": "#FFFFFF"
+                  },
+                  {
+                    "border-radius": "28px"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "padding": "16px"
+                  },
+                  {
+                    "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                  },
+                  {
+                    "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                  },
+                  {
+                    "width": "100%"
+                  },
+                  {
+                    "box-sizing": "border-box"
+                  }
+                ]
+              },
+              "extra_styles": "ha-card:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08); transform: translateY(-1px); }\n"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 2,
+          "columns": 1,
+          "square": false,
+          "cards": [
+            {
+              "type": "custom:button-card",
+              "icon": "mdi:microphone",
+              "show_name": false,
+              "show_icon": true,
+              "tap_action": {
+                "action": "navigate",
+                "navigation_path": "/voice"
+              },
+              "styles": {
+                "card": [
+                  {
+                    "font-family": "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                  },
+                  {
+                    "width": "56px"
+                  },
+                  {
+                    "height": "56px"
+                  },
+                  {
+                    "border-radius": "16px"
+                  },
+                  {
+                    "background": "#1A73E8"
+                  },
+                  {
+                    "box-shadow": "0 2px 8px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.08)"
+                  },
+                  {
+                    "display": "flex"
+                  },
+                  {
+                    "align-items": "center"
+                  },
+                  {
+                    "justify-content": "center"
+                  },
+                  {
+                    "position": "fixed"
+                  },
+                  {
+                    "bottom": "16px"
+                  },
+                  {
+                    "right": "16px"
+                  },
+                  {
+                    "z-index": 100
+                  },
+                  {
+                    "transition": "all 250ms cubic-bezier(0.4, 0, 0.2, 1)"
+                  },
+                  {
+                    "border": "none"
+                  }
+                ],
+                "icon": [
+                  {
+                    "color": "#FFFFFF"
+                  },
+                  {
+                    "width": "24px"
+                  },
+                  {
+                    "height": "24px"
+                  }
+                ]
+              },
+              "extra_styles": "ha-card:hover {\n  box-shadow: 0 4px 16px rgba(26,115,232,0.45), 0 8px 24px 4px rgba(26,115,232,0.25);\n}\nha-card:active {\n  box-shadow: 0 2px 4px rgba(26,115,232,0.30);\n}\n@keyframes listening-pulse {\n  0% { opacity: 0.6; }\n  50% { opacity: 0.3; }\n  100% { opacity: 0; }\n}\n"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
