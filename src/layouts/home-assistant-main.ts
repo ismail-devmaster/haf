@@ -295,10 +295,10 @@ export class HomeAssistantMain extends LitElement {
       right: 12px;
       height: 64px;
       border-radius: 32px;
-      background: rgba(255, 255, 255, 0.8);
+      background-color: var(--card-background-color, #ffffff);
       backdrop-filter: blur(20px) saturate(180%);
       -webkit-backdrop-filter: blur(20px) saturate(180%);
-      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-block-start: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
       box-shadow:
         0 4px 16px 0 rgba(0, 0, 0, 0.08),
         0 1px 3px 0 rgba(0, 0, 0, 0.04);

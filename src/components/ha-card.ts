@@ -11,38 +11,57 @@ export class HaCard extends LitElement {
     :host {
       background: var(
         --ha-card-background,
-        rgba(255, 255, 255, 0.85)
+        var(--card-background-color, #ffffff)
       );
-      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, blur(2px));
-      backdrop-filter: var(--ha-card-backdrop-filter, blur(2px));
-      box-shadow: var(--ha-card-box-shadow, 0 1px 3px 0 rgba(0,0,0,0.06), 0 1px 2px -1px rgba(0,0,0,0.04));
+      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none);
+      backdrop-filter: var(--ha-card-backdrop-filter, none);
+      box-shadow: var(
+        --ha-card-box-shadow,
+        0 2px 4px 0 rgba(0, 0, 0, 0.08),
+        0 4px 8px -2px rgba(0, 0, 0, 0.06)
+      );
       box-sizing: border-box;
       border-radius: var(--ha-card-border-radius, 24px);
-      border: none;
+      border: var(--ha-card-border, 1px solid rgba(0, 0, 0, 0.06));
       color: var(--primary-text-color);
       display: block;
-      transition: box-shadow 200ms ease, transform 200ms ease;
+      transition:
+        box-shadow 200ms ease,
+        transform 200ms ease;
       position: relative;
       will-change: transform;
     }
 
     :host(:hover) {
-      box-shadow: 0 4px 12px 0 rgba(0,0,0,0.08), 0 2px 4px -2px rgba(0,0,0,0.05);
+      box-shadow:
+        0 4px 12px 0 rgba(0, 0, 0, 0.08),
+        0 2px 4px -2px rgba(0, 0, 0, 0.05);
     }
 
     :host([raised]) {
-      border: none;
-      box-shadow: var(--ha-card-box-shadow, 0 4px 12px 0 rgba(0,0,0,0.06), 0 2px 4px -2px rgba(0,0,0,0.04));
+      border: var(--ha-card-border, 1px solid rgba(0, 0, 0, 0.06));
+      box-shadow: var(
+        --ha-card-box-shadow,
+        0 4px 12px 0 rgba(0, 0, 0, 0.06),
+        0 2px 4px -2px rgba(0, 0, 0, 0.04)
+      );
     }
 
     :host([raised]:hover) {
-      box-shadow: 0 6px 20px 0 rgba(0,0,0,0.10), 0 3px 6px -3px rgba(0,0,0,0.06);
+      box-shadow:
+        0 6px 20px 0 rgba(0, 0, 0, 0.1),
+        0 3px 6px -3px rgba(0, 0, 0, 0.06);
     }
 
     .card-header,
     :host ::slotted(.card-header) {
       color: var(--ha-card-header-color, var(--primary-text-color));
-      font-family: var(--ha-card-header-font-family, 'Google Sans', 'Product Sans', var(--ha-font-family-heading, inherit));
+      font-family: var(
+        --ha-card-header-font-family,
+        "Google Sans",
+        "Product Sans",
+        var(--ha-font-family-heading, inherit)
+      );
       font-size: var(--ha-card-header-font-size, 18px);
       letter-spacing: -0.01em;
       line-height: 1.4;
@@ -66,7 +85,7 @@ export class HaCard extends LitElement {
     }
 
     :host ::slotted(.card-actions) {
-      border-top: 1px solid rgba(0,0,0,0.06);
+      border-top: 1px solid rgba(0, 0, 0, 0.06);
       padding: 12px 16px;
       display: flex;
       justify-content: flex-end;

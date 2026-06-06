@@ -19,10 +19,10 @@ export const colorStyles = css`
     --darker-primary-color: #0d47a1;
     --light-primary-color: #d2e3fc;
     --accent-color: #4285f4;
-    --divider-color: rgba(0, 0, 0, 0.06);
-    --outline-color: rgba(0, 0, 0, 0.08);
-    --outline-hover-color: rgba(0, 0, 0, 0.18);
-    --shadow-color: rgba(0, 0, 0, 0.10);
+    --divider-color: rgba(0, 0, 0, 0.08);
+    --outline-color: rgba(0, 0, 0, 0.12);
+    --outline-hover-color: rgba(0, 0, 0, 0.24);
+    --shadow-color: rgba(0, 0, 0, 0.14);
 
     /* rgb */
     --rgb-primary-color: 26, 115, 232;
@@ -46,9 +46,9 @@ export const colorStyles = css`
 
     /* backgrounds - Google Home light */
     --card-background-color: #ffffff;
-    --primary-background-color: #f0f4f8;
-    --secondary-background-color: #e3e8ed;
-    --clear-background-color: #f0f4f8;
+    --primary-background-color: #ffffff;
+    --secondary-background-color: #f5f6f7;
+    --clear-background-color: #ffffff;
 
     /* for label-badge */
     --label-badge-grey: #9e9e9e;
@@ -278,7 +278,7 @@ export const colorStyles = css`
     --table-row-background-color: var(--primary-background-color);
     --table-row-alternative-background-color: var(--secondary-background-color);
     --data-table-background-color: var(--card-background-color);
-    --markdown-code-background-color: var(--primary-background-color);
+    --markdown-code-background-color: var(--secondary-background-color);
     --bar-box-shadow: 0 2px 12px var(--shadow-color);
 
     /* https://github.com/material-components/material-web/blob/master/docs/theming.md */
@@ -343,8 +343,8 @@ export const colorStyles = css`
 
 export const darkColorStyles = css`
   html {
-    --md-sys-color-primary-container: #004D4D;
-    --md-sys-color-on-primary-container: #A8E6E6;
+    --md-sys-color-primary-container: #004d4d;
+    --md-sys-color-on-primary-container: #a8e6e6;
     --primary-background-color: #1a1a1c;
     --card-background-color: #2a2a2d;
     --secondary-background-color: #222224;
@@ -352,8 +352,8 @@ export const darkColorStyles = css`
     --primary-text-color: #e3e3e3;
     --secondary-text-color: #9aa0a6;
     --disabled-text-color: #5f6368;
-    --primary-color: #00A8A8;
-    --divider-color: rgba(227, 227, 227, 0.10);
+    --primary-color: #00a8a8;
+    --divider-color: rgba(227, 227, 227, 0.1);
     --outline-color: rgba(227, 227, 227, 0.12);
     --outline-hover-color: rgba(227, 227, 227, 0.24);
     --shadow-color: rgba(0, 0, 0, 0.48);
