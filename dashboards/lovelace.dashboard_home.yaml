@@ -1,0 +1,1611 @@
+{
+  "views": [
+    {
+      "title": "Main Overview",
+      "path": "google-home-dashboard",
+      "type": "sections",
+      "max_columns": 2,
+      "sections": [
+        {
+          "type": "grid",
+          "column_span": 2,
+          "columns": 1,
+          "square": false,
+          "cards": [
+            {
+              "type": "custom:button-card",
+              "show_name": true,
+              "show_icon": false,
+              "show_state": false,
+              "name": "[[[ \n  const userName = user && user.name ? user.name : 'User';\n  const initial = userName.charAt(0).toUpperCase();\n  const hour = new Date().getHours();\n  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';\n  return `<div style=\"display:flex; align-items:center; gap:10px; width:100%; height:100%;\">\n    <div style=\"width:36px; height:36px; border-radius:12px; background:rgba(255,255,255,0.20); display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:all 0.2s ease;\">\n      <ha-icon icon=\"mdi:arrow-left\" style=\"color:#fff; width:18px; height:18px;\"></ha-icon>\n    </div>\n    <div style=\"flex:1; min-width:0; text-align:left;\">\n      <div style=\"font-size:10px; font-weight:400; color:rgba(255,255,255,0.85); letter-spacing:0.3px; line-height:12px;\">${greeting} \u00b7 Overview</div>\n      <div style=\"font-size:14px; font-weight:500; color:#fff; letter-spacing:-0.2px; line-height:18px; margin-top:1px;\">${userName}</div>\n    </div>\n    <img src=\"/local/maxconfort_logo.png\" style=\"width:32px; height:32px; border-radius:50%; object-fit:cover; flex-shrink:0;\">\n  </div>`;\n]]]\n",
+              "tap_action": {
+                "action": "navigate",
+                "navigation_path": "/dashboard-user/0"
+              },
+              "styles": {
+                "card": [
+                  {
+                    "font-family": "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+                  },
+                  {
+                    "-webkit-font-smoothing": "antialiased"
+                  },
+                  {
+                    "-moz-osx-font-smoothing": "grayscale"
+                  },
+                  {
+                    "background": "linear-gradient(100deg, #4285f4 0%, #34a853 100%)"
+                  },
+                  {
+                    "border-radius": "28px"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "box-shadow": "0 2px 8px rgba(0,0,0,0.08)"
+                  },
+                  {
+                    "padding": "12px 16px"
+                  },
+                  {
+                    "height": "64px"
+                  },
+                  {
+                    "width": "100%"
+                  },
+                  {
+                    "box-sizing": "border-box"
+                  },
+                  {
+                    "transition": "all 250ms cubic-bezier(0.4, 0, 0.2, 1)"
+                  }
+                ],
+                "name": [
+                  {
+                    "text-align": "left"
+                  },
+                  {
+                    "width": "100%"
+                  }
+                ]
+              },
+              "extra_styles": "ha-card:hover {\n  box-shadow: 0 4px 12px rgba(0,0,0,0.14), 0 2px 4px rgba(0,0,0,0.06);\n  transform: translateY(-1px);\n}\n"
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 1,
+          "columns": 1,
+          "square": false,
+          "cards": [
+            {
+              "type": "grid",
+              "columns": 2,
+              "square": false,
+              "cards": [
+                {
+                  "type": "custom:button-card",
+                  "entity": "input_boolean.ac_power",
+                  "name": "On",
+                  "icon": "mdi:power",
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_turn_on"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "48px"
+                      },
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      },
+                      {
+                        "padding": "16px"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      }
+                    ],
+                    "icon": [
+                      {
+                        "color": "#34a853"
+                      },
+                      {
+                        "width": "20px"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "color": "#202124"
+                      },
+                      {
+                        "font-size": "13px"
+                      },
+                      {
+                        "font-weight": 500
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  box-shadow: 0 2px 6px rgba(52,168,83,0.18);\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "value": "on",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#e6f4ea"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(24,128,56,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#188038"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "color": "#188038"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "input_boolean.ac_power",
+                  "name": "Off",
+                  "icon": "mdi:power-off",
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_turn_off"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "48px"
+                      },
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      },
+                      {
+                        "padding": "16px"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      }
+                    ],
+                    "icon": [
+                      {
+                        "color": "#e53935"
+                      },
+                      {
+                        "width": "20px"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "color": "#202124"
+                      },
+                      {
+                        "font-size": "13px"
+                      },
+                      {
+                        "font-weight": 500
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  box-shadow: 0 2px 6px rgba(229,57,53,0.18);\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "value": "off",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#ffebee"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(0,0,0,0.08)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#c62828"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "color": "#c62828"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "columns": 3,
+              "square": false,
+              "cards": [
+                {
+                  "type": "custom:button-card",
+                  "show_name": false,
+                  "show_icon": true,
+                  "icon": "mdi:minus",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_temperature_down"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "52px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": 0
+                      },
+                      {
+                        "box-shadow": "none"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      }
+                    ],
+                    "icon": [
+                      {
+                        "color": "#1a73e8"
+                      },
+                      {
+                        "width": "22px"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #d2e3fc;\n  box-shadow: 0 2px 6px rgba(66,133,244,0.20);\n}\nha-card:active {}\n"
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "input_number.ac_temperature",
+                  "show_name": false,
+                  "show_icon": false,
+                  "show_state": false,
+                  "name": "[[[\n  const temp = entity && entity.state ? Math.round(parseFloat(entity.state)) : '--';\n  return `<div style=\"display:flex;align-items:center;justify-content:center;height:100%;\">\n    <span style=\"font-size:20px;font-weight:500;color:#202124;letter-spacing:-0.3px;\">${temp}\u00b0C</span>\n  </div>`;\n]]]\n",
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "52px"
+                      },
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": "16px"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "type": "custom:button-card",
+                  "show_name": false,
+                  "show_icon": true,
+                  "icon": "mdi:plus",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "script.ac_temperature_up"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "52px"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": 0
+                      },
+                      {
+                        "box-shadow": "none"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      }
+                    ],
+                    "icon": [
+                      {
+                        "color": "#e37400"
+                      },
+                      {
+                        "width": "22px"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #fde7c3;\n  box-shadow: 0 2px 6px rgba(249,171,0,0.25);\n}\nha-card:active {}\n"
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "columns": 2,
+              "square": false,
+              "cards": [
+                {
+                  "type": "custom:button-card",
+                  "entity": "switch.meeting_room_controller_switch_1",
+                  "show_name": true,
+                  "show_icon": false,
+                  "show_state": false,
+                  "name": "[[[\n  const isOn = entity && entity.state === 'on';\n  return `<div style=\"display:flex; align-items:center; gap:10px; width:100%; height:100%;\">\n    <div style=\"width:32px;height:32px;border-radius:10px;background:${isOn ? '#f3e8ff' : '#f1f3f4'};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;\">\n      <ha-icon icon=\"mdi:power-plug\" style=\"color:${isOn ? '#9c27b0' : '#5f6368'};width:18px;height:18px;\"></ha-icon>\n    </div>\n    <div style=\"flex:1; text-align:left;\">\n      <div style=\"font-size:14px;font-weight:500;color:#202124;line-height:17px;\">Meeting Room</div>\n    </div>\n    <div style=\"display:inline-block; position:relative; width:44px; height:24px; background:${isOn ? '#9c27b0' : '#dadce0'}; border-radius:12px; transition:all 0.3s ease;\">\n      <div style=\"position:absolute; top:2px; ${isOn ? 'right:2px;' : 'left:2px;'} width:20px; height:20px; border-radius:50%; background:#ffffff; box-shadow:0 1px 3px rgba(0,0,0,0.20); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);\"></div>\n    </div>\n  </div>`;\n]]]\n",
+                  "tap_action": {
+                    "action": "toggle"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "56px"
+                      },
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": "16px"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      },
+                      {
+                        "width": "100%"
+                      },
+                      {
+                        "box-sizing": "border-box"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  box-shadow: 0 2px 6px rgba(0,0,0,0.08);\n}\n",
+                  "state": [
+                    {
+                      "value": "on",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#faf5ff"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(156,39,176,0.12)"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "switch.fethi_room_controller_switch_2",
+                  "show_name": true,
+                  "show_icon": false,
+                  "show_state": false,
+                  "name": "[[[\n  const isOn = entity && entity.state === 'on';\n  return `<div style=\"display:flex; align-items:center; gap:10px; width:100%; height:100%;\">\n    <div style=\"width:32px;height:32px;border-radius:10px;background:${isOn ? '#e6f4ea' : '#f1f3f4'};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;\">\n      <ha-icon icon=\"mdi:power-plug\" style=\"color:${isOn ? '#34a853' : '#5f6368'};width:18px;height:18px;\"></ha-icon>\n    </div>\n    <div style=\"flex:1; text-align:left;\">\n      <div style=\"font-size:14px;font-weight:500;color:#202124;line-height:17px;\">Fethi's Room</div>\n    </div>\n    <div style=\"display:inline-block; position:relative; width:44px; height:24px; background:${isOn ? '#34a853' : '#dadce0'}; border-radius:12px; transition:all 0.3s ease;\">\n      <div style=\"position:absolute; top:2px; ${isOn ? 'right:2px;' : 'left:2px;'} width:20px; height:20px; border-radius:50%; background:#ffffff; box-shadow:0 1px 3px rgba(0,0,0,0.20); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);\"></div>\n    </div>\n  </div>`;\n]]]\n",
+                  "tap_action": {
+                    "action": "toggle"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "56px"
+                      },
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": "16px"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      },
+                      {
+                        "width": "100%"
+                      },
+                      {
+                        "box-sizing": "border-box"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  box-shadow: 0 2px 6px rgba(0,0,0,0.08);\n}\n",
+                  "state": [
+                    {
+                      "value": "on",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#f0f9f4"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(0,0,0,0.08)"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "columns": 2,
+              "square": false,
+              "cards": [
+                {
+                  "type": "custom:button-card",
+                  "entity": "binary_sensor.0xf4b3b1fffe495048_occupancy",
+                  "show_name": true,
+                  "show_icon": false,
+                  "show_state": false,
+                  "name": "[[[\n  const isOn = entity && entity.state === 'on';\n  const icon = isOn ? 'mdi:motion-sensor' : 'mdi:motion-sensor-off';\n  const iconBg = isOn ? '#188038' : '#F8F9FA';\n  const iconColor = isOn ? '#FFFFFF' : '#5F6368';\n  const pillBg = isOn ? '#188038' : '#F1F3F4';\n  const pillColor = isOn ? '#FFFFFF' : '#5F6368';\n  const pillBorder = isOn ? '#188038' : '#DADCE0';\n  return `<div style=\"display:flex; align-items:center; gap:10px; width:100%; height:100%;\">\n    <div style=\"width:32px;height:32px;border-radius:10px;background:${iconBg};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;\">\n      <ha-icon icon=\"${icon}\" style=\"color:${iconColor};width:18px;height:18px;\"></ha-icon>\n    </div>\n    <div style=\"flex:1; text-align:left;\">\n      <div style=\"font-size:14px;font-weight:500;color:#202124;line-height:17px;\">Occupancy</div>\n    </div>\n    <div style=\"font-size:11px;font-weight:600;color:${pillColor};background:${pillBg};padding:3px 9px;border-radius:9999px;transition:all 0.3s ease;flex-shrink:0;letter-spacing:0.3px;\">${isOn ? 'Active' : 'Inactive'}</div>\n  </div>`;\n]]]\n",
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "56px"
+                      },
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": "16px"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      },
+                      {
+                        "width": "100%"
+                      },
+                      {
+                        "box-sizing": "border-box"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  box-shadow: 0 2px 6px rgba(0,0,0,0.08);\n}\n",
+                  "state": [
+                    {
+                      "value": "on",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#E6F4EA"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(24,128,56,0.12)"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "binary_sensor.0xa4c138997d10233c_contact",
+                  "show_name": true,
+                  "show_icon": false,
+                  "show_state": false,
+                  "name": "[[[\n  const isOn = entity && entity.state === 'on';\n  const icon = isOn ? 'mdi:door-open' : 'mdi:door-closed';\n  const iconBg = isOn ? '#F9AB00' : '#E8F0FE';\n  const iconColor = isOn ? '#FFFFFF' : '#1A73E8';\n  const pillBg = isOn ? '#F9AB00' : '#E8F0FE';\n  const pillColor = isOn ? '#FFFFFF' : '#1A73E8';\n  const pillBorder = isOn ? '#F9AB00' : '#1A73E8';\n  return `<div style=\"display:flex; align-items:center; gap:10px; width:100%; height:100%;\">\n    <div style=\"width:32px;height:32px;border-radius:10px;background:${iconBg};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;\">\n      <ha-icon icon=\"${icon}\" style=\"color:${iconColor};width:18px;height:18px;\"></ha-icon>\n    </div>\n    <div style=\"flex:1; text-align:left;\">\n      <div style=\"font-size:14px;font-weight:500;color:#202124;line-height:17px;\">Door</div>\n    </div>\n    <div style=\"font-size:11px;font-weight:600;color:${pillColor};background:${pillBg};padding:3px 9px;border-radius:9999px;transition:all 0.3s ease;flex-shrink:0;letter-spacing:0.3px;\">${isOn ? 'Open' : 'Closed'}</div>\n  </div>`;\n]]]\n",
+                  "tap_action": {
+                    "action": "more-info"
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "56px"
+                      },
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": "16px"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      },
+                      {
+                        "width": "100%"
+                      },
+                      {
+                        "box-sizing": "border-box"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  box-shadow: 0 2px 6px rgba(0,0,0,0.08);\n}\n",
+                  "state": [
+                    {
+                      "value": "on",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#FFF8E1"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "grid",
+          "column_span": 1,
+          "columns": 1,
+          "square": false,
+          "cards": [
+            {
+              "type": "custom:button-card",
+              "entity": "light.0xa4c138ad2b20ea12",
+              "show_name": true,
+              "show_icon": false,
+              "show_state": false,
+              "name": "[[[\n  const isOn = entity && entity.state === 'on';\n  const brightness = (entity && entity.attributes && entity.attributes.brightness) || 0;\n  const pct = Math.round((brightness / 255) * 100);\n  const status = isOn ? 'On \u00b7 ' + pct + '%' : 'Off';\n  const iconBg = isOn ? '#fef3e2' : '#f1f3f4';\n  const iconColor = isOn ? '#f9ab00' : '#5f6368';\n  return `<div style=\"display:flex; align-items:center; gap:10px; width:100%; height:100%;\">\n    <div style=\"width:32px;height:32px;border-radius:10px;background:${iconBg};display:flex;align-items:center;justify-content:center;transition:all 0.3s ease;\">\n      <ha-icon icon=\"mdi:desk-lamp\" style=\"color:${iconColor};width:18px;height:18px;\"></ha-icon>\n    </div>\n    <div style=\"flex:1; text-align:left;\">\n      <div style=\"font-size:14px;font-weight:500;color:#202124;line-height:17px;\">Desk Lamp</div>\n      <div style=\"font-size:11px;color:#5f6368;margin-top:1px;line-height:14px;\">${status}</div>\n    </div>\n    <div style=\"display:inline-block; position:relative; width:44px; height:24px; background:${isOn ? '#4285f4' : '#dadce0'}; border-radius:12px; transition:all 0.3s ease;\">\n      <div style=\"position:absolute; top:2px; ${isOn ? 'right:2px;' : 'left:2px;'} width:20px; height:20px; border-radius:50%; background:#ffffff; box-shadow:0 1px 3px rgba(0,0,0,0.20); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);\"></div>\n    </div>\n  </div>`;\n]]]\n",
+              "tap_action": {
+                "action": "toggle"
+              },
+              "styles": {
+                "card": [
+                  {
+                    "height": "56px"
+                  },
+                  {
+                    "background": "#FFFFFF"
+                  },
+                  {
+                    "border-radius": "28px"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "padding": "16px"
+                  },
+                  {
+                    "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                  },
+                  {
+                    "width": "100%"
+                  },
+                  {
+                    "box-sizing": "border-box"
+                  },
+                  {
+                    "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                  }
+                ]
+              },
+              "extra_styles": "ha-card:hover {\n  box-shadow: 0 2px 6px rgba(0,0,0,0.08);\n}\n",
+              "state": [
+                {
+                  "value": "on",
+                  "styles": {
+                    "card": [
+                      {
+                        "background": "#fef3e2"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "columns": 4,
+              "square": false,
+              "cards": [
+                {
+                  "type": "custom:button-card",
+                  "entity": "light.0xa4c138ad2b20ea12",
+                  "name": "25%",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "light.turn_on",
+                    "target": {
+                      "entity_id": "light.0xa4c138ad2b20ea12"
+                    },
+                    "data": {
+                      "brightness_pct": 25
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "44px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": 0
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "color": "#5f6368"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #fef9f0;\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === \"on\" && Math.round((b / 255) * 100) === 25; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#fef3e2"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#e37400"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "light.0xa4c138ad2b20ea12",
+                  "name": "50%",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "light.turn_on",
+                    "target": {
+                      "entity_id": "light.0xa4c138ad2b20ea12"
+                    },
+                    "data": {
+                      "brightness_pct": 50
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "44px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": 0
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "color": "#5f6368"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #fef9f0;\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === \"on\" && Math.round((b / 255) * 100) === 50; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#fef3e2"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#e67c00"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "light.0xa4c138ad2b20ea12",
+                  "name": "75%",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "light.turn_on",
+                    "target": {
+                      "entity_id": "light.0xa4c138ad2b20ea12"
+                    },
+                    "data": {
+                      "brightness_pct": 75
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "44px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": 0
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "color": "#5f6368"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #fef9f0;\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === \"on\" && Math.round((b / 255) * 100) === 75; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#fef3e2"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#e67c00"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "light.0xa4c138ad2b20ea12",
+                  "name": "100%",
+                  "show_icon": false,
+                  "show_state": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "light.turn_on",
+                    "target": {
+                      "entity_id": "light.0xa4c138ad2b20ea12"
+                    },
+                    "data": {
+                      "brightness_pct": 100
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "44px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": 0
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "color": "#5f6368"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #fef9f0;\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ const b = (entity && entity.attributes && entity.attributes.brightness) || 0; return entity.state === \"on\" && Math.round((b / 255) * 100) === 100; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#fef3e2"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#e67c00"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "custom:button-card",
+              "entity": "cover.yellow_switch",
+              "show_name": true,
+              "show_icon": false,
+              "show_state": false,
+              "name": "[[[\n  const pos = entity && entity.attributes ? (entity.attributes.current_position || 0) : 0;\n  const status = entity && entity.state === 'closed' ? 'Closed' : 'Open ' + pos + '%';\n  return `<div style=\"display:flex; align-items:center; gap:10px; width:100%; height:100%;\">\n    <div style=\"width:32px;height:32px;border-radius:10px;background:#fef3e2;display:flex;align-items:center;justify-content:center;\">\n      <ha-icon icon=\"mdi:window-shutter\" style=\"color:#f9ab00;width:18px;height:18px;\"></ha-icon>\n    </div>\n    <div style=\"flex:1; text-align:left;\">\n      <div style=\"font-size:14px;font-weight:500;color:#202124;line-height:17px;\">Yellow Blind</div>\n      <div style=\"font-size:11px;color:#5f6368;margin-top:1px;line-height:14px;\">${status}</div>\n    </div>\n  </div>`;\n]]]\n",
+              "tap_action": {
+                "action": "more-info"
+              },
+              "styles": {
+                "card": [
+                  {
+                    "height": "56px"
+                  },
+                  {
+                    "background": "#FFFFFF"
+                  },
+                  {
+                    "border-radius": "28px"
+                  },
+                  {
+                    "border": "none"
+                  },
+                  {
+                    "padding": "16px"
+                  },
+                  {
+                    "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                  },
+                  {
+                    "width": "100%"
+                  },
+                  {
+                    "box-sizing": "border-box"
+                  },
+                  {
+                    "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                  }
+                ]
+              },
+              "extra_styles": "ha-card:hover {\n  box-shadow: 0 2px 6px rgba(0,0,0,0.08);\n}\n"
+            },
+            {
+              "type": "grid",
+              "columns": 3,
+              "square": false,
+              "cards": [
+                {
+                  "type": "custom:button-card",
+                  "entity": "cover.yellow_switch",
+                  "icon": "mdi:arrow-up",
+                  "show_name": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "cover.open_cover",
+                    "target": {
+                      "entity_id": "cover.yellow_switch"
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "48px"
+                      },
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": "16px"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      }
+                    ],
+                    "icon": [
+                      {
+                        "color": "#f9ab00"
+                      },
+                      {
+                        "width": "22px"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #fef3e2;\n  box-shadow: 0 2px 6px rgba(249,171,0,0.20);\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ return entity.state === \"open\" || entity.state === \"opening\" || (entity.attributes.current_position || 0) >= 65; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#fef3e2"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "color": "#e67c00"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "cover.yellow_switch",
+                  "icon": "mdi:pause",
+                  "show_name": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "cover.stop_cover",
+                    "target": {
+                      "entity_id": "cover.yellow_switch"
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "48px"
+                      },
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": "16px"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      }
+                    ],
+                    "icon": [
+                      {
+                        "color": "#202124"
+                      },
+                      {
+                        "width": "22px"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #f1f3f4;\n  box-shadow: 0 2px 6px rgba(0,0,0,0.08);\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ const pos = entity.attributes.current_position || 0; return entity.state !== \"opening\" && entity.state !== \"closing\" && pos > 0 && pos < 65; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#fff8e1"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(249,171,0,0.12)"
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "color": "#f9ab00"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "cover.yellow_switch",
+                  "icon": "mdi:arrow-down",
+                  "show_name": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "cover.close_cover",
+                    "target": {
+                      "entity_id": "cover.yellow_switch"
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "48px"
+                      },
+                      {
+                        "background": "#FFFFFF"
+                      },
+                      {
+                        "border-radius": "28px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": "16px"
+                      },
+                      {
+                        "box-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)"
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      }
+                    ],
+                    "icon": [
+                      {
+                        "color": "#5f6368"
+                      },
+                      {
+                        "width": "22px"
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #f1f3f4;\n  box-shadow: 0 2px 6px rgba(0,0,0,0.08);\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ return entity.state === \"closed\" || entity.state === \"closing\" || (entity.attributes.current_position || 0) === 0; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#fce8e8"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(217,48,37,0.12)"
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "color": "#d93025"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "columns": 4,
+              "square": false,
+              "cards": [
+                {
+                  "type": "custom:button-card",
+                  "entity": "cover.yellow_switch",
+                  "name": "25%",
+                  "show_icon": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "cover.set_cover_position",
+                    "target": {
+                      "entity_id": "cover.yellow_switch"
+                    },
+                    "data": {
+                      "position": 25
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": 0
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "color": "#202124"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #e8f0fe;\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ return (entity.attributes.current_position || 0) === 25; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#e8f0fe"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(26,115,232,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#1a73e8"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "cover.yellow_switch",
+                  "name": "50%",
+                  "show_icon": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "cover.set_cover_position",
+                    "target": {
+                      "entity_id": "cover.yellow_switch"
+                    },
+                    "data": {
+                      "position": 50
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": 0
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "color": "#202124"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #e8f0fe;\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ return (entity.attributes.current_position || 0) === 50; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#e8f0fe"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(26,115,232,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#1a73e8"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "cover.yellow_switch",
+                  "name": "75%",
+                  "show_icon": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "cover.set_cover_position",
+                    "target": {
+                      "entity_id": "cover.yellow_switch"
+                    },
+                    "data": {
+                      "position": 75
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": 0
+                      },
+                      {
+                        "transition": "all 200ms cubic-bezier(0.4, 0, 0.2, 1)"
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "color": "#202124"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 500
+                      }
+                    ]
+                  },
+                  "extra_styles": "ha-card:hover {\n  background: #e8f0fe;\n}\nha-card:active {}\n",
+                  "state": [
+                    {
+                      "operator": "template",
+                      "value": "[[[ return (entity.attributes.current_position || 0) === 75; ]]]\n",
+                      "styles": {
+                        "card": [
+                          {
+                            "background": "#e8f0fe"
+                          },
+                          {
+                            "border": "none"
+                          },
+                          {
+                            "box-shadow": "0 2px 8px rgba(26,115,232,0.12)"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "color": "#1a73e8"
+                          },
+                          {
+                            "font-weight": 600
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:button-card",
+                  "entity": "cover.yellow_switch",
+                  "name": "100%",
+                  "show_icon": false,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "cover.set_cover_position",
+                    "target": {
+                      "entity_id": "cover.yellow_switch"
+                    },
+                    "data": {
+                      "position": 65
+                    }
+                  },
+                  "styles": {
+                    "card": [
+                      {
+                        "height": "40px"
+                      },
+                      {
+                        "background": "#F1F3F4"
+                      },
+                      {
+                        "border-radius": "16px"
+                      },
+                      {
+                        "border": "none"
+                      },
+                      {
+                        "padding": 0
+                      },
+                      {
+                        "box-shadow": "none"
+                      }
+                    ],
+                    "name": [
+                      {
+                        "color": "#1a73e8"
+                      },
+                      {
+                        "font-size": "12px"
+                      },
+                      {
+                        "font-weight": 600
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
