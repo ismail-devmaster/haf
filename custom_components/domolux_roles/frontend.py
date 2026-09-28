@@ -40,7 +40,7 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
             sidebar_title="Domolux Roles",
             sidebar_icon="mdi:account-cog",
             js_url=f"{js_url_path}/entrypoint.js",
-            embed_iframe=False,
+            embed_iframe=True,
             trust_external=False,
             require_admin=True,
             config_panel_domain=DOMAIN,

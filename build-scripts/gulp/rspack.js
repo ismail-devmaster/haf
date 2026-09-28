@@ -1,3 +1,4 @@
+/* global process */
 // Tasks to run rspack.
 
 import fs from "fs";
@@ -10,6 +11,7 @@ import env from "../env.cjs";
 import paths from "../paths.cjs";
 import {
   createAppConfig,
+  createDomoluxRolesConfig,
   createCastConfig,
   createDemoConfig,
   createGalleryConfig,
@@ -119,6 +121,17 @@ gulp.task("rspack-prod-app", () =>
   prodBuild(
     bothBuilds(createAppConfig, {
       isProdBuild: true,
+      isStatsBuild: env.isStatsBuild(),
+      isTestBuild: env.isTestBuild(),
+    })
+  )
+);
+
+gulp.task("rspack-prod-domolux-roles", () =>
+  prodBuild(
+    createDomoluxRolesConfig({
+      isProdBuild: true,
+      latestBuild: true,
       isStatsBuild: env.isStatsBuild(),
       isTestBuild: env.isTestBuild(),
     })

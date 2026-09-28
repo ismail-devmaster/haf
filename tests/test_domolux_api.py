@@ -11,6 +11,7 @@ from custom_components.domolux_roles.api import (
     ws_set_father,
 )
 from custom_components.domolux_roles.const import DOMAIN, ROLE_FATHER, ROLE_USER
+from custom_components.domolux_roles.frontend import async_register_frontend
 from custom_components.domolux_roles.role_manager import DomoluxRoleManager
 from custom_components.domolux_roles.store import DomoluxRoleStore
 
@@ -308,3 +309,24 @@ async def test_father_elevated_to_admin_loses_role_immediately():
 
     # Immediate fail-closed evaluation
     assert manager.get_user_role(VALID_USER_ID_1) == ROLE_USER
+
+
+# 11. Panel Registration - Verify embed_iframe=True for Custom Element isolation
+@pytest.mark.asyncio
+async def test_async_register_frontend_embed_iframe(patch_panel_custom=None):
+    from unittest.mock import patch
+
+    hass = MagicMock()
+    hass.data = {}
+    hass.http.async_register_static_paths = AsyncMock()
+
+    with patch("homeassistant.components.panel_custom.async_register_panel", new_callable=AsyncMock) as mock_register:
+        await async_register_frontend(hass)
+
+        mock_register.assert_called_once()
+        _, kwargs = mock_register.call_args
+        assert kwargs.get("embed_iframe") is True
+        assert kwargs.get("frontend_url_path") == "domolux-roles"
+        assert kwargs.get("webcomponent_name") == "ha-config-domolux-roles"
+        assert kwargs.get("require_admin") is True
+

@@ -1,3 +1,4 @@
+/* global process */
 import gulp from "gulp";
 import env from "../env.cjs";
 import "./clean.js";
@@ -48,6 +49,27 @@ gulp.task(
     gulp.parallel("gen-pages-app-prod", "gen-service-worker-app-prod"),
     // Don't compress running tests
     ...(env.isTestBuild() || env.isStatsBuild() ? [] : ["compress-app"])
+  )
+);
+
+gulp.task(
+  "build-domolux-roles",
+  gulp.series(
+    async function setEnv() {
+      process.env.NODE_ENV = "production";
+    },
+    "rspack-prod-domolux-roles",
+    async function copyDomoluxBundle() {
+      const fs = await import("fs");
+      const path = await import("path");
+      const paths = (await import("../paths.cjs")).default;
+      const src = path.join(paths.app_output_latest, "domolux-roles.js");
+      const dest = path.resolve(
+        paths.root_dir,
+        "custom_components/domolux_roles/frontend/entrypoint.js"
+      );
+      fs.copyFileSync(src, dest);
+    }
   )
 );
 

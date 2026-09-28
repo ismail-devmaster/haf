@@ -47,6 +47,7 @@ const createRspackConfig = ({
   if (!dontHash) {
     dontHash = new Set();
   }
+  const isDomoluxBuild = name.startsWith("domolux-roles");
   const ignorePackages = bundle.ignorePackages({ latestBuild });
   return {
     name,
@@ -109,24 +110,28 @@ const createRspackConfig = ({
       ],
       moduleIds: isProdBuild && !isStatsBuild ? "deterministic" : "named",
       chunkIds: isProdBuild && !isStatsBuild ? "deterministic" : "named",
-      splitChunks: {
-        // Disable splitting for web workers and worklets because imports of
-        // external chunks are broken for:
-        chunks: !isProdBuild
-          ? // improve incremental build speed, but blows up bundle size
-            new RegExp(
-              `^(?!(${Object.keys(entry).join("|")}|.*work(?:er|let))$)`
-            )
-          : // - ESM output: https://github.com/webpack/webpack/issues/17014
-            // - Worklets use `importScripts`: https://github.com/webpack/webpack/issues/11543
-            (chunk) =>
-              !chunk.canBeInitial() &&
-              !new RegExp(
-                `^.+-work${latestBuild ? "(?:let|er)" : "let"}$`
-              ).test(chunk.name),
-      },
+      splitChunks: isDomoluxBuild
+        ? false
+        : {
+            // Disable splitting for web workers and worklets because imports of
+            // external chunks are broken for:
+            chunks: !isProdBuild
+              ? // improve incremental build speed, but blows up bundle size
+                new RegExp(
+                  `^(?!(${Object.keys(entry).join("|")}|.*work(?:er|let))$)`
+                )
+              : // - ESM output: https://github.com/webpack/webpack/issues/17014
+                // - Worklets use `importScripts`: https://github.com/webpack/webpack/issues/11543
+                (chunk) =>
+                  !chunk.canBeInitial() &&
+                  !new RegExp(
+                    `^.+-work${latestBuild ? "(?:let|er)" : "let"}$`
+                  ).test(chunk.name),
+          },
     },
     plugins: [
+      isDomoluxBuild &&
+        new rspack.optimize.LimitChunkCountPlugin({ maxChunks: 1 }),
       !isStatsBuild && new SafeWebpackBar({ fancy: !isProdBuild }),
       new WebpackManifestPlugin({
         // Only include the JS of entrypoints
@@ -338,8 +343,24 @@ const createGalleryConfig = ({ isProdBuild, latestBuild }) =>
 const createLandingPageConfig = ({ isProdBuild, latestBuild }) =>
   createRspackConfig(bundle.config.landingPage({ isProdBuild, latestBuild }));
 
+const createDomoluxRolesConfig = ({
+  isProdBuild,
+  latestBuild,
+  isStatsBuild,
+  isTestBuild,
+}) =>
+  createRspackConfig(
+    bundle.config.domoluxRoles({
+      isProdBuild,
+      latestBuild,
+      isStatsBuild,
+      isTestBuild,
+    })
+  );
+
 module.exports = {
   createAppConfig,
+  createDomoluxRolesConfig,
   createDemoConfig,
   createCastConfig,
   createGalleryConfig,

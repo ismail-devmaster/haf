@@ -250,6 +250,23 @@ module.exports.config = {
     };
   },
 
+  domoluxRoles({ isProdBuild, latestBuild, isStatsBuild, isTestBuild, isWDS }) {
+    return {
+      name: "domolux-roles" + nameSuffix(latestBuild),
+      entry: {
+        "domolux-roles": "./src/entrypoints/domolux-roles.ts",
+      },
+      outputPath: outputPath(paths.app_output_root, latestBuild),
+      publicPath: publicPath(latestBuild),
+      isProdBuild,
+      latestBuild,
+      isStatsBuild,
+      isTestBuild,
+      isWDS,
+      dontHash: new Set(["domolux-roles"]),
+    };
+  },
+
   demo({ isProdBuild, latestBuild, isStatsBuild }) {
     return {
       name: "demo" + nameSuffix(latestBuild),
