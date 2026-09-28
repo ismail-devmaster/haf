@@ -237,6 +237,7 @@ module.exports.config = {
         onboarding: "./src/entrypoints/onboarding.ts",
         core: "./src/entrypoints/core.ts",
         "custom-panel": "./src/entrypoints/custom-panel.ts",
+        "domolux-roles": "./src/entrypoints/domolux-roles.ts",
       },
       outputPath: outputPath(paths.app_output_root, latestBuild),
       publicPath: publicPath(latestBuild),
@@ -245,6 +246,7 @@ module.exports.config = {
       isStatsBuild,
       isTestBuild,
       isWDS,
+      dontHash: new Set(["domolux-roles"]),
     };
   },
 

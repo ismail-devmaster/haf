@@ -12,6 +12,9 @@ import html from "@html-eslint/eslint-plugin";
 import importX from "eslint-plugin-import-x";
 
 export default tseslint.config(
+  {
+    ignores: ["custom_components/**"],
+  },
   js.configs.recommended,
   eslintConfigPrettier,
   litConfigs["flat/all"],

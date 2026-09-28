@@ -288,6 +288,19 @@ export class HomeAssistantMain extends LitElement {
       -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
     }
 
+    /* Hide the floating bottom navigation bar in portrait orientation. */
+    @media (orientation: portrait) {
+      .domolux-bottom-nav {
+        display: none !important;
+      }
+
+      /* Restore full height so hiding the bar leaves no empty whitespace. */
+      :host([modal]) partial-panel-resolver {
+        height: 100%;
+        margin-block-end: 0;
+      }
+    }
+
     .domolux-bottom-nav {
       position: fixed;
       bottom: 12px;
