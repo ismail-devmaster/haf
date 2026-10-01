@@ -21,15 +21,20 @@ if "homeassistant" not in sys.modules:
     sys.modules["homeassistant.helpers.storage"] = ha_mock.helpers.storage
     sys.modules["homeassistant.helpers.typing"] = ha_mock.helpers.typing
 
+    class MockUnauthorized(Exception):
+        pass
+
+    exceptions_mock = MagicMock()
+    exceptions_mock.Unauthorized = MockUnauthorized
+    sys.modules["homeassistant.exceptions"] = exceptions_mock
+    ha_mock.exceptions = exceptions_mock
+
     # Mock components & websocket_api
     components_mock = MagicMock()
     ws_mock = MagicMock()
     ws_mock.ERR_UNAUTHORIZED = "unauthorized"
     ws_mock.ERR_INVALID_FORMAT = "invalid_format"
     ws_mock.ERR_UNKNOWN_ERROR = "unknown_error"
-
-    class MockUnauthorized(Exception):
-        pass
 
     ws_mock.Unauthorized = MockUnauthorized
 

@@ -15,7 +15,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
 from .api import async_register_websocket_commands
+from .family_api import async_register_family_api_commands
+from .family_user_service import DomoluxFamilyUserService
 from .frontend import async_register_frontend, async_unregister_frontend
+from .ha_auth_adapter import DomoluxHAAuthAdapter
 from .const import DOMAIN
 from .role_manager import DomoluxRoleManager
 from .store import DomoluxRoleStore
@@ -27,16 +30,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the Domolux Roles integration domain state."""
     hass.data.setdefault(DOMAIN, {})
     async_register_websocket_commands(hass)
+    async_register_family_api_commands(hass)
     await async_register_frontend(hass)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Domolux Roles from a config entry."""
-    _LOGGER.info("Initializing Domolux Roles integration (Phase 1 Foundation)")
+    _LOGGER.info("Initializing Domolux Roles integration (Phase 1 Foundation & Phase 2 Family API)")
 
     store = DomoluxRoleStore(hass)
     manager = DomoluxRoleManager(hass, store)
+    adapter = DomoluxHAAuthAdapter(hass)
+    family_service = DomoluxFamilyUserService(hass, adapter, store)
 
     await manager.async_initialize()
 
@@ -44,6 +50,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {
         "store": store,
         "manager": manager,
+        "adapter": adapter,
+        "family_service": family_service,
     }
 
     _LOGGER.info("Domolux Roles integration setup completed successfully.")

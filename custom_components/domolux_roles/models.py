@@ -77,6 +77,74 @@ def validate_non_admin_user(is_admin: bool, is_owner: bool) -> None:
 
 
 @dataclass
+class FamilyMemberRecord:
+    """Representation of a managed family member record in Domolux."""
+
+    user_id: str
+    display_name: str
+    username: str
+    managed_group_id: str
+    status: str = STATUS_ACTIVE
+    created_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    updated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    permissions_metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.user_id = validate_user_id(self.user_id)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize record to primitive dictionary for JSON storage."""
+        return {
+            "user_id": self.user_id,
+            "display_name": self.display_name,
+            "username": self.username,
+            "managed_group_id": self.managed_group_id,
+            "status": self.status,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "permissions_metadata": self.permissions_metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Optional["FamilyMemberRecord"]:
+        """Instantiate from primitive dictionary with safe validation."""
+        if not data or not isinstance(data, dict):
+            return None
+
+        user_id = data.get("user_id")
+        display_name = data.get("display_name")
+        username = data.get("username")
+        managed_group_id = data.get("managed_group_id")
+
+        if not user_id or not display_name or not username or not managed_group_id:
+            return None
+
+        try:
+            return cls(
+                user_id=str(user_id),
+                display_name=str(display_name),
+                username=str(username),
+                managed_group_id=str(managed_group_id),
+                status=str(data.get("status", STATUS_ACTIVE)),
+                created_at=str(
+                    data.get("created_at", datetime.now(timezone.utc).isoformat())
+                ),
+                updated_at=str(
+                    data.get("updated_at", datetime.now(timezone.utc).isoformat())
+                ),
+                permissions_metadata=data.get("permissions_metadata", {})
+                if isinstance(data.get("permissions_metadata"), dict)
+                else {},
+            )
+        except (DomoluxRoleValidationError, ValueError):
+            return None
+
+
+@dataclass
 class FatherRoleAssignment:
     """Representation of the single Father role assignment."""
 
@@ -134,6 +202,7 @@ class DomoluxAuthState:
     version: int = 1
     minor_version: int = 0
     father: Optional[FatherRoleAssignment] = None
+    family_members: dict[str, FamilyMemberRecord] = field(default_factory=dict)
     metadata: dict[str, Any] = field(
         default_factory=lambda: {
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -147,6 +216,9 @@ class DomoluxAuthState:
             "version": self.version,
             "minor_version": self.minor_version,
             "father": self.father.to_dict() if self.father else None,
+            "family_members": {
+                k: v.to_dict() for k, v in self.family_members.items()
+            },
             "metadata": self.metadata,
         }
 
@@ -163,6 +235,15 @@ class DomoluxAuthState:
             else None
         )
 
+        family_members_raw = data.get("family_members")
+        family_members: dict[str, FamilyMemberRecord] = {}
+        if isinstance(family_members_raw, dict):
+            for k, v in family_members_raw.items():
+                if isinstance(v, dict):
+                    rec = FamilyMemberRecord.from_dict(v)
+                    if rec:
+                        family_members[rec.user_id] = rec
+
         metadata = (
             data.get("metadata")
             if isinstance(data.get("metadata"), dict)
@@ -176,5 +257,6 @@ class DomoluxAuthState:
             version=int(data.get("version", 1)),
             minor_version=int(data.get("minor_version", 0)),
             father=father_obj,
+            family_members=family_members,
             metadata=metadata,
         )

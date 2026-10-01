@@ -8,6 +8,7 @@ SECURITY & ISOLATION BOUNDARY:
 """
 
 from datetime import datetime, timezone
+import inspect
 import logging
 from typing import Any, Optional
 
@@ -15,6 +16,7 @@ from .const import STORAGE_KEY, STORAGE_VERSION
 from .models import (
     DomoluxAuthState,
     DomoluxRoleValidationError,
+    FamilyMemberRecord,
     FatherRoleAssignment,
     FatherRoleStatus,
     validate_user_id,
@@ -82,6 +84,26 @@ class DomoluxRoleStore:
             return False
         self._data.father = None
         return True
+
+    def get_family_member(self, user_id: str) -> Optional[FamilyMemberRecord]:
+        """Return a managed family member record by user_id."""
+        return self._data.family_members.get(user_id)
+
+    def add_family_member(self, record: FamilyMemberRecord) -> None:
+        """Add or update a managed family member record."""
+        validate_user_id(record.user_id)
+        self._data.family_members[record.user_id] = record
+
+    def remove_family_member(self, user_id: str) -> bool:
+        """Remove a managed family member record by user_id."""
+        if user_id in self._data.family_members:
+            del self._data.family_members[user_id]
+            return True
+        return False
+
+    def list_family_members(self) -> list[FamilyMemberRecord]:
+        """Return all stored managed family member records."""
+        return list(self._data.family_members.values())
 
     def validate(self, raw_data: dict[str, Any]) -> dict[str, Any]:
         """Validate raw input structure, forbid secrets, enforce single-father rule.
@@ -158,6 +180,9 @@ class DomoluxRoleStore:
                     "last_updated": datetime.now(timezone.utc).isoformat(),
                 }
 
+        if "family_members" not in raw_data or not isinstance(raw_data.get("family_members"), dict):
+            raw_data["family_members"] = {}
+
         return raw_data
 
     async def async_load(self) -> DomoluxAuthState:
@@ -214,8 +239,11 @@ class DomoluxRoleStore:
             try:
                 # Pre-save validation
                 self.validate(self._data.to_dict())
-                await self._store.async_save(self._data.to_dict())
+                res = self._store.async_save(self._data.to_dict())
+                if inspect.isawaitable(res):
+                    await res
             except Exception as err:
                 _LOGGER.error(
                     "Failed to persist Domolux role state to disk: %s", err
                 )
+                raise
