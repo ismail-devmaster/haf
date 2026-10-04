@@ -12,6 +12,8 @@ VERSION ISOLATION & SECURITY BOUNDARY:
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
 import inspect
 import logging
 from typing import Any, Optional
@@ -48,6 +50,33 @@ class DomoluxHAAuthAdapter:
     def __init__(self, hass: Any) -> None:
         """Initialize adapter with Home Assistant Core instance."""
         self.hass = hass
+        self._user_creation_locks: dict[str, tuple[asyncio.Lock, int]] = {}
+        self._locks_guard: asyncio.Lock | None = None
+
+    @asynccontextmanager
+    async def _user_creation_lock(self, clean_username: str):
+        """Acquire a per-username lock with automatic cleanup upon completion."""
+        if self._locks_guard is None:
+            self._locks_guard = asyncio.Lock()
+
+        async with self._locks_guard:
+            if clean_username in self._user_creation_locks:
+                lock, ref_count = self._user_creation_locks[clean_username]
+                self._user_creation_locks[clean_username] = (lock, ref_count + 1)
+            else:
+                lock = asyncio.Lock()
+                self._user_creation_locks[clean_username] = (lock, 1)
+
+        try:
+            async with lock:
+                yield
+        finally:
+            async with self._locks_guard:
+                lock, ref_count = self._user_creation_locks[clean_username]
+                if ref_count == 1:
+                    del self._user_creation_locks[clean_username]
+                else:
+                    self._user_creation_locks[clean_username] = (lock, ref_count - 1)
 
     # ------------------------------------------------------------------
     # Internal Encapsulation Helpers for HA Core Private APIs
@@ -154,141 +183,142 @@ class DomoluxHAAuthAdapter:
         clean_username = username.strip().lower()
         clean_name = name.strip()
 
-        # Step 1: Check username uniqueness across auth provider credentials and user credentials
-        provider = self._get_hass_auth_provider()
-        if hasattr(provider, "data") and provider.data is not None:
-            norm_fn = getattr(provider.data, "normalize_username", lambda x: x.strip().lower())
-            target_norm = norm_fn(clean_username)
-            for u_info in getattr(provider.data, "users", []):
-                if norm_fn(u_info.get("username", "")) == target_norm:
-                    raise DomoluxAuthAdapterError(
-                        f"Username '{clean_username}' already exists in Home Assistant."
-                    )
-
-        existing_users = await self.hass.auth.async_get_users()
-        for u in existing_users:
-            for cred in getattr(u, "credentials", []):
-                cred_username = getattr(cred, "data", {}).get("username", "")
-                if cred_username and cred_username.strip().lower() == clean_username:
-                    raise DomoluxAuthAdapterError(
-                        f"Username '{clean_username}' already exists in Home Assistant."
-                    )
-
-        # Step 2: Create base HA User with no default system group (Default-Deny baseline)
-        created_user = None
-        auth_added = False
-
-        async def _execute_rollback() -> None:
-            """Remove provider auth entry (if added) and core HA user (if created)."""
-            if auth_added:
-                remove_auth_func = getattr(provider, "async_remove_auth", None)
-                if remove_auth_func and callable(remove_auth_func):
-                    try:
-                        res = remove_auth_func(clean_username)
-                        if inspect.isawaitable(res):
-                            await res
-                    except Exception as remove_err:
-                        _LOGGER.critical(
-                            "Rollback failed during provider auth removal for '%s': %s",
-                            clean_username,
-                            remove_err,
+        async with self._user_creation_lock(clean_username):
+            # Step 1: Check username uniqueness across auth provider credentials and user credentials
+            provider = self._get_hass_auth_provider()
+            if hasattr(provider, "data") and provider.data is not None:
+                norm_fn = getattr(provider.data, "normalize_username", lambda x: x.strip().lower())
+                target_norm = norm_fn(clean_username)
+                for u_info in getattr(provider.data, "users", []):
+                    if norm_fn(u_info.get("username", "")) == target_norm:
+                        raise DomoluxAuthAdapterError(
+                            f"Username '{clean_username}' already exists in Home Assistant."
                         )
-            if created_user is not None:
-                try:
-                    await self.hass.auth.async_remove_user(created_user)
-                except Exception as rollback_err:
-                    _LOGGER.critical("Rollback failed during user cleanup: %s", rollback_err)
 
-        try:
-            created_user = await self.hass.auth.async_create_user(
-                name=clean_name,
-                group_ids=[],
-            )
-        except Exception as err:
-            raise DomoluxAuthAdapterError(
-                f"Failed to create Home Assistant core user: {err}"
-            ) from err
+            existing_users = await self.hass.auth.async_get_users()
+            for u in existing_users:
+                for cred in getattr(u, "credentials", []):
+                    cred_username = getattr(cred, "data", {}).get("username", "")
+                    if cred_username and cred_username.strip().lower() == clean_username:
+                        raise DomoluxAuthAdapterError(
+                            f"Username '{clean_username}' already exists in Home Assistant."
+                        )
 
-        user_id = getattr(created_user, "id", None)
-        if not user_id:
-            await _execute_rollback()
-            raise DomoluxAuthAdapterError("Created user object is missing a valid UUID.")
+            # Step 2: Create base HA User with no default system group (Default-Deny baseline)
+            created_user = None
+            auth_added = False
 
-        # Immediate post-creation security invariant verification & rollback
-        is_admin = getattr(created_user, "is_admin", False) is True
-        is_owner = getattr(created_user, "is_owner", False) is True
-        is_active = getattr(created_user, "is_active", True) is not False
-        user_groups = getattr(created_user, "groups", [])
-        forbidden_system_groups = {"system-admin", "system-users", "system-read-only"}
-        has_forbidden_group = False
-        if isinstance(user_groups, (list, tuple, set)):
-            has_forbidden_group = any(
-                getattr(g, "id", None) in forbidden_system_groups for g in user_groups
-            )
+            async def _execute_rollback() -> None:
+                """Remove provider auth entry (if added) and core HA user (if created)."""
+                if auth_added:
+                    remove_auth_func = getattr(provider, "async_remove_auth", None)
+                    if remove_auth_func and callable(remove_auth_func):
+                        try:
+                            res = remove_auth_func(clean_username)
+                            if inspect.isawaitable(res):
+                                await res
+                        except Exception as remove_err:
+                            _LOGGER.critical(
+                                "Rollback failed during provider auth removal for '%s': %s",
+                                clean_username,
+                                remove_err,
+                            )
+                if created_user is not None:
+                    try:
+                        await self.hass.auth.async_remove_user(created_user)
+                    except Exception as rollback_err:
+                        _LOGGER.critical("Rollback failed during user cleanup: %s", rollback_err)
 
-        if is_admin or is_owner or not is_active or has_forbidden_group:
-            _LOGGER.critical(
-                "Security Invariant Failure post user creation for '%s'. Executing rollback.",
-                clean_username,
-            )
-            await _execute_rollback()
-            raise DomoluxAuthSecurityError(
-                "Post-creation security invariant verification failed: "
-                f"is_admin={is_admin}, is_owner={is_owner}, is_active={is_active}, forbidden_group={has_forbidden_group}"
-            )
-
-        # Step 3: Add credentials via HassAuthProvider & link to HA user (Atomic rollback on failure)
-        try:
-            await provider.async_add_auth(clean_username, password)
-            auth_added = True
-
-            get_creds_func = getattr(provider, "async_get_or_create_credentials", None)
-            link_user_func = getattr(self.hass.auth, "async_link_user", None)
-
-            if not (get_creds_func and callable(get_creds_func) and link_user_func and callable(link_user_func)):
+            try:
+                created_user = await self.hass.auth.async_create_user(
+                    name=clean_name,
+                    group_ids=[],
+                )
+            except Exception as err:
                 raise DomoluxAuthAdapterError(
-                    "Home Assistant Auth credential binding capabilities (async_get_or_create_credentials and async_link_user) are required but unavailable."
+                    f"Failed to create Home Assistant core user: {err}"
+                ) from err
+
+            user_id = getattr(created_user, "id", None)
+            if not user_id:
+                await _execute_rollback()
+                raise DomoluxAuthAdapterError("Created user object is missing a valid UUID.")
+
+            # Immediate post-creation security invariant verification & rollback
+            is_admin = getattr(created_user, "is_admin", False) is True
+            is_owner = getattr(created_user, "is_owner", False) is True
+            is_active = getattr(created_user, "is_active", True) is not False
+            user_groups = getattr(created_user, "groups", [])
+            forbidden_system_groups = {"system-admin", "system-users", "system-read-only"}
+            has_forbidden_group = False
+            if isinstance(user_groups, (list, tuple, set)):
+                has_forbidden_group = any(
+                    getattr(g, "id", None) in forbidden_system_groups for g in user_groups
                 )
 
-            credentials = await get_creds_func({"username": clean_username})
-            if not credentials:
-                raise DomoluxAuthAdapterError(
-                    "AuthProvider returned empty credentials object."
+            if is_admin or is_owner or not is_active or has_forbidden_group:
+                _LOGGER.critical(
+                    "Security Invariant Failure post user creation for '%s'. Executing rollback.",
+                    clean_username,
                 )
-            await link_user_func(created_user, credentials)
-        except Exception as err:
-            _LOGGER.error(
-                "Failed binding credentials for user '%s'. Executing atomic rollback.",
-                clean_username,
-            )
-            await _execute_rollback()
-            raise DomoluxAuthAdapterError(
-                f"Failed to bind authentication credentials: {err}"
-            ) from err
+                await _execute_rollback()
+                raise DomoluxAuthSecurityError(
+                    "Post-creation security invariant verification failed: "
+                    f"is_admin={is_admin}, is_owner={is_owner}, is_active={is_active}, forbidden_group={has_forbidden_group}"
+                )
 
-        # Step 4: Create dedicated custom managed group (Atomic rollback on failure)
-        try:
-            default_empty_policy: dict[str, Any] = {"entities": {}}
-            await self.async_create_or_update_managed_group(
-                user_id=user_id,
-                policy=default_empty_policy,
-            )
-        except Exception as err:
-            _LOGGER.error(
-                "Failed initializing custom managed group for user '%s'. Executing atomic rollback.",
+            # Step 3: Add credentials via HassAuthProvider & link to HA user (Atomic rollback on failure)
+            try:
+                await provider.async_add_auth(clean_username, password)
+                auth_added = True
+
+                get_creds_func = getattr(provider, "async_get_or_create_credentials", None)
+                link_user_func = getattr(self.hass.auth, "async_link_user", None)
+
+                if not (get_creds_func and callable(get_creds_func) and link_user_func and callable(link_user_func)):
+                    raise DomoluxAuthAdapterError(
+                        "Home Assistant Auth credential binding capabilities (async_get_or_create_credentials and async_link_user) are required but unavailable."
+                    )
+
+                credentials = await get_creds_func({"username": clean_username})
+                if not credentials:
+                    raise DomoluxAuthAdapterError(
+                        "AuthProvider returned empty credentials object."
+                    )
+                await link_user_func(created_user, credentials)
+            except Exception as err:
+                _LOGGER.error(
+                    "Failed binding credentials for user '%s'. Executing atomic rollback.",
+                    clean_username,
+                )
+                await _execute_rollback()
+                raise DomoluxAuthAdapterError(
+                    f"Failed to bind authentication credentials: {err}"
+                ) from err
+
+            # Step 4: Create dedicated custom managed group (Atomic rollback on failure)
+            try:
+                default_empty_policy: dict[str, Any] = {"entities": {}}
+                await self.async_create_or_update_managed_group(
+                    user_id=user_id,
+                    policy=default_empty_policy,
+                )
+            except Exception as err:
+                _LOGGER.error(
+                    "Failed initializing custom managed group for user '%s'. Executing atomic rollback.",
+                    user_id,
+                )
+                await _execute_rollback()
+                raise DomoluxAuthAdapterError(
+                    f"Failed initializing managed group: {err}"
+                ) from err
+
+            _LOGGER.info(
+                "Successfully created Domolux managed family user '%s' (%s) with Default-Deny custom group.",
+                clean_username,
                 user_id,
             )
-            await _execute_rollback()
-            raise DomoluxAuthAdapterError(
-                f"Failed initializing managed group: {err}"
-            ) from err
-
-        _LOGGER.info(
-            "Successfully created Domolux managed family user '%s' (%s) with Default-Deny custom group.",
-            clean_username,
-            user_id,
-        )
-        return created_user
+            return created_user
 
     async def async_deactivate_managed_user(self, user_id: str) -> bool:
         """Deactivate a managed family user and invalidate all session tokens."""

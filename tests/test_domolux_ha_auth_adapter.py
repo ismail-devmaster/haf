@@ -1,5 +1,6 @@
 """Unit tests for DomoluxHAAuthAdapter and safety invariants."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 import pytest
 
@@ -510,3 +511,224 @@ async def test_change_username_missing_credential_fails_closed():
 
     assert "has no Home Assistant credential object" in str(exc_info.value)
     provider.async_change_username.assert_not_called()
+
+
+# ----------------------------------------------------------------------
+# CONCURRENCY REGRESSION TESTS FOR USERNAME CREATION RACE CONDITIONS
+# ----------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_concurrent_create_managed_user_same_username():
+    """Verify that two concurrent creation requests for the exact same username
+    are synchronized so that exactly one succeeds and the other fails cleanly with
+    the duplicate username error, leaving zero orphaned users or credentials."""
+    hass, mock_store, provider = _setup_mock_hass()
+    adapter = DomoluxHAAuthAdapter(hass)
+
+    mock_user = MagicMock()
+    mock_user.id = VALID_USER_ID
+    mock_user.is_admin = False
+    mock_user.is_owner = False
+    mock_user.groups = []
+    mock_user.invalidate_cache = MagicMock()
+
+    # Simulate realistic async delay in HA user creation to expose race conditions if unlocked
+    async def _mock_async_create_user(name, group_ids):
+        await asyncio.sleep(0.01)
+        # Update hass.auth.async_get_users mock dynamically so subsequent Step 1 uniqueness check sees created user
+        cred = MagicMock()
+        cred.data = {"username": "concurrent_child"}
+        mock_user.credentials = [cred]
+        hass.auth.async_get_users.return_value = [mock_user]
+        return mock_user
+
+    hass.auth.async_create_user = AsyncMock(side_effect=_mock_async_create_user)
+    hass.auth.async_get_user.return_value = mock_user
+
+    # Execute concurrent creation requests via asyncio.gather
+    task1 = adapter.async_create_managed_user("concurrent_child", "Pass123!", "Child One")
+    task2 = adapter.async_create_managed_user("concurrent_child", "Pass123!", "Child Two")
+
+    results = await asyncio.gather(task1, task2, return_exceptions=True)
+
+    successes = [r for r in results if not isinstance(r, Exception)]
+    errors = [r for r in results if isinstance(r, Exception)]
+
+    assert len(successes) == 1
+    assert len(errors) == 1
+
+    assert successes[0] == mock_user
+    assert isinstance(errors[0], DomoluxAuthAdapterError)
+    assert "already exists in Home Assistant" in str(errors[0])
+
+    assert hass.auth.async_create_user.call_count == 1
+    assert provider.async_add_auth.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_create_managed_user_case_insensitive_username():
+    """Verify that concurrent creation requests with case-insensitively identical usernames
+    ('childtest' and 'ChildTest') collide cleanly and prevent duplicate account creation."""
+    hass, mock_store, provider = _setup_mock_hass()
+    adapter = DomoluxHAAuthAdapter(hass)
+
+    mock_user = MagicMock()
+    mock_user.id = VALID_USER_ID
+    mock_user.is_admin = False
+    mock_user.is_owner = False
+    mock_user.groups = []
+    mock_user.invalidate_cache = MagicMock()
+
+    async def _mock_async_create_user(name, group_ids):
+        await asyncio.sleep(0.01)
+        cred = MagicMock()
+        cred.data = {"username": "childtest"}
+        mock_user.credentials = [cred]
+        hass.auth.async_get_users.return_value = [mock_user]
+        return mock_user
+
+    hass.auth.async_create_user = AsyncMock(side_effect=_mock_async_create_user)
+    hass.auth.async_get_user.return_value = mock_user
+
+    task1 = adapter.async_create_managed_user("childtest", "Pass123!", "Child Lower")
+    task2 = adapter.async_create_managed_user("ChildTest", "Pass123!", "Child Upper")
+
+    results = await asyncio.gather(task1, task2, return_exceptions=True)
+
+    successes = [r for r in results if not isinstance(r, Exception)]
+    errors = [r for r in results if isinstance(r, Exception)]
+
+    assert len(successes) == 1
+    assert len(errors) == 1
+
+    assert successes[0] == mock_user
+    assert isinstance(errors[0], DomoluxAuthAdapterError)
+    assert "already exists in Home Assistant" in str(errors[0])
+
+    assert hass.auth.async_create_user.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_create_managed_user_distinct_usernames_succeed_independently():
+    """Verify that concurrent creation requests for DIFFERENT usernames run concurrently
+    without blocking or globally serializing each other."""
+    hass, mock_store, provider = _setup_mock_hass()
+    adapter = DomoluxHAAuthAdapter(hass)
+
+    mock_user_a = MagicMock(id="uuid-child-a", is_admin=False, is_owner=False, groups=[])
+    mock_user_b = MagicMock(id="uuid-child-b", is_admin=False, is_owner=False, groups=[])
+
+    async def _mock_async_get_user(u_id):
+        if u_id == "uuid-child-a":
+            return mock_user_a
+        elif u_id == "uuid-child-b":
+            return mock_user_b
+        return None
+
+    hass.auth.async_get_user = AsyncMock(side_effect=_mock_async_get_user)
+
+    a_entered = asyncio.Event()
+    b_entered = asyncio.Event()
+
+    async def _mock_async_create_user(name, group_ids):
+        if name == "Child A":
+            a_entered.set()
+            # Wait for Child B to ALSO enter its critical section concurrently
+            await asyncio.wait_for(b_entered.wait(), timeout=1.0)
+            return mock_user_a
+        else:
+            b_entered.set()
+            # Wait for Child A to ALSO enter its critical section concurrently
+            await asyncio.wait_for(a_entered.wait(), timeout=1.0)
+            return mock_user_b
+
+    hass.auth.async_create_user = AsyncMock(side_effect=_mock_async_create_user)
+
+    task1 = adapter.async_create_managed_user("child_a", "Pass123!", "Child A")
+    task2 = adapter.async_create_managed_user("child_b", "Pass123!", "Child B")
+
+    results = await asyncio.gather(task1, task2)
+
+    assert results[0] == mock_user_a
+    assert results[1] == mock_user_b
+    assert a_entered.is_set()
+    assert b_entered.is_set()
+    assert hass.auth.async_create_user.call_count == 2
+    assert provider.async_add_auth.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_create_managed_user_lock_cleanup_after_completion():
+    """Verify that per-username locks are automatically cleaned up from memory
+    after creation completes, preventing lock map memory leaks."""
+    hass, mock_store, provider = _setup_mock_hass()
+    adapter = DomoluxHAAuthAdapter(hass)
+
+    mock_user = MagicMock(id=VALID_USER_ID, is_admin=False, is_owner=False, groups=[])
+    hass.auth.async_get_user.return_value = mock_user
+
+    async def _mock_async_create_user(name, group_ids):
+        # Verify lock is in dictionary during active creation
+        assert len(adapter._user_creation_locks) == 1
+        assert "cleanup_child" in adapter._user_creation_locks
+        return mock_user
+
+    hass.auth.async_create_user = AsyncMock(side_effect=_mock_async_create_user)
+
+    assert len(adapter._user_creation_locks) == 0
+
+    await adapter.async_create_managed_user("cleanup_child", "Pass123!", "Cleanup Child")
+
+    # Verify lock dictionary is completely empty after completion
+    assert len(adapter._user_creation_locks) == 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_create_managed_user_rollback_prevents_orphans_and_allows_subsequent_creation():
+    """Verify that if an in-flight creation attempt fails and triggers rollback,
+    no orphaned HA user or provider auth entry remains, and a subsequent/queued creation
+    attempt for the same username succeeds cleanly."""
+    hass, mock_store, provider = _setup_mock_hass()
+    adapter = DomoluxHAAuthAdapter(hass)
+
+    mock_user_1 = MagicMock(id="uuid-1", is_admin=False, is_owner=False, groups=[])
+    mock_user_2 = MagicMock(id="uuid-2", is_admin=False, is_owner=False, groups=[])
+
+    attempt = 0
+
+    async def _mock_async_create_user(name, group_ids):
+        nonlocal attempt
+        attempt += 1
+        await asyncio.sleep(0.01)
+        if attempt == 1:
+            return mock_user_1
+        return mock_user_2
+
+    hass.auth.async_create_user = AsyncMock(side_effect=_mock_async_create_user)
+
+    async def _mock_async_get_user(u_id):
+        if u_id == "uuid-2":
+            return mock_user_2
+        return None
+
+    hass.auth.async_get_user = AsyncMock(side_effect=_mock_async_get_user)
+
+    # First task fails at credential binding (async_add_auth)
+    provider.async_add_auth.side_effect = [Exception("Binding error"), None]
+
+    task1 = adapter.async_create_managed_user("retry_child", "Pass123!", "Retry One")
+    task2 = adapter.async_create_managed_user("retry_child", "Pass123!", "Retry Two")
+
+    results = await asyncio.gather(task1, task2, return_exceptions=True)
+
+    errors = [r for r in results if isinstance(r, Exception)]
+    successes = [r for r in results if not isinstance(r, Exception)]
+
+    assert len(errors) == 1
+    assert len(successes) == 1
+
+    assert isinstance(errors[0], DomoluxAuthAdapterError)
+    assert successes[0] == mock_user_2
+
+    # Verify atomic rollback was called for mock_user_1
+    hass.auth.async_remove_user.assert_called_once_with(mock_user_1)

@@ -35,10 +35,10 @@ def _get_manager(hass: HomeAssistant) -> DomoluxRoleManager:
 def _require_admin(connection: websocket_api.ActiveConnection) -> None:
     """Check if the connected user is an active Home Assistant Administrator or Owner."""
     user = connection.user
-    if user is None or getattr(user, "is_disabled", False) or not (
-        getattr(user, "is_admin", False) or getattr(user, "is_owner", False)
-    ):
-        raise websocket_api.Unauthorized("Admin privilege required.")
+    if user is None or getattr(user, "is_disabled", False):
+        raise websocket_api.Unauthorized()
+    if not (getattr(user, "is_admin", False) or getattr(user, "is_owner", False)):
+        raise websocket_api.Unauthorized(user_id=user.id)
 
 
 @websocket_api.websocket_command(

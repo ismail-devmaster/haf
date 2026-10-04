@@ -76,7 +76,7 @@ async def _require_father(
     """
     user = connection.user
     if user is None or getattr(user, "is_disabled", False):
-        raise Unauthorized("Connection user is not authenticated or disabled.")
+        raise Unauthorized()
 
     manager = _get_manager(hass)
     user_role = manager.get_user_role(user.id)
@@ -87,7 +87,7 @@ async def _require_father(
         or father_assignment is None
         or father_assignment.user_id != user.id
     ):
-        raise Unauthorized("Father privilege required.")
+        raise Unauthorized(user_id=user.id)
 
     return user.id
 

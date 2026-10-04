@@ -22,7 +22,22 @@ if "homeassistant" not in sys.modules:
     sys.modules["homeassistant.helpers.typing"] = ha_mock.helpers.typing
 
     class MockUnauthorized(Exception):
-        pass
+        def __init__(
+            self,
+            context=None,
+            user_id=None,
+            entity_id=None,
+            config_entry_id=None,
+            permission=None,
+        ):
+            super().__init__()
+            self.context = context
+            self.user_id = user_id
+            self.entity_id = entity_id
+            self.config_entry_id = config_entry_id
+            self.permission = permission
+            if context is not None:
+                _ = context.user_id
 
     exceptions_mock = MagicMock()
     exceptions_mock.Unauthorized = MockUnauthorized

@@ -14,6 +14,7 @@ from custom_components.domolux_roles.family_api import (
     ERR_FAMILY_USER_ORPHANED,
     ERR_FATHER_REQUIRED,
     ERR_INVALID_INPUT,
+    _require_father,
     ws_family_change_password,
     ws_family_create,
     ws_family_delete,
@@ -21,6 +22,7 @@ from custom_components.domolux_roles.family_api import (
     ws_family_enable,
     ws_family_list,
 )
+from homeassistant.exceptions import Unauthorized
 from custom_components.domolux_roles.family_user_service import (
     DomoluxDuplicateUsernameError,
     DomoluxFamilyUserService,
@@ -489,3 +491,30 @@ async def test_family_change_password_success():
 
     adapter.async_change_managed_user_password.assert_called_once_with(CHILD_USER_ID, new_pass)
     adapter.async_revoke_user_sessions.assert_called_with(CHILD_USER_ID)
+
+
+# 8. Regression Test: Unauthorized Exception Semantics & Keywords
+@pytest.mark.asyncio
+async def test_require_father_unauthorized_exception_semantics():
+    hass, manager, store, service, adapter, father_user, admin_user, owner_user = _setup_api_environment()
+
+    # Father user -> succeeds and returns FATHER_USER_ID
+    conn = _make_connection(father_user)
+    father_id = await _require_father(hass, conn)
+    assert father_id == FATHER_USER_ID
+
+    # Non-father authenticated user -> raises Unauthorized(user_id=...) without string context
+    regular_user = MagicMock(id=ARBITRARY_USER_ID, is_admin=False, is_owner=False, is_disabled=False)
+    conn = _make_connection(regular_user)
+    with pytest.raises(Unauthorized) as exc_info:
+        await _require_father(hass, conn)
+    assert exc_info.value.context is None
+    assert exc_info.value.user_id == ARBITRARY_USER_ID
+
+    # Unauthenticated user -> raises Unauthorized() without positional string context
+    conn = _make_connection(None)
+    conn.user = None
+    with pytest.raises(Unauthorized) as exc_info:
+        await _require_father(hass, conn)
+    assert exc_info.value.context is None
+    assert exc_info.value.user_id is None
