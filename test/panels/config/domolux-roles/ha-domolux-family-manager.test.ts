@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import "../../../../src/panels/config/domolux-roles/ha-domolux-family-manager";
 import type { HaDomoluxFamilyManager } from "../../../../src/panels/config/domolux-roles/ha-domolux-family-manager";
 import type { HomeAssistant } from "../../../../src/types";
-import { showConfirmationDialog } from "../../../../src/dialogs/generic/show-dialog-box";
 
 // Polyfill ElementInternals.prototype.setValidity and validity for WebAwesome in JSDOM environment
 if (typeof ElementInternals !== "undefined") {
@@ -400,21 +399,45 @@ describe("ha-domolux-family-manager component", () => {
 
       const member = (element as any)._familyMembers[0];
 
-      (showConfirmationDialog as any).mockResolvedValueOnce(true);
+      // 1. Open delete dialog
+      (element as any)._openDeleteDialog(member);
+      await element.updateComplete;
 
-      await (element as any)._handleDeleteMember(member);
+      expect((element as any)._showDeleteDialog).toBe(true);
+      expect((element as any)._selectedUserForDelete).toEqual(member);
 
-      expect(showConfirmationDialog).toHaveBeenCalledWith(
-        element,
-        expect.objectContaining({
-          destructive: true,
-        })
-      );
+      // 2. Confirm deletion
+      await (element as any)._handleConfirmDeleteMember();
 
       expect(hass.callWS).toHaveBeenCalledWith({
         type: "domolux/family/delete",
         user_id: CHILD_USER_ID,
       });
+
+      expect((element as any)._showDeleteDialog).toBe(false);
+      expect((element as any)._selectedUserForDelete).toBe(null);
+      expect((element as any)._success).toContain("deleted successfully");
+    });
+
+    it("handles delete member dialog cancel/close", async () => {
+      element.hass = createMockHass({ isFather: true });
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+
+      // Open delete dialog
+      (element as any)._openDeleteDialog(member);
+      await element.updateComplete;
+
+      expect((element as any)._showDeleteDialog).toBe(true);
+
+      // Close dialog
+      (element as any)._closeDeleteDialog();
+
+      expect((element as any)._showDeleteDialog).toBe(false);
+      expect((element as any)._selectedUserForDelete).toBe(null);
     });
   });
 

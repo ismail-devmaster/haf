@@ -2033,36 +2033,35 @@ var t = {
             o = (n(6776), n(8350)),
             s = n(8962),
             l = (n(7094), n(6386)),
-            c = n(5063),
-            u = n(8868),
-            L = t([o, s, l]);
-          [o, s, l] = L.then ? (await L)() : L;
-          const d =
+            c = n(8868),
+            u = t([o, s, l]);
+          [o, s, l] = u.then ? (await u)() : u;
+          const L =
               "M12,5.5A3.5,3.5 0 0,1 15.5,9A3.5,3.5 0 0,1 12,12.5A3.5,3.5 0 0,1 8.5,9A3.5,3.5 0 0,1 12,5.5M5,8C5.56,8 6.08,8.15 6.53,8.42C6.38,9.85 6.8,11.27 7.66,12.38C7.16,13.34 6.16,14 5,14A3,3 0 0,1 2,11A3,3 0 0,1 5,8M19,8A3,3 0 0,1 22,11A3,3 0 0,1 19,14C17.84,14 16.84,13.34 16.34,12.38C17.2,11.27 17.62,9.85 17.47,8.42C17.92,8.15 18.44,8 19,8M5.5,18.25C5.5,16.18 8.41,14.5 12,14.5C15.59,14.5 18.5,16.18 18.5,18.25V20H5.5V18.25M0,20V18.5C0,17.11 1.89,15.94 4.45,15.6C3.86,16.28 3.5,17.22 3.5,18.25V20H0M24,20H20.5V18.25C20.5,17.22 20.14,16.28 19.55,15.6C22.11,15.94 24,17.11 24,18.5V20Z",
-            m =
+            d =
               "M15,14C12.33,14 7,15.33 7,18V20H23V18C23,15.33 17.67,14 15,14M6,10V7H4V10H1V12H4V15H6V12H9V10M15,12A4,4 0 0,0 19,8A4,4 0 0,0 15,4A4,4 0 0,0 11,8A4,4 0 0,0 15,12Z",
-            h =
+            m =
               "M6 8C6 5.79 7.79 4 10 4S14 5.79 14 8 12.21 12 10 12 6 10.21 6 8M12 18.2C12 17.24 12.5 16.34 13.2 15.74V15.5C13.2 15.11 13.27 14.74 13.38 14.38C12.35 14.14 11.21 14 10 14C5.58 14 2 15.79 2 18V20H12V18.2M22 18.3V21.8C22 22.4 21.4 23 20.7 23H15.2C14.6 23 14 22.4 14 21.7V18.2C14 17.6 14.6 17 15.2 17V15.5C15.2 14.1 16.6 13 18 13C19.4 13 20.8 14.1 20.8 15.5V17C21.4 17 22 17.6 22 18.3M19.5 15.5C19.5 14.7 18.8 14.2 18 14.2C17.2 14.2 16.5 14.7 16.5 15.5V17H19.5V15.5Z",
-            p =
+            h =
               "M21.1,12.5L22.5,13.91L15.97,20.5L12.5,17L13.9,15.59L15.97,17.67L21.1,12.5M10,17L13,20H3V18C3,15.79 6.58,14 11,14L12.89,14.11L10,17M11,4A4,4 0 0,1 15,8A4,4 0 0,1 11,12A4,4 0 0,1 7,8A4,4 0 0,1 11,4Z",
-            f =
+            p =
               "M22,18V22H18V19H15V16H12L9.74,13.74C9.19,13.91 8.61,14 8,14A6,6 0 0,1 2,8A6,6 0 0,1 8,2A6,6 0 0,1 14,8C14,8.61 13.91,9.19 13.74,9.74L22,18M7,5A2,2 0 0,0 5,7A2,2 0 0,0 7,9A2,2 0 0,0 9,7A2,2 0 0,0 7,5Z",
-            b =
+            f =
               "M15,14C17.67,14 23,15.33 23,18V20H7V18C7,15.33 12.33,14 15,14M15,12A4,4 0 0,1 11,8A4,4 0 0,1 15,4A4,4 0 0,1 19,8A4,4 0 0,1 15,12M5,9.59L7.12,7.46L8.54,8.88L6.41,11L8.54,13.12L7.12,14.54L5,12.41L2.88,14.54L1.46,13.12L3.59,11L1.46,8.88L2.88,7.46L5,9.59Z",
-            g =
+            b =
               "M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5M11,7H13V13H11M11,15H13V17H11",
-            y =
+            g =
               "M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z",
-            k =
+            y =
               "M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z";
-          class w extends r.WF {
+          class k extends r.WF {
             firstUpdated() {
               this._checkRoleAndLoadFamily();
             }
             async _checkRoleAndLoadFamily() {
               ((this._loading = !0), (this._error = null));
               try {
-                const t = await (0, u.jw)(this.hass);
+                const t = await (0, c.jw)(this.hass);
                 if (((this._isFather = t.isFather), !this._isFather))
                   return void (this._loading = !1);
                 await this._loadFamilyMembers();
@@ -2225,34 +2224,36 @@ var t = {
                 this._submitting = !1;
               }
             }
-            async _handleDeleteMember(t) {
-              if (
-                await (0, c.dk)(this, {
-                  title: "Delete Family Member / حذف فرد من العائلة",
-                  text: `Are you sure you want to delete family member "${t.display_name}" (@${t.username})? This action will permanently remove the Home Assistant user account and cannot be undone.`,
-                  confirmText: "Delete Member / حذف",
-                  dismissText: "Cancel / إلغاء",
-                  destructive: !0,
-                })
-              ) {
-                ((this._submitting = !0),
-                  (this._error = null),
-                  (this._success = null));
-                try {
-                  (await this.hass.callWS({
-                    type: "domolux/family/delete",
-                    user_id: t.user_id,
-                  }),
-                    (this._success = `Family member '${t.display_name}' deleted successfully.`),
-                    await this._loadFamilyMembers());
-                } catch (t) {
-                  this._error = this._parseErrorMessage(
-                    t,
-                    "Failed to delete family member."
-                  );
-                } finally {
-                  this._submitting = !1;
-                }
+            _openDeleteDialog(t) {
+              ((this._selectedUserForDelete = t),
+                (this._error = null),
+                (this._showDeleteDialog = !0));
+            }
+            _closeDeleteDialog() {
+              ((this._showDeleteDialog = !1),
+                (this._selectedUserForDelete = null));
+            }
+            async _handleConfirmDeleteMember() {
+              if (!this._selectedUserForDelete) return;
+              const t = this._selectedUserForDelete;
+              ((this._submitting = !0),
+                (this._error = null),
+                (this._success = null));
+              try {
+                (await this.hass.callWS({
+                  type: "domolux/family/delete",
+                  user_id: t.user_id,
+                }),
+                  (this._success = `Family member '${t.display_name}' deleted successfully.`),
+                  this._closeDeleteDialog(),
+                  await this._loadFamilyMembers());
+              } catch (t) {
+                this._error = this._parseErrorMessage(
+                  t,
+                  "Failed to delete family member."
+                );
+              } finally {
+                this._submitting = !1;
               }
             }
             _handleToggleStatusClick(t) {
@@ -2265,7 +2266,7 @@ var t = {
             }
             _handleDeleteMemberClick(t) {
               const a = t.currentTarget.member;
-              a && this._handleDeleteMember(a);
+              a && this._openDeleteDialog(a);
             }
             _handleCreateDisplayNameInput(t) {
               this._createDisplayName = t.target.value;
@@ -2283,17 +2284,17 @@ var t = {
               return this._loading
                 ? r.qy` <div class="loading-container"> <ha-progress-ring active></ha-progress-ring> <p>Loading Domolux Family Manager...</p> </div> `
                 : this._isFather
-                  ? r.qy` <div class="content" dir="auto"> <div class="header-section"> <ha-svg-icon .path="${d}" class="header-icon"></ha-svg-icon> <div class="header-text"> <h1>Domolux Family Manager / إدارة عائلة دومولوكس</h1> <p class="subtitle"> Manage family member accounts, security statuses, and access credentials. إدارة حسابات أفراد العائلة وحالات الأمان وكلمات المرور. </p> </div> <div class="header-actions"> <ha-button raised .disabled="${this._submitting}" @click="${this._openCreateDialog}"> <ha-svg-icon .path="${m}" slot="start"></ha-svg-icon> Add Member / إضافة فرد </ha-button> <ha-button .disabled="${this._submitting}" @click="${this._loadFamilyMembers}" title="Refresh / تحديث"> <ha-svg-icon .path="${y}" slot="start"></ha-svg-icon> Refresh / تحديث </ha-button> </div> </div> ${this._error ? r.qy`<ha-alert alert-type="error" dismissable .localize="${this.hass?.localize}" @alert-dismissed-clicked="${this._dismissError}"> ${this._error} </ha-alert>` : r.s6} ${this._success ? r.qy`<ha-alert alert-type="success" dismissable .localize="${this.hass?.localize}" @alert-dismissed-clicked="${this._dismissSuccess}"> ${this._success} </ha-alert>` : r.s6} <ha-card header="Managed Family Members / أفراد العائلة المدارون"> <div class="card-content"> ${
+                  ? r.qy` <div class="content" dir="auto"> <div class="header-section"> <ha-svg-icon .path="${L}" class="header-icon"></ha-svg-icon> <div class="header-text"> <h1>Domolux Family Manager / إدارة عائلة دومولوكس</h1> <p class="subtitle"> Manage family member accounts, security statuses, and access credentials. إدارة حسابات أفراد العائلة وحالات الأمان وكلمات المرور. </p> </div> <div class="header-actions"> <ha-button raised .disabled="${this._submitting}" @click="${this._openCreateDialog}"> <ha-svg-icon .path="${d}" slot="start"></ha-svg-icon> Add Member / إضافة فرد </ha-button> <ha-button .disabled="${this._submitting}" @click="${this._loadFamilyMembers}" title="Refresh / تحديث"> <ha-svg-icon .path="${g}" slot="start"></ha-svg-icon> Refresh / تحديث </ha-button> </div> </div> ${this._error ? r.qy`<ha-alert alert-type="error" dismissable .localize="${this.hass?.localize}" @alert-dismissed-clicked="${this._dismissError}"> ${this._error} </ha-alert>` : r.s6} ${this._success ? r.qy`<ha-alert alert-type="success" dismissable .localize="${this.hass?.localize}" @alert-dismissed-clicked="${this._dismissSuccess}"> ${this._success} </ha-alert>` : r.s6} <ha-card header="Managed Family Members / أفراد العائلة المدارون"> <div class="card-content"> ${
                       0 === this._familyMembers.length
-                        ? r.qy` <div class="empty-state"> <p>No managed family members found. Click "Add Member" above to create a family user.</p> </div> `
+                        ? r.qy` <div class="empty-state"> <p> No managed family members found. Click "Add Member" above to create a family user. </p> </div> `
                         : r.qy` <div class="table-container"> <table class="member-table"> <thead> <tr> <th>Member Name / الاسم</th> <th>Username / اسم المستخدم</th> <th>Status / الحالة</th> <th>Managed ID / المعرف</th> <th>Actions / الإجراءات</th> </tr> </thead> <tbody> ${this._familyMembers.map(
                             (t) => {
                               const a = "ACTIVE" === t.status;
-                              return r.qy` <tr> <td class="name-cell"> <span class="display-name">${t.display_name}</span> </td> <td class="username-cell">@${t.username}</td> <td class="status-cell"> <span class="status-badge ${a ? "active" : "disabled"}"> <ha-svg-icon .path="${a ? p : h}"></ha-svg-icon> ${a ? "Active / نشط" : "Suspended / معلق"} </span> </td> <td class="id-cell"> <code>${t.user_id}</code> </td> <td class="actions-cell"> <ha-button size="small" .disabled="${this._submitting}" .member="${t}" @click="${this._handleToggleStatusClick}"> <ha-svg-icon .path="${a ? h : p}" slot="start"></ha-svg-icon> ${a ? "Disable / تعليق" : "Enable / تفعيل"} </ha-button> <ha-button size="small" .disabled="${this._submitting}" .member="${t}" @click="${this._openPasswordDialogClick}"> <ha-svg-icon .path="${f}" slot="start"></ha-svg-icon> Password / كلمة السر </ha-button> <ha-button size="small" class="destructive" .disabled="${this._submitting}" .member="${t}" @click="${this._handleDeleteMemberClick}"> <ha-svg-icon .path="${b}" slot="start"></ha-svg-icon> Delete / حذف </ha-button> </td> </tr> `;
+                              return r.qy` <tr> <td class="name-cell"> <span class="display-name">${t.display_name}</span> </td> <td class="username-cell">@${t.username}</td> <td class="status-cell"> <span class="status-badge ${a ? "active" : "disabled"}"> <ha-svg-icon .path="${a ? h : m}"></ha-svg-icon> ${a ? "Active / نشط" : "Suspended / معلق"} </span> </td> <td class="id-cell"> <code>${t.user_id}</code> </td> <td class="actions-cell"> <ha-button size="small" .disabled="${this._submitting}" .member="${t}" @click="${this._handleToggleStatusClick}"> <ha-svg-icon .path="${a ? m : h}" slot="start"></ha-svg-icon> ${a ? "Disable / تعليق" : "Enable / تفعيل"} </ha-button> <ha-button size="small" .disabled="${this._submitting}" .member="${t}" @click="${this._openPasswordDialogClick}"> <ha-svg-icon .path="${p}" slot="start"></ha-svg-icon> Password / كلمة السر </ha-button> <ha-button size="small" class="destructive" .disabled="${this._submitting}" .member="${t}" @click="${this._handleDeleteMemberClick}"> <ha-svg-icon .path="${f}" slot="start"></ha-svg-icon> Delete / حذف </ha-button> </td> </tr> `;
                             }
                           )} </tbody> </table> </div> `
-                    } </div> </ha-card> ${this._showCreateDialog ? r.qy` <div class="dialog-backdrop"> <div class="dialog-box"> <div class="dialog-header"> <h2>Add Family Member / إضافة فرد من العائلة</h2> <button class="icon-button" @click="${this._closeCreateDialog}"> <ha-svg-icon .path="${k}"></ha-svg-icon> </button> </div> <div class="dialog-body"> <div class="form-group"> <label for="create-name">Display Name / الاسم المعروض</label> <input id="create-name" placeholder="e.g. Child One" .value="${this._createDisplayName}" @input="${this._handleCreateDisplayNameInput}"> </div> <div class="form-group"> <label for="create-username">Username / اسم المستخدم</label> <input id="create-username" placeholder="e.g. child1" .value="${this._createUsername}" @input="${this._handleCreateUsernameInput}"> </div> <div class="form-group"> <label for="create-password">Initial Password / كلمة المرور الأولية</label> <input id="create-password" type="password" placeholder="At least 8 characters" .value="${this._createPassword}" @input="${this._handleCreatePasswordInput}"> <span class="helper-text">Minimum 8 characters required.</span> </div> </div> <div class="dialog-footer"> <ha-button @click="${this._closeCreateDialog}" .disabled="${this._submitting}"> Cancel / إلغاء </ha-button> <ha-button raised @click="${this._handleCreateMember}" .disabled="${this._submitting}"> Create Member / إنشاء </ha-button> </div> </div> </div> ` : r.s6} ${this._showPasswordDialog && this._selectedUserForPassword ? r.qy` <div class="dialog-backdrop"> <div class="dialog-box"> <div class="dialog-header"> <h2>Change Password / تغيير كلمة المرور</h2> <button class="icon-button" @click="${this._closePasswordDialog}"> <ha-svg-icon .path="${k}"></ha-svg-icon> </button> </div> <div class="dialog-body"> <p class="target-summary"> Target Member: <strong>${this._selectedUserForPassword.display_name}</strong> (@${this._selectedUserForPassword.username}) </p> <div class="form-group"> <label for="new-password">New Password / كلمة المرور الجديدة</label> <input id="new-password" type="password" placeholder="At least 8 characters" .value="${this._newPassword}" @input="${this._handleNewPasswordInput}"> <span class="helper-text">Minimum 8 characters required.</span> </div> </div> <div class="dialog-footer"> <ha-button @click="${this._closePasswordDialog}" .disabled="${this._submitting}"> Cancel / إلغاء </ha-button> <ha-button raised @click="${this._handleChangePassword}" .disabled="${this._submitting}"> Save Password / حفظ </ha-button> </div> </div> </div> ` : r.s6} </div> `
-                  : r.qy` <div class="content" dir="auto"> <ha-alert alert-type="warning" title="Access Denied"> <div class="alert-content"> <ha-svg-icon .path="${g}"></ha-svg-icon> <span> Father privilege required to view or manage family members. يلزم وجود صلاحيات الأب المسؤول لإدارة أفراد العائلة. </span> </div> </ha-alert> </div> `;
+                    } </div> </ha-card> ${this._showCreateDialog ? r.qy` <div class="dialog-backdrop"> <div class="dialog-box"> <div class="dialog-header"> <h2>Add Family Member / إضافة فرد من العائلة</h2> <button class="icon-button" @click="${this._closeCreateDialog}"> <ha-svg-icon .path="${y}"></ha-svg-icon> </button> </div> <div class="dialog-body"> <div class="form-group"> <label for="create-name">Display Name / الاسم المعروض</label> <input id="create-name" placeholder="e.g. Child One" .value="${this._createDisplayName}" @input="${this._handleCreateDisplayNameInput}"> </div> <div class="form-group"> <label for="create-username">Username / اسم المستخدم</label> <input id="create-username" placeholder="e.g. child1" .value="${this._createUsername}" @input="${this._handleCreateUsernameInput}"> </div> <div class="form-group"> <label for="create-password">Initial Password / كلمة المرور الأولية</label> <input id="create-password" type="password" placeholder="At least 8 characters" .value="${this._createPassword}" @input="${this._handleCreatePasswordInput}"> <span class="helper-text">Minimum 8 characters required.</span> </div> </div> <div class="dialog-footer"> <ha-button @click="${this._closeCreateDialog}" .disabled="${this._submitting}"> Cancel / إلغاء </ha-button> <ha-button raised @click="${this._handleCreateMember}" .disabled="${this._submitting}"> Create Member / إنشاء </ha-button> </div> </div> </div> ` : r.s6} ${this._showPasswordDialog && this._selectedUserForPassword ? r.qy` <div class="dialog-backdrop"> <div class="dialog-box"> <div class="dialog-header"> <h2>Change Password / تغيير كلمة المرور</h2> <button class="icon-button" @click="${this._closePasswordDialog}"> <ha-svg-icon .path="${y}"></ha-svg-icon> </button> </div> <div class="dialog-body"> <p class="target-summary"> Target Member: <strong>${this._selectedUserForPassword.display_name}</strong> (@${this._selectedUserForPassword.username}) </p> <div class="form-group"> <label for="new-password">New Password / كلمة المرور الجديدة</label> <input id="new-password" type="password" placeholder="At least 8 characters" .value="${this._newPassword}" @input="${this._handleNewPasswordInput}"> <span class="helper-text">Minimum 8 characters required.</span> </div> </div> <div class="dialog-footer"> <ha-button @click="${this._closePasswordDialog}" .disabled="${this._submitting}"> Cancel / إلغاء </ha-button> <ha-button raised @click="${this._handleChangePassword}" .disabled="${this._submitting}"> Save Password / حفظ </ha-button> </div> </div> </div> ` : r.s6} ${this._showDeleteDialog && this._selectedUserForDelete ? r.qy` <div class="dialog-backdrop"> <div class="dialog-box"> <div class="dialog-header"> <h2>Delete Family Member / حذف فرد من العائلة</h2> <button class="icon-button" @click="${this._closeDeleteDialog}"> <ha-svg-icon .path="${y}"></ha-svg-icon> </button> </div> <div class="dialog-body"> <p class="target-summary"> Are you sure you want to delete family member <strong>"${this._selectedUserForDelete.display_name}" (@${this._selectedUserForDelete.username})</strong>? This action will permanently remove the Home Assistant user account and cannot be undone. </p> </div> <div class="dialog-footer"> <ha-button @click="${this._closeDeleteDialog}" .disabled="${this._submitting}"> Cancel / إلغاء </ha-button> <ha-button raised class="destructive" @click="${this._handleConfirmDeleteMember}" .disabled="${this._submitting}"> Delete Member / حذف </ha-button> </div> </div> </div> ` : r.s6} </div> `
+                  : r.qy` <div class="content" dir="auto"> <ha-alert alert-type="warning" title="Access Denied"> <div class="alert-content"> <ha-svg-icon .path="${b}"></ha-svg-icon> <span> Father privilege required to view or manage family members. يلزم وجود صلاحيات الأب المسؤول لإدارة أفراد العائلة. </span> </div> </ha-alert> </div> `;
             }
             constructor(...t) {
               (super(...t),
@@ -2306,43 +2307,52 @@ var t = {
                 (this._showCreateDialog = !1),
                 (this._showPasswordDialog = !1),
                 (this._selectedUserForPassword = null),
+                (this._showDeleteDialog = !1),
+                (this._selectedUserForDelete = null),
                 (this._createDisplayName = ""),
                 (this._createUsername = ""),
                 (this._createPassword = ""),
                 (this._newPassword = ""));
             }
           }
-          ((w.styles = r.AH`:host{display:block;padding:var(--ha-space-4,16px);background-color:var(--primary-background-color);color:var(--primary-text-color)}.content{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:var(--ha-space-4,16px)}.header-section{display:flex;align-items:center;gap:var(--ha-space-4,16px);flex-wrap:wrap}.header-icon{width:48px;height:48px;color:var(--primary-color)}.header-text{flex:1;min-width:250px}h1{margin:0;font-size:1.5rem;font-weight:500}.subtitle{margin:var(--ha-space-1,4px) 0 0 0;color:var(--secondary-text-color);font-size:.9rem}.header-actions{display:flex;gap:var(--ha-space-2,8px)}ha-card{border-radius:var(--ha-card-border-radius,12px)}.card-content{padding:var(--ha-space-4,16px)}.loading-container{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:16px}.alert-content{display:flex;align-items:center;gap:12px}.table-container{overflow-x:auto}.member-table{width:100%;border-collapse:collapse;text-align:left}.member-table th{padding:12px;border-bottom:2px solid var(--divider-color,#e0e0e0);color:var(--secondary-text-color);font-weight:600;font-size:.85rem;text-transform:uppercase}.member-table td{padding:12px;border-bottom:1px solid var(--divider-color,#e0e0e0);vertical-align:middle}.display-name{font-weight:500}.username-cell{color:var(--secondary-text-color)}.status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:12px;font-size:.8rem;font-weight:500}.status-badge.active{background-color:var(--state-active-color,rgba(3,169,244,.15));color:var(--primary-color)}.status-badge.disabled{background-color:var(--warning-color-subtle,rgba(255,152,0,.15));color:var(--warning-color,#ff9800)}.id-cell code{font-family:monospace;font-size:.8rem;background:var(--secondary-background-color,#f5f5f5);padding:2px 6px;border-radius:4px}.actions-cell{display:flex;gap:6px;flex-wrap:wrap}ha-button.destructive{--mdc-theme-primary:var(--error-color, #db4437);color:var(--error-color,#db4437)}.empty-state{text-align:center;padding:32px 16px;color:var(--secondary-text-color)}.dialog-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:100}.dialog-box{background:var(--card-background-color,#fff);color:var(--primary-text-color,#000);border-radius:12px;width:100%;max-width:480px;box-shadow:0 4px 20px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden}.dialog-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--divider-color,#e0e0e0)}.dialog-header h2{margin:0;font-size:1.2rem;font-weight:500}.icon-button{background:0 0;border:none;cursor:pointer;color:var(--secondary-text-color);padding:4px}.dialog-body{padding:20px;display:flex;flex-direction:column;gap:16px}.target-summary{margin:0;color:var(--secondary-text-color)}.form-group{display:flex;flex-direction:column;gap:6px}.form-group label{font-size:.9rem;font-weight:500}.form-group input{padding:10px 12px;border-radius:6px;border:1px solid var(--divider-color,#ccc);background:var(--card-background-color,#fff);color:var(--primary-text-color,#000);font-size:1rem}.form-group input:focus{outline:0;border-color:var(--primary-color)}.helper-text{font-size:.8rem;color:var(--secondary-text-color)}.dialog-footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;background:var(--secondary-background-color,#f9f9f9);border-top:1px solid var(--divider-color,#e0e0e0)}`),
+          ((k.styles = r.AH`:host{display:block;padding:var(--ha-space-4,16px);background-color:var(--primary-background-color);color:var(--primary-text-color)}.content{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:var(--ha-space-4,16px)}.header-section{display:flex;align-items:center;gap:var(--ha-space-4,16px);flex-wrap:wrap}.header-icon{width:48px;height:48px;color:var(--primary-color)}.header-text{flex:1;min-width:250px}h1{margin:0;font-size:1.5rem;font-weight:500}.subtitle{margin:var(--ha-space-1,4px) 0 0 0;color:var(--secondary-text-color);font-size:.9rem}.header-actions{display:flex;gap:var(--ha-space-2,8px)}ha-card{border-radius:var(--ha-card-border-radius,12px)}.card-content{padding:var(--ha-space-4,16px)}.loading-container{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:200px;gap:16px}.alert-content{display:flex;align-items:center;gap:12px}.table-container{overflow-x:auto}.member-table{width:100%;border-collapse:collapse;text-align:left}.member-table th{padding:12px;border-bottom:2px solid var(--divider-color,#e0e0e0);color:var(--secondary-text-color);font-weight:600;font-size:.85rem;text-transform:uppercase}.member-table td{padding:12px;border-bottom:1px solid var(--divider-color,#e0e0e0);vertical-align:middle}.display-name{font-weight:500}.username-cell{color:var(--secondary-text-color)}.status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:12px;font-size:.8rem;font-weight:500}.status-badge.active{background-color:var(--state-active-color,rgba(3,169,244,.15));color:var(--primary-color)}.status-badge.disabled{background-color:var(--warning-color-subtle,rgba(255,152,0,.15));color:var(--warning-color,#ff9800)}.id-cell code{font-family:monospace;font-size:.8rem;background:var(--secondary-background-color,#f5f5f5);padding:2px 6px;border-radius:4px}.actions-cell{display:flex;gap:6px;flex-wrap:wrap}ha-button.destructive{--mdc-theme-primary:var(--error-color, #db4437);color:var(--error-color,#db4437)}.empty-state{text-align:center;padding:32px 16px;color:var(--secondary-text-color)}.dialog-backdrop{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:100}.dialog-box{background:var(--card-background-color,#fff);color:var(--primary-text-color,#000);border-radius:12px;width:100%;max-width:480px;box-shadow:0 4px 20px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden}.dialog-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--divider-color,#e0e0e0)}.dialog-header h2{margin:0;font-size:1.2rem;font-weight:500}.icon-button{background:0 0;border:none;cursor:pointer;color:var(--secondary-text-color);padding:4px}.dialog-body{padding:20px;display:flex;flex-direction:column;gap:16px}.target-summary{margin:0;color:var(--secondary-text-color)}.form-group{display:flex;flex-direction:column;gap:6px}.form-group label{font-size:.9rem;font-weight:500}.form-group input{padding:10px 12px;border-radius:6px;border:1px solid var(--divider-color,#ccc);background:var(--card-background-color,#fff);color:var(--primary-text-color,#000);font-size:1rem}.form-group input:focus{outline:0;border-color:var(--primary-color)}.helper-text{font-size:.8rem;color:var(--secondary-text-color)}.dialog-footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;background:var(--secondary-background-color,#f9f9f9);border-top:1px solid var(--divider-color,#e0e0e0)}`),
             (0, e.Cg)(
               [(0, i.MZ)({ attribute: !1 })],
-              w.prototype,
+              k.prototype,
               "hass",
               void 0
             ),
-            (0, e.Cg)([(0, i.wk)()], w.prototype, "_loading", void 0),
-            (0, e.Cg)([(0, i.wk)()], w.prototype, "_submitting", void 0),
-            (0, e.Cg)([(0, i.wk)()], w.prototype, "_isFather", void 0),
-            (0, e.Cg)([(0, i.wk)()], w.prototype, "_familyMembers", void 0),
-            (0, e.Cg)([(0, i.wk)()], w.prototype, "_error", void 0),
-            (0, e.Cg)([(0, i.wk)()], w.prototype, "_success", void 0),
-            (0, e.Cg)([(0, i.wk)()], w.prototype, "_showCreateDialog", void 0),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_loading", void 0),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_submitting", void 0),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_isFather", void 0),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_familyMembers", void 0),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_error", void 0),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_success", void 0),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_showCreateDialog", void 0),
             (0, e.Cg)(
               [(0, i.wk)()],
-              w.prototype,
+              k.prototype,
               "_showPasswordDialog",
               void 0
             ),
             (0, e.Cg)(
               [(0, i.wk)()],
-              w.prototype,
+              k.prototype,
               "_selectedUserForPassword",
               void 0
             ),
-            (0, e.Cg)([(0, i.wk)()], w.prototype, "_createDisplayName", void 0),
-            (0, e.Cg)([(0, i.wk)()], w.prototype, "_createUsername", void 0),
-            (0, e.Cg)([(0, i.wk)()], w.prototype, "_createPassword", void 0),
-            (0, e.Cg)([(0, i.wk)()], w.prototype, "_newPassword", void 0),
-            (w = (0, e.Cg)([(0, i.EM)("ha-domolux-family-manager")], w)),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_showDeleteDialog", void 0),
+            (0, e.Cg)(
+              [(0, i.wk)()],
+              k.prototype,
+              "_selectedUserForDelete",
+              void 0
+            ),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_createDisplayName", void 0),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_createUsername", void 0),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_createPassword", void 0),
+            (0, e.Cg)([(0, i.wk)()], k.prototype, "_newPassword", void 0),
+            (k = (0, e.Cg)([(0, i.EM)("ha-domolux-family-manager")], k)),
             a());
         } catch (t) {
           a(t);

@@ -17,7 +17,6 @@ import "../../../components/ha-button";
 import "../../../components/ha-alert";
 import "../../../components/ha-svg-icon";
 import "../../../components/progress/ha-progress-ring";
-import { showConfirmationDialog } from "../../../dialogs/generic/show-dialog-box";
 import type { HomeAssistant } from "../../../types";
 import {
   getDomoluxRole,
@@ -56,6 +55,10 @@ export class HaDomoluxFamilyManager extends LitElement {
   @state() private _showPasswordDialog = false;
 
   @state() private _selectedUserForPassword: DomoluxFamilyMember | null = null;
+
+  @state() private _showDeleteDialog = false;
+
+  @state() private _selectedUserForDelete: DomoluxFamilyMember | null = null;
 
   // Form Inputs (Passwords cleared immediately after WS call)
   @state() private _createDisplayName = "";
@@ -285,19 +288,21 @@ export class HaDomoluxFamilyManager extends LitElement {
     }
   }
 
-  private async _handleDeleteMember(
-    member: DomoluxFamilyMember
-  ): Promise<void> {
-    const confirmed = await showConfirmationDialog(this, {
-      title: "Delete Family Member / حذف فرد من العائلة",
-      text: `Are you sure you want to delete family member "${member.display_name}" (@${member.username})? This action will permanently remove the Home Assistant user account and cannot be undone.`,
-      confirmText: "Delete Member / حذف",
-      dismissText: "Cancel / إلغاء",
-      destructive: true,
-    });
+  private _openDeleteDialog(member: DomoluxFamilyMember): void {
+    this._selectedUserForDelete = member;
+    this._error = null;
+    this._showDeleteDialog = true;
+  }
 
-    if (!confirmed) return;
+  private _closeDeleteDialog(): void {
+    this._showDeleteDialog = false;
+    this._selectedUserForDelete = null;
+  }
 
+  private async _handleConfirmDeleteMember(): Promise<void> {
+    if (!this._selectedUserForDelete) return;
+
+    const member = this._selectedUserForDelete;
     this._submitting = true;
     this._error = null;
     this._success = null;
@@ -309,6 +314,7 @@ export class HaDomoluxFamilyManager extends LitElement {
       });
 
       this._success = `Family member '${member.display_name}' deleted successfully.`;
+      this._closeDeleteDialog();
       await this._loadFamilyMembers();
     } catch (err: any) {
       this._error = this._parseErrorMessage(
@@ -337,7 +343,7 @@ export class HaDomoluxFamilyManager extends LitElement {
   private _handleDeleteMemberClick(e: Event): void {
     const member = (e.currentTarget as any).member as DomoluxFamilyMember;
     if (member) {
-      this._handleDeleteMember(member);
+      this._openDeleteDialog(member);
     }
   }
 
@@ -675,6 +681,51 @@ export class HaDomoluxFamilyManager extends LitElement {
                       .disabled=${this._submitting}
                     >
                       Save Password / حفظ
+                    </ha-button>
+                  </div>
+                </div>
+              </div>
+            `
+          : nothing}
+
+        <!-- Delete Member Confirmation Dialog -->
+        ${this._showDeleteDialog && this._selectedUserForDelete
+          ? html`
+              <div class="dialog-backdrop">
+                <div class="dialog-box">
+                  <div class="dialog-header">
+                    <h2>Delete Family Member / حذف فرد من العائلة</h2>
+                    <button
+                      class="icon-button"
+                      @click=${this._closeDeleteDialog}
+                    >
+                      <ha-svg-icon .path=${mdiClose}></ha-svg-icon>
+                    </button>
+                  </div>
+                  <div class="dialog-body">
+                    <p class="target-summary">
+                      Are you sure you want to delete family member
+                      <strong
+                        >"${this._selectedUserForDelete.display_name}"
+                        (@${this._selectedUserForDelete.username})</strong
+                      >? This action will permanently remove the Home Assistant
+                      user account and cannot be undone.
+                    </p>
+                  </div>
+                  <div class="dialog-footer">
+                    <ha-button
+                      @click=${this._closeDeleteDialog}
+                      .disabled=${this._submitting}
+                    >
+                      Cancel / إلغاء
+                    </ha-button>
+                    <ha-button
+                      raised
+                      class="destructive"
+                      @click=${this._handleConfirmDeleteMember}
+                      .disabled=${this._submitting}
+                    >
+                      Delete Member / حذف
                     </ha-button>
                   </div>
                 </div>
