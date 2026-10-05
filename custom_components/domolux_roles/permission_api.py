@@ -10,6 +10,7 @@ SECURITY INVARIANTS:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 import uuid
@@ -58,6 +59,15 @@ VALID_ACCESS_LEVELS = {ACCESS_LEVEL_NONE, ACCESS_LEVEL_READ, ACCESS_LEVEL_CONTRO
 VALID_TARGET_TYPES = {TARGET_ENTITY, TARGET_DEVICE, TARGET_AREA}
 VALID_EFFECTS = {EFFECT_ALLOW, EFFECT_DENY}
 
+_USER_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _get_user_lock(user_id: str) -> asyncio.Lock:
+    """Retrieve or create a per-target-user lock to serialize permission mutations."""
+    if user_id not in _USER_LOCKS:
+        _USER_LOCKS[user_id] = asyncio.Lock()
+    return _USER_LOCKS[user_id]
+
 
 def _get_store(hass: HomeAssistant) -> DomoluxRoleStore:
     """Retrieve active DomoluxRoleStore instance from hass.data."""
@@ -80,6 +90,89 @@ def _get_evaluator(hass: HomeAssistant) -> DomoluxPermissionEvaluator:
 def _async_fire_permissions_updated(hass: HomeAssistant, user_id: str) -> None:
     """Fire event on HA bus to notify active clients that permission set changed."""
     hass.bus.async_fire("domolux_permissions_updated", {"user_id": user_id})
+
+
+async def _execute_atomic_permission_mutation(
+    hass: HomeAssistant,
+    target_user_id: str,
+    mutate_fn: Any,
+) -> UserPermissionSet:
+    """Execute a permission mutation with atomic transaction semantics and per-user locking.
+
+    Transaction flow:
+    1. Lock per-target user lock to serialize concurrent mutations.
+    2. Snapshot current Domolux permission set (in-memory & persisted).
+    3. Build candidate new permission set in memory via mutate_fn.
+    4. Sync new state to HA managed group & verify (handled by adapter).
+    5. Persist candidate state to Domolux store.
+    6. Return new permission set on success.
+
+    Failure & Rollback semantics:
+    - If HA sync or verification fails: adapter rolls back HA group policy; Domolux store remains un-persisted and in-memory state is preserved as old snapshot. Exception is re-raised.
+    - If Domolux persistence fails: HA group policy is rolled back to old snapshot via adapter, Domolux memory store is restored to old snapshot, and persistence of old snapshot is attempted. Exception is re-raised.
+
+    CRASH-WINDOW LIMITATION:
+    This two-phase atomic transaction provides application-level rollback consistency
+    for normal operational failures (validation errors, HA policy sync failures, HA verification failures,
+    store persistence errors). In the event of an un-interceptable process crash or power loss between
+    HA group update and disk persistence, the state will be reconciled on next service start or sync.
+    """
+    lock = _get_user_lock(target_user_id)
+    async with lock:
+        store = _get_store(hass)
+        old_perm_set = store.get_user_permissions(target_user_id)
+        old_dict = old_perm_set.to_dict()
+
+        # Build candidate state in memory without touching persistent store
+        new_perm_set = UserPermissionSet.from_dict(old_dict)
+        mutate_fn(new_perm_set)
+
+        # Retrieve adapter instance
+        adapter = None
+        domain_data = hass.data.get(DOMAIN, {})
+        for entry_data in domain_data.values():
+            if isinstance(entry_data, dict) and "adapter" in entry_data:
+                adapter = entry_data["adapter"]
+                break
+
+        # Step 4: Sync & Verify HA Group Policy
+        if adapter is not None and hasattr(adapter, "async_sync_managed_user_permissions"):
+            await adapter.async_sync_managed_user_permissions(
+                target_user_id, new_perm_set.to_dict()
+            )
+
+        # Step 5: Persist New Domolux State
+        store.set_user_permissions(new_perm_set)
+        try:
+            await store.async_save()
+        except Exception as persist_err:
+            _LOGGER.error(
+                "Domolux store persistence failed for user %s, rolling back HA policy: %s",
+                target_user_id,
+                persist_err,
+            )
+            # Rollback HA policy to old snapshot
+            if adapter is not None and hasattr(adapter, "async_sync_managed_user_permissions"):
+                try:
+                    await adapter.async_sync_managed_user_permissions(
+                        target_user_id, old_dict
+                    )
+                except Exception as rollback_err:
+                    _LOGGER.critical(
+                        "HA Policy rollback failed during store persistence failure for user %s: %s",
+                        target_user_id,
+                        rollback_err,
+                    )
+            # Restore old Domolux in-memory state
+            restored_set = UserPermissionSet.from_dict(old_dict)
+            store.set_user_permissions(restored_set)
+            try:
+                await store.async_save()
+            except Exception:
+                pass
+            raise persist_err
+
+        return new_perm_set
 
 
 async def _verify_target_family_member(
@@ -208,23 +301,23 @@ async def ws_permission_set_default_level(
         connection.send_error(msg["id"], err_code, err_msg)
         return
 
-    perm_set = store.get_user_permissions(target_user_id)
-    perm_set.default_access_level = default_level
-    store.set_user_permissions(perm_set)
-    await store.async_save()
-    _async_fire_permissions_updated(hass, target_user_id)
-    # Sync to HA managed group (adapter only — never patches core)
-    try:
-        adapter = hass.data.get("domolux_roles", {}).get("adapter")
-        if adapter is not None and hasattr(adapter, "async_sync_managed_user_permissions"):
-            await adapter.async_sync_managed_user_permissions(
-                target_user_id, perm_set.to_dict()
-            )
-    except Exception:
-        pass  # Adapter sync is best-effort; mutation already persisted in Domolux store
+    def mutate(ps: UserPermissionSet) -> None:
+        ps.default_access_level = default_level
 
+    try:
+        new_perm_set = await _execute_atomic_permission_mutation(
+            hass, target_user_id, mutate
+        )
+    except Exception as err:
+        _LOGGER.error("Failed to set default access level for user %s: %s", target_user_id, err)
+        connection.send_error(
+            msg["id"], ERR_INTERNAL_ERROR, f"Transaction failed: {err}"
+        )
+        return
+
+    _async_fire_permissions_updated(hass, target_user_id)
     connection.send_result(
-        msg["id"], {"success": True, "permissions": perm_set.to_dict()}
+        msg["id"], {"success": True, "permissions": new_perm_set.to_dict()}
     )
 
 
@@ -298,27 +391,27 @@ async def ws_permission_set_entity_rule(
         access_level=access_level,
     )
 
-    perm_set = store.get_user_permissions(target_user_id)
-    perm_set.entity_rules[rule_id] = rule
-    store.set_user_permissions(perm_set)
-    await store.async_save()
-    _async_fire_permissions_updated(hass, target_user_id)
-    # Sync to HA managed group (adapter only — never patches core)
-    try:
-        adapter = hass.data.get("domolux_roles", {}).get("adapter")
-        if adapter is not None and hasattr(adapter, "async_sync_managed_user_permissions"):
-            await adapter.async_sync_managed_user_permissions(
-                target_user_id, perm_set.to_dict()
-            )
-    except Exception:
-        pass  # Adapter sync is best-effort; mutation already persisted in Domolux store
+    def mutate(ps: UserPermissionSet) -> None:
+        ps.entity_rules[rule_id] = rule
 
+    try:
+        new_perm_set = await _execute_atomic_permission_mutation(
+            hass, target_user_id, mutate
+        )
+    except Exception as err:
+        _LOGGER.error("Failed to set entity rule for user %s: %s", target_user_id, err)
+        connection.send_error(
+            msg["id"], ERR_INTERNAL_ERROR, f"Transaction failed: {err}"
+        )
+        return
+
+    _async_fire_permissions_updated(hass, target_user_id)
     connection.send_result(
         msg["id"],
         {
             "success": True,
             "rule": rule.to_dict(),
-            "permissions": perm_set.to_dict(),
+            "permissions": new_perm_set.to_dict(),
         },
     )
 
@@ -365,22 +458,24 @@ async def ws_permission_remove_entity_rule(
         )
         return
 
-    del perm_set.entity_rules[rule_id]
-    store.set_user_permissions(perm_set)
-    await store.async_save()
-    _async_fire_permissions_updated(hass, target_user_id)
-    # Sync to HA managed group (adapter only — never patches core)
-    try:
-        adapter = hass.data.get("domolux_roles", {}).get("adapter")
-        if adapter is not None and hasattr(adapter, "async_sync_managed_user_permissions"):
-            await adapter.async_sync_managed_user_permissions(
-                target_user_id, perm_set.to_dict()
-            )
-    except Exception:
-        pass  # Adapter sync is best-effort; mutation already persisted in Domolux store
+    def mutate(ps: UserPermissionSet) -> None:
+        if rule_id in ps.entity_rules:
+            del ps.entity_rules[rule_id]
 
+    try:
+        new_perm_set = await _execute_atomic_permission_mutation(
+            hass, target_user_id, mutate
+        )
+    except Exception as err:
+        _LOGGER.error("Failed to remove entity rule for user %s: %s", target_user_id, err)
+        connection.send_error(
+            msg["id"], ERR_INTERNAL_ERROR, f"Transaction failed: {err}"
+        )
+        return
+
+    _async_fire_permissions_updated(hass, target_user_id)
     connection.send_result(
-        msg["id"], {"success": True, "permissions": perm_set.to_dict()}
+        msg["id"], {"success": True, "permissions": new_perm_set.to_dict()}
     )
 
 
@@ -435,18 +530,28 @@ async def ws_permission_set_view_rule(
         return
 
     rule = ViewPermissionRule(view_path=view_path, effect=effect)
-    perm_set = store.get_user_permissions(target_user_id)
-    perm_set.view_rules[view_path] = rule
-    store.set_user_permissions(perm_set)
-    await store.async_save()
-    _async_fire_permissions_updated(hass, target_user_id)
 
+    def mutate(ps: UserPermissionSet) -> None:
+        ps.view_rules[view_path] = rule
+
+    try:
+        new_perm_set = await _execute_atomic_permission_mutation(
+            hass, target_user_id, mutate
+        )
+    except Exception as err:
+        _LOGGER.error("Failed to set view rule for user %s: %s", target_user_id, err)
+        connection.send_error(
+            msg["id"], ERR_INTERNAL_ERROR, f"Transaction failed: {err}"
+        )
+        return
+
+    _async_fire_permissions_updated(hass, target_user_id)
     connection.send_result(
         msg["id"],
         {
             "success": True,
             "rule": rule.to_dict(),
-            "permissions": perm_set.to_dict(),
+            "permissions": new_perm_set.to_dict(),
         },
     )
 
@@ -493,13 +598,24 @@ async def ws_permission_remove_view_rule(
         )
         return
 
-    del perm_set.view_rules[view_path]
-    store.set_user_permissions(perm_set)
-    await store.async_save()
-    _async_fire_permissions_updated(hass, target_user_id)
+    def mutate(ps: UserPermissionSet) -> None:
+        if view_path in ps.view_rules:
+            del ps.view_rules[view_path]
 
+    try:
+        new_perm_set = await _execute_atomic_permission_mutation(
+            hass, target_user_id, mutate
+        )
+    except Exception as err:
+        _LOGGER.error("Failed to remove view rule for user %s: %s", target_user_id, err)
+        connection.send_error(
+            msg["id"], ERR_INTERNAL_ERROR, f"Transaction failed: {err}"
+        )
+        return
+
+    _async_fire_permissions_updated(hass, target_user_id)
     connection.send_result(
-        msg["id"], {"success": True, "permissions": perm_set.to_dict()}
+        msg["id"], {"success": True, "permissions": new_perm_set.to_dict()}
     )
 
 
@@ -534,24 +650,28 @@ async def ws_permission_reset(
         connection.send_error(msg["id"], err_code, err_msg)
         return
 
-    store.reset_user_permissions(target_user_id)
-    await store.async_save()
-    _async_fire_permissions_updated(hass, target_user_id)
-    # Sync to HA managed group (adapter only — never patches core)
-    try:
-        adapter = hass.data.get("domolux_roles", {}).get("adapter")
-        if adapter is not None and hasattr(adapter, "async_sync_managed_user_permissions"):
-            await adapter.async_sync_managed_user_permissions(
-                target_user_id, store.get_user_permissions(target_user_id).to_dict()
-            )
-    except Exception:
-        pass  # Adapter sync is best-effort; mutation already persisted in Domolux store
+    def mutate(ps: UserPermissionSet) -> None:
+        ps.default_access_level = ACCESS_LEVEL_NONE
+        ps.entity_rules.clear()
+        ps.view_rules.clear()
 
+    try:
+        new_perm_set = await _execute_atomic_permission_mutation(
+            hass, target_user_id, mutate
+        )
+    except Exception as err:
+        _LOGGER.error("Failed to reset permissions for user %s: %s", target_user_id, err)
+        connection.send_error(
+            msg["id"], ERR_INTERNAL_ERROR, f"Transaction failed: {err}"
+        )
+        return
+
+    _async_fire_permissions_updated(hass, target_user_id)
     connection.send_result(
         msg["id"],
         {
             "success": True,
-            "permissions": store.get_user_permissions(target_user_id).to_dict(),
+            "permissions": new_perm_set.to_dict(),
         },
     )
 
