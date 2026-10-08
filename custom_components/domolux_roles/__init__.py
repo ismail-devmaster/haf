@@ -21,7 +21,13 @@ from .frontend import async_register_frontend, async_unregister_frontend
 from .ha_auth_adapter import DomoluxHAAuthAdapter
 from .const import DOMAIN
 from .role_manager import DomoluxRoleManager
+from .permission_api import async_register_permission_api_commands
+from .permission_evaluator import DomoluxPermissionEvaluator
 from .store import DomoluxRoleStore
+from .service_auth_api import async_register_service_auth_commands
+from .view_api import async_register_view_api_commands
+from .view_manager import DomoluxViewManager
+from .view_store import DomoluxViewStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +37,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data.setdefault(DOMAIN, {})
     async_register_websocket_commands(hass)
     async_register_family_api_commands(hass)
+    async_register_permission_api_commands(hass)
+    async_register_view_api_commands(hass)
+    async_register_service_auth_commands(hass)
     await async_register_frontend(hass)
     return True
 
@@ -43,8 +52,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     manager = DomoluxRoleManager(hass, store)
     adapter = DomoluxHAAuthAdapter(hass)
     family_service = DomoluxFamilyUserService(hass, adapter, store)
+    evaluator = DomoluxPermissionEvaluator(hass, store)
+    view_store = DomoluxViewStore(hass)
+    view_manager = DomoluxViewManager(hass, view_store, manager)
 
     await manager.async_initialize()
+    await view_manager.async_initialize()
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
@@ -52,6 +65,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "manager": manager,
         "adapter": adapter,
         "family_service": family_service,
+        "evaluator": evaluator,
+        "view_store": view_store,
+        "view_manager": view_manager,
     }
 
     _LOGGER.info("Domolux Roles integration setup completed successfully.")
