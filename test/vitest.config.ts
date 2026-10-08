@@ -2,9 +2,15 @@ import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
+  resolve: {
+    conditions: ["browser", "development", "default"],
+    alias: {
+      "lit/decorators": "lit/decorators.js",
+    },
+  },
   plugins: [tsconfigPaths()],
   test: {
-    environment: "jsdom", // to run in browser-like environment
+    environment: "jsdom",
     env: {
       TZ: "Etc/UTC",
       IS_TEST: "true",
