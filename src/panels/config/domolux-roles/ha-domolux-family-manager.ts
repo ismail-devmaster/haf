@@ -10,6 +10,7 @@ import {
   mdiShieldAlert,
   mdiRefresh,
   mdiClose,
+  mdiShieldAccount,
 } from "@mdi/js";
 
 import "../../../components/ha-card";
@@ -21,6 +22,8 @@ import type { HomeAssistant } from "../../../types";
 import {
   getDomoluxRole,
   type DomoluxRoleInfo,
+  type UserPermissionSet,
+  type EvaluationResult,
 } from "../../../data/domolux_roles";
 
 export interface DomoluxFamilyMember {
@@ -59,6 +62,31 @@ export class HaDomoluxFamilyManager extends LitElement {
   @state() private _showDeleteDialog = false;
 
   @state() private _selectedUserForDelete: DomoluxFamilyMember | null = null;
+
+  // Permission Dialog States
+  @state() private _showPermissionDialog = false;
+
+  @state() private _selectedUserForPermissions: DomoluxFamilyMember | null = null;
+
+  @state() private _userPermissionSet: UserPermissionSet | null = null;
+
+  @state() private _newDefaultAccessLevel: "none" | "read" | "control" | "" = "none";
+
+  @state() private _newRuleTargetType: "entity" | "device" | "area" = "entity";
+
+  @state() private _newRuleTargetId = "";
+
+  @state() private _newRuleAccessLevel: "none" | "read" | "control" = "none";
+
+  @state() private _newViewPath = "";
+
+  @state() private _newViewEffect: "allow" | "deny" = "deny";
+
+  @state() private _evalTargetType: "entity" | "device" | "area" | "view" = "entity";
+
+  @state() private _evalTargetId = "";
+
+  @state() private _evalResult: EvaluationResult | null = null;
 
   // Form Inputs (Passwords cleared immediately after WS call)
   @state() private _createDisplayName = "";
@@ -347,6 +375,269 @@ export class HaDomoluxFamilyManager extends LitElement {
     }
   }
 
+  private _openPermissionDialogClick(e: Event): void {
+    const member = (e.currentTarget as any).member as DomoluxFamilyMember;
+    if (member) {
+      this._openPermissionDialog(member);
+    }
+  }
+
+  private async _openPermissionDialog(member: DomoluxFamilyMember): Promise<void> {
+    if (!this._isFather) {
+      return;
+    }
+    this._selectedUserForPermissions = member;
+    this._userPermissionSet = null;
+    this._evalResult = null;
+    this._newDefaultAccessLevel = "none";
+    this._newRuleTargetType = "entity";
+    this._newRuleTargetId = "";
+    this._newRuleAccessLevel = "none";
+    this._newViewPath = "";
+    this._newViewEffect = "deny";
+    this._evalTargetType = "entity";
+    this._evalTargetId = "";
+    this._error = null;
+    this._showPermissionDialog = true;
+
+    await this._loadUserPermissions(member.user_id);
+  }
+
+  private _closePermissionDialog(): void {
+    this._showPermissionDialog = false;
+    this._selectedUserForPermissions = null;
+    this._userPermissionSet = null;
+    this._evalResult = null;
+  }
+
+  private async _loadUserPermissions(userId: string): Promise<void> {
+    try {
+      const permSet = (await this.hass.callWS({
+        type: "domolux/permission/get",
+        user_id: userId,
+      })) as UserPermissionSet;
+
+      this._userPermissionSet = permSet;
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to load user permissions."
+      );
+    }
+  }
+
+  private async _handleSetDefaultAccessLevel(
+    defaultLevel?: "none" | "read" | "control" | ""
+  ): Promise<void> {
+    if (!this._selectedUserForPermissions) return;
+
+    const level = defaultLevel || this._newDefaultAccessLevel;
+    if (!level) {
+      this._error = "Default access level is required.";
+      return;
+    }
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      const res = (await this.hass.callWS({
+        type: "domolux/permission/set_default_level",
+        user_id: this._selectedUserForPermissions.user_id,
+        default_access_level: level,
+      })) as any;
+
+      if (res?.permissions) {
+        this._userPermissionSet = res.permissions;
+      }
+      this._success = "Default access level updated successfully.";
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to update default access level."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private async _handleAddEntityRule(): Promise<void> {
+    if (!this._selectedUserForPermissions) return;
+    if (!this._newRuleTargetId.trim()) {
+      this._error = "Target ID is required for entity permission rule.";
+      return;
+    }
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      const res = (await this.hass.callWS({
+        type: "domolux/permission/set_entity_rule",
+        user_id: this._selectedUserForPermissions.user_id,
+        target_type: this._newRuleTargetType,
+        target_id: this._newRuleTargetId.trim(),
+        access_level: this._newRuleAccessLevel,
+      })) as any;
+
+      if (res?.permissions) {
+        this._userPermissionSet = res.permissions;
+      }
+      this._newRuleTargetId = "";
+      this._success = "Entity permission rule added successfully.";
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to add entity permission rule."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private async _handleRemoveEntityRule(ruleId: string): Promise<void> {
+    if (!this._selectedUserForPermissions) return;
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      const res = (await this.hass.callWS({
+        type: "domolux/permission/remove_entity_rule",
+        user_id: this._selectedUserForPermissions.user_id,
+        rule_id: ruleId,
+      })) as any;
+
+      if (res?.permissions) {
+        this._userPermissionSet = res.permissions;
+      }
+      this._success = "Entity permission rule removed successfully.";
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to remove entity permission rule."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private async _handleAddViewRule(): Promise<void> {
+    if (!this._selectedUserForPermissions) return;
+    if (!this._newViewPath.trim()) {
+      this._error = "View Path is required for view permission rule.";
+      return;
+    }
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      const res = (await this.hass.callWS({
+        type: "domolux/permission/set_view_rule",
+        user_id: this._selectedUserForPermissions.user_id,
+        view_path: this._newViewPath.trim(),
+        effect: this._newViewEffect,
+      })) as any;
+
+      if (res?.permissions) {
+        this._userPermissionSet = res.permissions;
+      }
+      this._newViewPath = "";
+      this._success = "View permission rule added successfully.";
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to add view permission rule."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private async _handleRemoveViewRule(viewPath: string): Promise<void> {
+    if (!this._selectedUserForPermissions) return;
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      const res = (await this.hass.callWS({
+        type: "domolux/permission/remove_view_rule",
+        user_id: this._selectedUserForPermissions.user_id,
+        view_path: viewPath,
+      })) as any;
+
+      if (res?.permissions) {
+        this._userPermissionSet = res.permissions;
+      }
+      this._success = "View permission rule removed successfully.";
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to remove view permission rule."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private async _handleResetPermissions(): Promise<void> {
+    if (!this._selectedUserForPermissions) return;
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      const res = (await this.hass.callWS({
+        type: "domolux/permission/reset",
+        user_id: this._selectedUserForPermissions.user_id,
+      })) as any;
+
+      if (res?.permissions) {
+        this._userPermissionSet = res.permissions;
+      }
+      this._evalResult = null;
+      this._success = "User permissions reset to default successfully.";
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to reset permissions."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private async _handleEvaluatePermission(): Promise<void> {
+    if (!this._selectedUserForPermissions) return;
+    if (!this._evalTargetId.trim()) {
+      this._error = "Target ID or View Path is required for evaluation.";
+      return;
+    }
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      const res = (await this.hass.callWS({
+        type: "domolux/permission/evaluate",
+        user_id: this._selectedUserForPermissions.user_id,
+        target_type: this._evalTargetType,
+        target_id: this._evalTargetId.trim(),
+      })) as EvaluationResult;
+
+      this._evalResult = res;
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to evaluate permission."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
   private _handleCreateDisplayNameInput(e: Event): void {
     this._createDisplayName = (e.target as HTMLInputElement).value;
   }
@@ -530,6 +821,18 @@ export class HaDomoluxFamilyManager extends LitElement {
                                     slot="start"
                                   ></ha-svg-icon>
                                   Password / كلمة السر
+                                </ha-button>
+                                <ha-button
+                                  size="small"
+                                  .disabled=${this._submitting}
+                                  .member=${member}
+                                  @click=${this._openPermissionDialogClick}
+                                >
+                                  <ha-svg-icon
+                                    .path=${mdiShieldAccount}
+                                    slot="start"
+                                  ></ha-svg-icon>
+                                  Permissions / الصلاحيات
                                 </ha-button>
                                 <ha-button
                                   size="small"
@@ -726,6 +1029,286 @@ export class HaDomoluxFamilyManager extends LitElement {
                       .disabled=${this._submitting}
                     >
                       Delete Member / حذف
+                    </ha-button>
+                  </div>
+                </div>
+              </div>
+            `
+          : nothing}
+
+        <!-- Permission Management Dialog -->
+        ${this._showPermissionDialog && this._selectedUserForPermissions
+          ? html`
+              <div class="dialog-backdrop">
+                <div class="dialog-box dialog-full">
+                  <div class="dialog-header">
+                    <h2>
+                      Permissions / الصلاحيات —
+                      ${this._selectedUserForPermissions.display_name}
+                      (@${this._selectedUserForPermissions.username})
+                    </h2>
+                    <button
+                      class="icon-button"
+                      @click=${this._closePermissionDialog}
+                    >
+                      <ha-svg-icon .path=${mdiClose}></ha-svg-icon>
+                    </button>
+                  </div>
+                  <div class="dialog-body">
+                    <!-- Default Access Level -->
+                    <ha-card>
+                      <div class="card-content">
+                        <h3>Default Access Level / مستوى الوصول الافتراضي</h3>
+                        <div class="form-group">
+                          <select
+                            .value=${this._userPermissionSet
+                              ?.default_access_level || "none"}
+                            @change=${(e: Event) =>
+                              this._handleSetDefaultAccessLevel(
+                                (e.target as HTMLSelectElement)
+                                  .value as "none" | "read" | "control"
+                              )}
+                          >
+                            <option value="none">
+                              None / لا شيء
+                            </option>
+                            <option value="read">
+                              Read / قراءة
+                            </option>
+                            <option value="control">
+                              Control / تحكم
+                            </option>
+                          </select>
+                        </div>
+                      </div>
+                    </ha-card>
+
+                    <!-- Entity Rules -->
+                    <ha-card>
+                      <div class="card-content">
+                        <h3>Entity / Device / Area Rules / القواعد</h3>
+                        <div class="form-row">
+                          <select
+                            .value=${this._newRuleTargetType}
+                            @change=${(e: Event) => {
+                              this._newRuleTargetType = (
+                                e.target as HTMLSelectElement
+                              ).value as "entity" | "device" | "area";
+                            }}
+                          >
+                            <option value="entity">Entity / كيان</option>
+                            <option value="device">Device / جهاز</option>
+                            <option value="area">Area / منطقة</option>
+                          </select>
+                          <input
+                            type="text"
+                            placeholder="Target ID / المعرف"
+                            .value=${this._newRuleTargetId}
+                            @input=${(e: Event) => {
+                              this._newRuleTargetId = (
+                                e.target as HTMLInputElement
+                              ).value;
+                            }}
+                          />
+                          <select
+                            .value=${this._newRuleAccessLevel}
+                            @change=${(e: Event) => {
+                              this._newRuleAccessLevel = (
+                                e.target as HTMLSelectElement
+                              ).value as "none" | "read" | "control";
+                            }}
+                          >
+                            <option value="none">None / لا شيء</option>
+                            <option value="read">Read / قراءة</option>
+                            <option value="control">
+                              Control / تحكم
+                            </option>
+                          </select>
+                          <ha-button
+                            @click=${this._handleAddEntityRule}
+                            .disabled=${this._submitting ||
+                            !this._newRuleTargetId.trim()}
+                          >
+                            Add / إضافة
+                          </ha-button>
+                        </div>
+                        ${this._userPermissionSet &&
+                        Object.keys(this._userPermissionSet.entity_rules)
+                          .length === 0
+                          ? html`<p class="empty-state-text"
+                              >No entity rules / لا توجد قواعد</p
+                            >`
+                          : nothing}
+                        <div class="rules-list">
+                          ${this._userPermissionSet
+                            ? Object.values(
+                                this._userPermissionSet.entity_rules
+                              ).map(
+                                (rule) => html`
+                                  <div class="rule-row">
+                                    <span>
+                                      <strong
+                                        >${rule.target_type}</strong
+                                      >/${rule.target_id} →
+                                      ${rule.access_level}
+                                    </span>
+                                    <ha-button
+                                      size="small"
+                                      class="destructive"
+                                      @click=${() =>
+                                        this._handleRemoveEntityRule(
+                                          rule.rule_id
+                                        )}
+                                      .disabled=${this._submitting}
+                                    >
+                                      Remove / حذف
+                                    </ha-button>
+                                  </div>
+                                `
+                              )
+                            : nothing}
+                        </div>
+                      </div>
+                    </ha-card>
+
+                    <!-- View Rules -->
+                    <ha-card>
+                      <div class="card-content">
+                        <h3>View Rules / قواعد العرض</h3>
+                        <div class="form-row">
+                          <input
+                            type="text"
+                            placeholder="View path / المسار"
+                            .value=${this._newViewPath}
+                            @input=${(e: Event) => {
+                              this._newViewPath = (
+                                e.target as HTMLInputElement
+                              ).value;
+                            }}
+                          />
+                          <select
+                            .value=${this._newViewEffect}
+                            @change=${(e: Event) => {
+                              this._newViewEffect = (
+                                e.target as HTMLSelectElement
+                              ).value as "allow" | "deny";
+                            }}
+                          >
+                            <option value="allow">Allow / سماح</option>
+                            <option value="deny">Deny / منع</option>
+                          </select>
+                          <ha-button
+                            @click=${this._handleAddViewRule}
+                            .disabled=${this._submitting ||
+                            !this._newViewPath.trim()}
+                          >
+                            Add / إضافة
+                          </ha-button>
+                        </div>
+                        <div class="rules-list">
+                          ${this._userPermissionSet
+                            ? Object.values(
+                                this._userPermissionSet.view_rules
+                              ).map(
+                                (rule) => html`
+                                  <div class="rule-row">
+                                    <span>
+                                      <strong>${rule.view_path}</strong>
+                                      → ${rule.effect}
+                                    </span>
+                                    <ha-button
+                                      size="small"
+                                      class="destructive"
+                                      @click=${() =>
+                                        this._handleRemoveViewRule(
+                                          rule.view_path
+                                        )}
+                                      .disabled=${this._submitting}
+                                    >
+                                      Remove / حذف
+                                    </ha-button>
+                                  </div>
+                                `
+                              )
+                            : nothing}
+                        </div>
+                      </div>
+                    </ha-card>
+
+                    <!-- Evaluation Preview -->
+                    <ha-card>
+                      <div class="card-content">
+                        <h3>
+                          Evaluation Preview / معاينة التقييم
+                        </h3>
+                        <div class="form-row">
+                          <select
+                            .value=${this._evalTargetType}
+                            @change=${(e: Event) => {
+                              this._evalTargetType = (
+                                e.target as HTMLSelectElement
+                              ).value as "entity" | "device" | "area" | "view";
+                            }}
+                          >
+                            <option value="entity">Entity</option>
+                            <option value="device">Device</option>
+                            <option value="area">Area</option>
+                            <option value="view">View</option>
+                          </select>
+                          <input
+                            type="text"
+                            placeholder="Target ID / View path"
+                            .value=${this._evalTargetId}
+                            @input=${(e: Event) => {
+                              this._evalTargetId = (
+                                e.target as HTMLInputElement
+                              ).value;
+                            }}
+                          />
+                          <ha-button
+                            @click=${this._handleEvaluatePermission}
+                            .disabled=${this._submitting ||
+                            !this._evalTargetId.trim()}
+                          >
+                            Evaluate / قيّم
+                          </ha-button>
+                        </div>
+                        ${this._evalResult
+                          ? html`
+                              <div class="eval-result">
+                                <p>
+                                  Result / النتيجة:
+                                  <strong
+                                    >${this._evalResult.effect ||
+                                    this._evalResult.access_level ||
+                                    "N/A"}</strong
+                                  >
+                                  ${this._evalResult.matching_rule_type
+                                    ? html` (matched:
+                                        ${this._evalResult.matching_rule_type}
+                                        / rule:
+                                        ${this._evalResult.matching_rule_id})`
+                                    : nothing}
+                                </p>
+                              </div>
+                            `
+                          : nothing}
+                      </div>
+                    </ha-card>
+                  </div>
+                  <div class="dialog-footer">
+                    <ha-button
+                      @click=${this._handleResetPermissions}
+                      .disabled=${this._submitting}
+                      class="destructive"
+                    >
+                      Reset Permissions / إعادة تعيين
+                    </ha-button>
+                    <ha-button
+                      @click=${this._closePermissionDialog}
+                      .disabled=${this._submitting}
+                    >
+                      Close / إغلاق
                     </ha-button>
                   </div>
                 </div>

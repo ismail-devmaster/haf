@@ -42,7 +42,7 @@ async def test_first_startup_empty_store():
     await store.async_load()
 
     assert store.get_father() is None
-    assert store.data.version == 1
+    assert store.data.version == 2
     assert store.data.father is None
 
 
@@ -246,8 +246,8 @@ async def test_schema_migration_v0_to_v1():
 
     await store.async_load()
 
-    # Migrated version to 1 and loaded valid father assignment
-    assert store.data.version == 1
+    # Migrated version to 2 and loaded valid father assignment
+    assert store.data.version == 2
     assert store.get_father() is not None
     assert store.get_father().user_id == VALID_UUID_1
 

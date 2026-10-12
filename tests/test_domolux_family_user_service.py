@@ -287,9 +287,11 @@ async def test_storage_schema_migration():
     }
 
     migrated = store.migrate(legacy_raw)
-    assert migrated["version"] == 1
+    assert migrated["version"] == 2
     assert "family_members" in migrated
     assert migrated["family_members"] == {}
+    assert "permissions" in migrated
+    assert migrated["permissions"] == {}
 
     state = DomoluxAuthState.from_dict(migrated)
     assert state.father is not None

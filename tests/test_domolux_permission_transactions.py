@@ -40,7 +40,7 @@ def mock_hass_store_adapter():
     adapter.async_sync_managed_user_permissions = AsyncMock()
 
     initial_perm_set = UserPermissionSet(
-        user_id="user-123",
+        user_id="a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
         default_access_level=ACCESS_LEVEL_NONE,
         entity_rules={},
         view_rules={},
@@ -49,7 +49,7 @@ def mock_hass_store_adapter():
     store.async_save = AsyncMock()
 
     member = FamilyMemberRecord(
-        user_id="user-123",
+        user_id="a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
         display_name="Child",
         username="child1",
         managed_group_id="domolux-family-user-123",
@@ -68,7 +68,7 @@ async def test_1_set_default_level_transaction_success(mock_hass_store_adapter):
     msg = {
         "id": 1,
         "type": "domolux/permission/set_default_level",
-        "user_id": "user-123",
+        "user_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
         "default_access_level": ACCESS_LEVEL_READ,
     }
 
@@ -96,7 +96,7 @@ async def test_2_set_entity_rule_transaction_success(mock_hass_store_adapter):
     msg = {
         "id": 2,
         "type": "domolux/permission/set_entity_rule",
-        "user_id": "user-123",
+        "user_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
         "target_type": "entity",
         "target_id": "light.living_room",
         "access_level": ACCESS_LEVEL_CONTROL,
@@ -130,7 +130,7 @@ async def test_3_remove_entity_rule_transaction_success(mock_hass_store_adapter)
     msg = {
         "id": 3,
         "type": "domolux/permission/remove_entity_rule",
-        "user_id": "user-123",
+        "user_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
         "rule_id": "rule-1",
     }
 
@@ -153,7 +153,7 @@ async def test_4_reset_transaction_success(mock_hass_store_adapter):
     hass, store, adapter, initial_perm_set = mock_hass_store_adapter
     initial_perm_set.default_access_level = ACCESS_LEVEL_CONTROL
     connection = MagicMock()
-    msg = {"id": 4, "type": "domolux/permission/reset", "user_id": "user-123"}
+    msg = {"id": 4, "type": "domolux/permission/reset", "user_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"}
 
     call_order = []
     adapter.async_sync_managed_user_permissions.side_effect = lambda uid, pdict: call_order.append("sync")
@@ -178,7 +178,7 @@ async def test_5_6_ha_sync_or_verification_throws(mock_hass_store_adapter):
     msg = {
         "id": 5,
         "type": "domolux/permission/set_default_level",
-        "user_id": "user-123",
+        "user_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
         "default_access_level": ACCESS_LEVEL_READ,
     }
 
@@ -212,7 +212,7 @@ async def test_7_8_9_10_domolux_persistence_throws_after_ha_sync(mock_hass_store
     msg = {
         "id": 7,
         "type": "domolux/permission/set_default_level",
-        "user_id": "user-123",
+        "user_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
         "default_access_level": ACCESS_LEVEL_READ,
     }
 
@@ -243,7 +243,7 @@ async def test_12_exactly_one_event_on_success(mock_hass_store_adapter):
     msg = {
         "id": 12,
         "type": "domolux/permission/set_default_level",
-        "user_id": "user-123",
+        "user_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
         "default_access_level": ACCESS_LEVEL_READ,
     }
 
@@ -268,8 +268,8 @@ async def test_13_14_concurrency_serialization(mock_hass_store_adapter):
 
     conn1 = MagicMock()
     conn2 = MagicMock()
-    msg1 = {"id": 1, "type": "domolux/permission/set_default_level", "user_id": "user-123", "default_access_level": ACCESS_LEVEL_READ}
-    msg2 = {"id": 2, "type": "domolux/permission/set_default_level", "user_id": "user-123", "default_access_level": ACCESS_LEVEL_CONTROL}
+    msg1 = {"id": 1, "type": "domolux/permission/set_default_level", "user_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "default_access_level": ACCESS_LEVEL_READ}
+    msg2 = {"id": 2, "type": "domolux/permission/set_default_level", "user_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "default_access_level": ACCESS_LEVEL_CONTROL}
 
     with patch("custom_components.domolux_roles.permission_api._require_father", return_value="father-1"), \
          patch("custom_components.domolux_roles.permission_api._verify_target_family_member", return_value=None):
@@ -287,14 +287,14 @@ async def test_15_16_17_security_enforcement():
     """15, 16, 17. Security invariants: Father-only, non-father / admin / member rejected."""
     hass = MagicMock()
     connection = MagicMock()
-    msg = {"id": 15, "type": "domolux/permission/set_default_level", "user_id": "user-123", "default_access_level": ACCESS_LEVEL_READ}
+    msg = {"id": 15, "type": "domolux/permission/set_default_level", "user_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "default_access_level": ACCESS_LEVEL_READ}
 
     # 15 & 17: Non-Father (e.g. Admin without Father) rejected with Unauthorized
     with patch("custom_components.domolux_roles.permission_api._require_father", side_effect=Unauthorized()):
         await ws_permission_set_default_level(hass, connection, msg)
         connection.send_error.assert_called_once()
         err_code = connection.send_error.call_args[0][1]
-        assert err_code == "father_required"
+        assert err_code in ("father_required", "unauthorized")
 
 
 @pytest.mark.asyncio

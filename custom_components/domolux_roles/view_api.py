@@ -555,9 +555,7 @@ async def ws_view_subscribe(
     connection.send_result(msg["id"])
 
 
-@callback
-
-def async_register_view_api_commands(hass: HomeAssistant) -> None:
+async def async_register_view_api_commands(hass: HomeAssistant) -> None:
     """Register all Domolux View WebSocket API commands."""
     websocket_api.async_register_command(hass, ws_view_list)
     websocket_api.async_register_command(hass, ws_view_get)

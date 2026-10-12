@@ -12,6 +12,37 @@ export interface DomoluxRoleGetResult {
   father_assigned: boolean;
 }
 
+export interface EntityPermissionRule {
+  rule_id: string;
+  target_type: "entity" | "device" | "area";
+  target_id: string;
+  access_level: "none" | "read" | "control";
+}
+
+export interface ViewPermissionRule {
+  view_path: string;
+  effect: "allow" | "deny";
+}
+
+export interface UserPermissionSet {
+  user_id: string;
+  default_access_level: "none" | "read" | "control";
+  entity_rules: Record<string, EntityPermissionRule>;
+  view_rules: Record<string, ViewPermissionRule>;
+}
+
+export interface EvaluationResult {
+  user_id: string;
+  target_id?: string;
+  view_path?: string;
+  access_level?: string;
+  effect?: string;
+  granted?: boolean;
+  allowed?: boolean;
+  matching_rule_type?: string;
+  matching_rule_id?: string | null;
+}
+
 export interface DomoluxRoleInfo {
   userId: string | null;
   role: DomoluxRole;
@@ -145,6 +176,84 @@ export function subscribeDomoluxRole(
       .subscribeEvents((_event: any) => {
         update();
       }, "domolux_role_changed")
+      .then((unsubFunc) => {
+        unsub = unsubFunc;
+      })
+      .catch(() => {
+        // Ignore subscription errors
+      });
+  }
+
+  // Initial fetch
+  update();
+
+  return () => {
+    if (unsub) {
+      unsub();
+    }
+  };
+}
+
+export interface MyViewsResult {
+  user_id: string;
+  all_views_allowed: boolean;
+  default_access_level: "none" | "read" | "control";
+  view_rules: Record<string, "allow" | "deny">;
+}
+
+/**
+ * Fetch view permissions for the currently authenticated user.
+ */
+export async function getMyViewPermissions(hass: HomeAssistant): Promise<MyViewsResult> {
+  const userId = hass?.user?.id || "";
+
+  if (!userId || !hass?.connection || typeof hass?.callWS !== "function") {
+    return {
+      user_id: userId,
+      all_views_allowed: false,
+      default_access_level: "none",
+      view_rules: {},
+    };
+  }
+
+  try {
+    const result = (await hass.callWS({
+      type: "domolux/permission/my_views",
+    })) as MyViewsResult;
+    return result;
+  } catch (_err) {
+    return {
+      user_id: userId,
+      all_views_allowed: false,
+      default_access_level: "none",
+      view_rules: {},
+    };
+  }
+}
+
+/**
+ * Subscribe to real-time permission updates on the Home Assistant bus.
+ */
+export function subscribeMyViewPermissions(
+  hass: HomeAssistant,
+  callback: (myViews: MyViewsResult) => void
+): () => void {
+  let unsub: (() => void) | undefined;
+
+  const update = async () => {
+    const myViews = await getMyViewPermissions(hass);
+    callback(myViews);
+  };
+
+  if (hass?.connection && typeof hass.connection.subscribeEvents === "function") {
+    hass.connection
+      .subscribeEvents((event: any) => {
+        const targetUserId = event?.data?.user_id;
+        const currentUserId = hass?.user?.id;
+        if (!targetUserId || targetUserId === currentUserId) {
+          update();
+        }
+      }, "domolux_permissions_updated")
       .then((unsubFunc) => {
         unsub = unsubFunc;
       })

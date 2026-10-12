@@ -38,7 +38,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async_register_websocket_commands(hass)
     async_register_family_api_commands(hass)
     async_register_permission_api_commands(hass)
-    async_register_view_api_commands(hass)
+    await async_register_view_api_commands(hass)
     async_register_service_auth_commands(hass)
     await async_register_frontend(hass)
     return True

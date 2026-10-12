@@ -13,6 +13,11 @@ if "voluptuous" not in sys.modules:
 
 if "homeassistant" not in sys.modules:
     ha_mock = MagicMock()
+
+    def mock_callback(func):
+        return func
+
+    ha_mock.core.callback = mock_callback
     sys.modules["homeassistant"] = ha_mock
     sys.modules["homeassistant.config_entries"] = ha_mock.config_entries
     sys.modules["homeassistant.core"] = ha_mock.core

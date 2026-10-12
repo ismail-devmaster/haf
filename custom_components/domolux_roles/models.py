@@ -7,6 +7,14 @@ import re
 from typing import Any, Optional
 
 from .const import (
+    ACCESS_LEVEL_CONTROL,
+    ACCESS_LEVEL_NONE,
+    ACCESS_LEVEL_READ,
+    EFFECT_ALLOW,
+    EFFECT_DENY,
+    TARGET_AREA,
+    TARGET_DEVICE,
+    TARGET_ENTITY,
     ROLE_FATHER,
     ROLE_USER,
     STATUS_ACTIVE,
@@ -41,6 +49,158 @@ class FatherRoleStatus(str, Enum):
     ORPHANED_DELETED = STATUS_ORPHANED_DELETED
     CORRUPTED = STATUS_CORRUPTED
 
+
+class PermissionAccessLevel(str, Enum):
+    """Permission access levels."""
+    NONE = ACCESS_LEVEL_NONE
+    READ = ACCESS_LEVEL_READ
+    CONTROL = ACCESS_LEVEL_CONTROL
+
+
+class PermissionEffect(str, Enum):
+    """Permission effects."""
+    ALLOW = EFFECT_ALLOW
+    DENY = EFFECT_DENY
+
+
+class TargetType(str, Enum):
+    """Target types for permission rules."""
+    ENTITY = TARGET_ENTITY
+    DEVICE = TARGET_DEVICE
+    AREA = TARGET_AREA
+
+
+@dataclass
+class EntityPermissionRule:
+    """Explicit permission rule for an entity, device, or area."""
+
+    rule_id: str
+    target_type: str
+    target_id: str
+    access_level: str
+    created_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    updated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "rule_id": self.rule_id,
+            "target_type": self.target_type,
+            "target_id": self.target_id,
+            "access_level": self.access_level,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Optional["EntityPermissionRule"]:
+        if not data or not isinstance(data, dict):
+            return None
+        rule_id = data.get("rule_id")
+        target_type = data.get("target_type")
+        target_id = data.get("target_id")
+        access_level = data.get("access_level")
+        if not all([rule_id, target_type, target_id, access_level]):
+            return None
+        return cls(
+            rule_id=str(rule_id),
+            target_type=str(target_type),
+            target_id=str(target_id),
+            access_level=str(access_level),
+            created_at=str(data.get("created_at", datetime.now(timezone.utc).isoformat())),
+            updated_at=str(data.get("updated_at", datetime.now(timezone.utc).isoformat())),
+        )
+
+
+@dataclass
+class ViewPermissionRule:
+    """Explicit permission rule for a Lovelace view."""
+
+    view_path: str
+    effect: str
+    created_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    updated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "view_path": self.view_path,
+            "effect": self.effect,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Optional["ViewPermissionRule"]:
+        if not data or not isinstance(data, dict):
+            return None
+        view_path = data.get("view_path")
+        effect = data.get("effect")
+        if not view_path or not effect:
+            return None
+        return cls(
+            view_path=str(view_path),
+            effect=str(effect),
+            created_at=str(data.get("created_at", datetime.now(timezone.utc).isoformat())),
+            updated_at=str(data.get("updated_at", datetime.now(timezone.utc).isoformat())),
+        )
+
+
+@dataclass
+class UserPermissionSet:
+    """Complete set of permissions for a user."""
+
+    user_id: str
+    default_access_level: str = ACCESS_LEVEL_NONE
+    entity_rules: dict[str, EntityPermissionRule] = field(default_factory=dict)
+    view_rules: dict[str, ViewPermissionRule] = field(default_factory=dict)
+    updated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "user_id": self.user_id,
+            "default_access_level": self.default_access_level,
+            "entity_rules": {k: v.to_dict() for k, v in self.entity_rules.items()},
+            "view_rules": {k: v.to_dict() for k, v in self.view_rules.items()},
+            "updated_at": self.updated_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Optional["UserPermissionSet"]:
+        if not data or not isinstance(data, dict):
+            return None
+        user_id = data.get("user_id")
+        if not user_id:
+            return None
+        entity_rules = {}
+        for k, v in (data.get("entity_rules") or {}).items():
+            if isinstance(v, dict):
+                parsed = EntityPermissionRule.from_dict(v)
+                if parsed:
+                    entity_rules[k] = parsed
+
+        view_rules = {}
+        for k, v in (data.get("view_rules") or {}).items():
+            if isinstance(v, dict):
+                parsed = ViewPermissionRule.from_dict(v)
+                if parsed:
+                    view_rules[k] = parsed
+
+        return cls(
+            user_id=str(user_id),
+            default_access_level=str(data.get("default_access_level", ACCESS_LEVEL_NONE)),
+            entity_rules=entity_rules,
+            view_rules=view_rules,
+            updated_at=str(data.get("updated_at", datetime.now(timezone.utc).isoformat())),
+        )
 
 class DomoluxRoleValidationError(Exception):
     """Raised when a role assignment or validation fails."""
@@ -199,10 +359,11 @@ class FatherRoleAssignment:
 class DomoluxAuthState:
     """Root state representation for Domolux Roles persistent storage."""
 
-    version: int = 1
+    version: int = 2
     minor_version: int = 0
     father: Optional[FatherRoleAssignment] = None
     family_members: dict[str, FamilyMemberRecord] = field(default_factory=dict)
+    permissions: dict[str, UserPermissionSet] = field(default_factory=dict)
     metadata: dict[str, Any] = field(
         default_factory=lambda: {
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -218,6 +379,9 @@ class DomoluxAuthState:
             "father": self.father.to_dict() if self.father else None,
             "family_members": {
                 k: v.to_dict() for k, v in self.family_members.items()
+            },
+            "permissions": {
+                k: v.to_dict() for k, v in self.permissions.items()
             },
             "metadata": self.metadata,
         }
@@ -244,6 +408,15 @@ class DomoluxAuthState:
                     if rec:
                         family_members[rec.user_id] = rec
 
+        permissions_raw = data.get("permissions")
+        permissions: dict[str, UserPermissionSet] = {}
+        if isinstance(permissions_raw, dict):
+            for k, v in permissions_raw.items():
+                if isinstance(v, dict):
+                    rec = UserPermissionSet.from_dict(v)
+                    if rec:
+                        permissions[rec.user_id] = rec
+
         metadata = (
             data.get("metadata")
             if isinstance(data.get("metadata"), dict)
@@ -254,9 +427,10 @@ class DomoluxAuthState:
         )
 
         return cls(
-            version=int(data.get("version", 1)),
+            version=int(data.get("version", 2)),
             minor_version=int(data.get("minor_version", 0)),
             father=father_obj,
             family_members=family_members,
+            permissions=permissions,
             metadata=metadata,
         )

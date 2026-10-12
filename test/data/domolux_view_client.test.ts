@@ -7,7 +7,6 @@ import {
   clearViewCache,
   _getCacheSize,
 } from "../../src/data/domolux_view_client";
-import type { DomoluxViewUpdatedEvent } from "../../src/data/domolux_view_client";
 import type { HomeAssistant } from "../../src/types";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -64,7 +63,7 @@ function createMockHass(
     user,
     connection: hasWs
       ? ({
-          subscribeEvents: vi.fn().mockReturnValue(() => () => {}),
+          subscribeEvents: vi.fn().mockReturnValue(() => () => undefined),
         } as any)
       : undefined,
     callWS: hasWs ? mockCallWS : undefined,

@@ -19,6 +19,7 @@ from .models import (
     FamilyMemberRecord,
     FatherRoleAssignment,
     FatherRoleStatus,
+    UserPermissionSet,
     validate_user_id,
 )
 
@@ -105,6 +106,26 @@ class DomoluxRoleStore:
         """Return all stored managed family member records."""
         return list(self._data.family_members.values())
 
+    def get_user_permissions(self, user_id: str) -> UserPermissionSet:
+        """Return UserPermissionSet for user_id, or a default empty permission set."""
+        validate_user_id(user_id)
+        if user_id in self._data.permissions:
+            return self._data.permissions[user_id]
+        return UserPermissionSet(user_id=user_id)
+
+    def set_user_permissions(self, permission_set: UserPermissionSet) -> None:
+        """Store or update UserPermissionSet for a user."""
+        validate_user_id(permission_set.user_id)
+        self._data.permissions[permission_set.user_id] = permission_set
+
+    def reset_user_permissions(self, user_id: str) -> bool:
+        """Reset permissions for user_id to default empty set."""
+        validate_user_id(user_id)
+        if user_id in self._data.permissions:
+            del self._data.permissions[user_id]
+            return True
+        return False
+
     def validate(self, raw_data: dict[str, Any]) -> dict[str, Any]:
         """Validate raw input structure, forbid secrets, enforce single-father rule.
 
@@ -170,7 +191,7 @@ class DomoluxRoleStore:
             _LOGGER.info(
                 "Migrating Domolux role storage from legacy version %s to version %s",
                 current_version,
-                STORAGE_VERSION,
+                1,
             )
             raw_data["version"] = 1
             raw_data["minor_version"] = 0
@@ -180,8 +201,23 @@ class DomoluxRoleStore:
                     "last_updated": datetime.now(timezone.utc).isoformat(),
                 }
 
+        # Migration: Version 1 -> Version 2 (Permissions added)
+        if current_version < 2:
+            _LOGGER.info(
+                "Migrating Domolux role storage from version %s to version %s",
+                current_version,
+                STORAGE_VERSION,
+            )
+            raw_data["version"] = 2
+            raw_data["minor_version"] = 0
+            if "permissions" not in raw_data or not isinstance(raw_data.get("permissions"), dict):
+                raw_data["permissions"] = {}
+
         if "family_members" not in raw_data or not isinstance(raw_data.get("family_members"), dict):
             raw_data["family_members"] = {}
+
+        if "permissions" not in raw_data or not isinstance(raw_data.get("permissions"), dict):
+            raw_data["permissions"] = {}
 
         return raw_data
 

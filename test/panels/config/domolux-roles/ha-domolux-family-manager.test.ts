@@ -12,7 +12,7 @@ if (typeof ElementInternals !== "undefined") {
     Object.defineProperty(ElementInternals.prototype, "validity", {
       get() {
         return (
-          this._validity || {
+          (this as any)._validity || {
             valid: true,
             badInput: false,
             customError: false,
@@ -28,7 +28,7 @@ if (typeof ElementInternals !== "undefined") {
         );
       },
       set(val) {
-        this._validity = val;
+        (this as any)._validity = val;
       },
       configurable: true,
     });
@@ -36,7 +36,7 @@ if (typeof ElementInternals !== "undefined") {
 
   if (!ElementInternals.prototype.setValidity) {
     ElementInternals.prototype.setValidity = function (flags?: any) {
-      this._validity = {
+      (this as any)._validity = {
         valid:
           !flags ||
           Object.keys(flags).length === 0 ||
@@ -137,6 +137,112 @@ function createMockHass(options: {
     }
     if (msg.type === "domolux/family/delete") {
       return Promise.resolve({ success: true, user_id: msg.user_id });
+    }
+    if (msg.type === "domolux/permission/get") {
+      return Promise.resolve({
+        user_id: msg.user_id,
+        default_access_level: "none",
+        entity_rules: {
+          rule_1: {
+            rule_id: "rule_1",
+            target_type: "entity",
+            target_id: "light.living_room",
+            access_level: "read",
+          },
+        },
+        view_rules: {
+          "/lovelace/kitchen": {
+            view_path: "/lovelace/kitchen",
+            effect: "deny",
+          },
+        },
+      });
+    }
+    if (msg.type === "domolux/permission/set_default_level") {
+      return Promise.resolve({
+        success: true,
+        permissions: {
+          user_id: msg.user_id,
+          default_access_level: msg.default_access_level,
+          entity_rules: {},
+          view_rules: {},
+        },
+      });
+    }
+    if (msg.type === "domolux/permission/set_entity_rule") {
+      return Promise.resolve({
+        success: true,
+        rule: {
+          rule_id: msg.rule_id || "rule_test",
+          target_type: msg.target_type,
+          target_id: msg.target_id,
+          access_level: msg.access_level,
+        },
+        permissions: {
+          user_id: msg.user_id,
+          default_access_level: "none",
+          entity_rules: {},
+          view_rules: {},
+        },
+      });
+    }
+    if (msg.type === "domolux/permission/remove_entity_rule") {
+      return Promise.resolve({
+        success: true,
+        permissions: {
+          user_id: msg.user_id,
+          default_access_level: "none",
+          entity_rules: {},
+          view_rules: {},
+        },
+      });
+    }
+    if (msg.type === "domolux/permission/set_view_rule") {
+      return Promise.resolve({
+        success: true,
+        rule: {
+          view_path: msg.view_path,
+          effect: msg.effect,
+        },
+        permissions: {
+          user_id: msg.user_id,
+          default_access_level: "none",
+          entity_rules: {},
+          view_rules: {},
+        },
+      });
+    }
+    if (msg.type === "domolux/permission/remove_view_rule") {
+      return Promise.resolve({
+        success: true,
+        permissions: {
+          user_id: msg.user_id,
+          default_access_level: "none",
+          entity_rules: {},
+          view_rules: {},
+        },
+      });
+    }
+    if (msg.type === "domolux/permission/reset") {
+      return Promise.resolve({
+        success: true,
+        permissions: {
+          user_id: msg.user_id,
+          default_access_level: "none",
+          entity_rules: {},
+          view_rules: {},
+        },
+      });
+    }
+    if (msg.type === "domolux/permission/evaluate") {
+      return Promise.resolve({
+        user_id: msg.user_id,
+        target_id: msg.target_id,
+        access_level: "control",
+        granted: true,
+        matching_rule_type: "entity",
+        matching_rule_id: "rule_1",
+      });
     }
     return Promise.resolve({});
   });
@@ -523,6 +629,366 @@ describe("ha-domolux-family-manager component", () => {
 
       expect((element as any)._showCreateDialog).toBe(false);
       expect((element as any)._createPassword).toBe("");
+    });
+  });
+
+  describe("Phase 3: Permission Management", () => {
+    it("opens permission dialog and loads permissions for a family member", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      expect((element as any)._showPermissionDialog).toBe(true);
+      expect((element as any)._selectedUserForPermissions).toEqual(member);
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/get",
+          user_id: CHILD_USER_ID,
+        })
+      );
+
+      const perms = (element as any)._userPermissionSet;
+      expect(perms).not.toBeNull();
+      expect(perms.default_access_level).toBe("none");
+      expect(Object.keys(perms.entity_rules).length).toBe(1);
+    });
+
+    it("closes permission dialog and resets permission state", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      expect((element as any)._showPermissionDialog).toBe(true);
+
+      (element as any)._closePermissionDialog();
+      await element.updateComplete;
+
+      expect((element as any)._showPermissionDialog).toBe(false);
+      expect((element as any)._selectedUserForPermissions).toBeNull();
+      expect((element as any)._userPermissionSet).toBeNull();
+    });
+
+    it("sets default access level for a family member", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      (element as any)._newDefaultAccessLevel = "read";
+
+      await (element as any)._handleSetDefaultAccessLevel();
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_default_level",
+          user_id: CHILD_USER_ID,
+          default_access_level: "read",
+        })
+      );
+
+      expect((element as any)._success).toContain(
+        "Default access level updated"
+      );
+    });
+
+    it("validates that empty default access level is rejected", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      (element as any)._newDefaultAccessLevel = "";
+
+      await (element as any)._handleSetDefaultAccessLevel();
+
+      expect((element as any)._error).toBeTruthy();
+      expect(hass.callWS).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "domolux/permission/set_default_level" })
+      );
+    });
+
+    it("adds an entity permission rule for a family member", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      (element as any)._newRuleTargetType = "entity";
+      (element as any)._newRuleTargetId = "switch.bedroom";
+      (element as any)._newRuleAccessLevel = "control";
+
+      await (element as any)._handleAddEntityRule();
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_entity_rule",
+          user_id: CHILD_USER_ID,
+          target_type: "entity",
+          target_id: "switch.bedroom",
+          access_level: "control",
+        })
+      );
+
+      expect((element as any)._success).toContain("Entity permission rule added");
+      expect((element as any)._newRuleTargetId).toBe("");
+    });
+
+    it("validates empty target_id for entity rule", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      (element as any)._newRuleTargetType = "entity";
+      (element as any)._newRuleTargetId = "";
+      (element as any)._newRuleAccessLevel = "control";
+
+      await (element as any)._handleAddEntityRule();
+
+      expect((element as any)._error).toBeTruthy();
+      expect(hass.callWS).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "domolux/permission/set_entity_rule" })
+      );
+    });
+
+    it("removes an entity permission rule", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      await (element as any)._handleRemoveEntityRule("rule_1");
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/remove_entity_rule",
+          user_id: CHILD_USER_ID,
+          rule_id: "rule_1",
+        })
+      );
+
+      expect((element as any)._success).toContain(
+        "Entity permission rule removed"
+      );
+    });
+
+    it("adds a view permission rule for a family member", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      (element as any)._newViewPath = "/lovelace/main";
+      (element as any)._newViewEffect = "allow";
+
+      await (element as any)._handleAddViewRule();
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_view_rule",
+          user_id: CHILD_USER_ID,
+          view_path: "/lovelace/main",
+          effect: "allow",
+        })
+      );
+
+      expect((element as any)._success).toContain("View permission rule added");
+      expect((element as any)._newViewPath).toBe("");
+    });
+
+    it("validates empty view_path for view rule", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      (element as any)._newViewPath = "";
+      (element as any)._newViewEffect = "allow";
+
+      await (element as any)._handleAddViewRule();
+
+      expect((element as any)._error).toBeTruthy();
+      expect(hass.callWS).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "domolux/permission/set_view_rule" })
+      );
+    });
+
+    it("removes a view permission rule", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      await (element as any)._handleRemoveViewRule("/lovelace/kitchen");
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/remove_view_rule",
+          user_id: CHILD_USER_ID,
+          view_path: "/lovelace/kitchen",
+        })
+      );
+
+      expect((element as any)._success).toContain(
+        "View permission rule removed"
+      );
+    });
+
+    it("resets all permissions to default state", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      await (element as any)._handleResetPermissions();
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/reset",
+          user_id: CHILD_USER_ID,
+        })
+      );
+
+      expect((element as any)._success).toContain(
+        "User permissions reset"
+      );
+
+      const perms = (element as any)._userPermissionSet;
+      expect(perms.entity_rules).toEqual({});
+      expect(perms.view_rules).toEqual({});
+    });
+
+    it("evaluates effective permission access level for entity", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      (element as any)._evalTargetType = "entity";
+      (element as any)._evalTargetId = "light.living_room";
+
+      await (element as any)._handleEvaluatePermission();
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/evaluate",
+          user_id: CHILD_USER_ID,
+          target_type: "entity",
+          target_id: "light.living_room",
+        })
+      );
+
+      const evalResult = (element as any)._evalResult;
+      expect(evalResult).not.toBeNull();
+      expect(evalResult.granted).toBe(true);
+      expect(evalResult.access_level).toBe("control");
+    });
+
+    it("validates empty target_id before evaluating permission", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      (element as any)._evalTargetType = "entity";
+      (element as any)._evalTargetId = "";
+
+      await (element as any)._handleEvaluatePermission();
+
+      expect((element as any)._error).toBeTruthy();
+      expect(hass.callWS).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "domolux/permission/evaluate" })
+      );
+    });
+
+    it("does not open permission dialog if not Father", async () => {
+      const hass = createMockHass({ isFather: false, isAdmin: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      expect((element as any)._isFather).toBe(false);
+
+      const fakeMember = {
+        user_id: CHILD_USER_ID,
+        display_name: "Child",
+        username: "child",
+        status: "ACTIVE",
+      };
+
+      await (element as any)._openPermissionDialog(fakeMember);
+      await element.updateComplete;
+
+      expect((element as any)._showPermissionDialog).toBe(false);
     });
   });
 });

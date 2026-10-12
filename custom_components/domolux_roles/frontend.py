@@ -14,10 +14,11 @@ _LOGGER = logging.getLogger(__name__)
 
 PANEL_ID = "domolux-roles"
 PANEL_FAMILY_ID = "domolux-family"
+PANEL_DASHBOARD_ID = "domolux-dashboard"
 
 
 async def async_register_frontend(hass: HomeAssistant) -> None:
-    """Register the Domolux Roles and Family Manager frontend panels."""
+    """Register the Domolux Roles, Family Manager, and Dashboard frontend panels."""
     # Define where the compiled JS will reside
     frontend_dir = Path(__file__).parent / "frontend"
     frontend_dir.mkdir(parents=True, exist_ok=True)
@@ -64,11 +65,27 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
             config_panel_domain=DOMAIN,
         )
 
-    _LOGGER.info("Domolux Roles & Family Manager frontend panels registered at %s", js_url_path)
+    # 3. Register Domolux Dashboard Container Panel (require_admin=False)
+    if PANEL_DASHBOARD_ID not in frontend_panels:
+        await panel_custom.async_register_panel(
+            hass,
+            frontend_url_path=PANEL_DASHBOARD_ID,
+            webcomponent_name="ha-domolux-dashboard",
+            sidebar_title="Domolux Dashboard",
+            sidebar_icon="mdi:shield-home",
+            js_url=f"{js_url_path}/entrypoint.js",
+            embed_iframe=True,
+            trust_external=False,
+            require_admin=False,
+            config_panel_domain=DOMAIN,
+        )
+
+    _LOGGER.info("Domolux Roles, Family Manager & Dashboard frontend panels registered at %s", js_url_path)
 
 
 async def async_unregister_frontend(hass: HomeAssistant) -> None:
-    """Unregister the Domolux Roles & Family Manager frontend panels."""
+    """Unregister the Domolux Roles, Family Manager & Dashboard frontend panels."""
     async_remove_panel(hass, PANEL_ID, warn_if_unknown=False)
     async_remove_panel(hass, PANEL_FAMILY_ID, warn_if_unknown=False)
-    _LOGGER.info("Domolux Roles & Family Manager frontend panels unregistered.")
+    async_remove_panel(hass, PANEL_DASHBOARD_ID, warn_if_unknown=False)
+    _LOGGER.info("Domolux Roles, Family Manager & Dashboard frontend panels unregistered.")
