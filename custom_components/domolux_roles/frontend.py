@@ -15,6 +15,7 @@ _LOGGER = logging.getLogger(__name__)
 PANEL_ID = "domolux-roles"
 PANEL_FAMILY_ID = "domolux-family"
 PANEL_DASHBOARD_ID = "domolux-dashboard"
+PANEL_MANAGE_ID = "domolux-manage"
 
 
 async def async_register_frontend(hass: HomeAssistant) -> None:
@@ -73,6 +74,21 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
             webcomponent_name="ha-domolux-dashboard",
             sidebar_title="Domolux Dashboard",
             sidebar_icon="mdi:shield-home",
+            js_url=f"{js_url_path}/entrypoint.js",
+            embed_iframe=True,
+            trust_external=False,
+            require_admin=False,
+            config_panel_domain=DOMAIN,
+        )
+
+    # 4. Parent Management Console (route /domolux-manage — standalone panel)
+    if PANEL_MANAGE_ID not in frontend_panels:
+        await panel_custom.async_register_panel(
+            hass,
+            frontend_url_path=PANEL_MANAGE_ID,
+            webcomponent_name="ha-domolux-family-manager",
+            sidebar_title="Parent Console / إدارة الوالدين",
+            sidebar_icon="mdi:shield-account",
             js_url=f"{js_url_path}/entrypoint.js",
             embed_iframe=True,
             trust_external=False,

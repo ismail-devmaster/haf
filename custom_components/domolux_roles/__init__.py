@@ -25,7 +25,7 @@ from .permission_api import async_register_permission_api_commands
 from .permission_evaluator import DomoluxPermissionEvaluator
 from .store import DomoluxRoleStore
 from .service_auth_api import async_register_service_auth_commands
-from .view_api import async_register_view_api_commands
+from .view_api import async_register_view_api_commands, async_register_catalog_commands
 from .view_manager import DomoluxViewManager
 from .view_store import DomoluxViewStore
 
@@ -39,6 +39,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async_register_family_api_commands(hass)
     async_register_permission_api_commands(hass)
     await async_register_view_api_commands(hass)
+    async_register_catalog_commands(hass)
     async_register_service_auth_commands(hass)
     await async_register_frontend(hass)
     return True

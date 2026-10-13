@@ -563,3 +563,129 @@ async def async_register_view_api_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_view_update)
     websocket_api.async_register_command(hass, ws_view_delete)
     websocket_api.async_register_command(hass, ws_view_subscribe)
+
+
+# ----------------------------------------------------------------------
+# Catalog API — Phase 2: Read-only parent-authorized device / entity discovery
+# ----------------------------------------------------------------------
+
+from homeassistant.helpers import device_registry as dr, entity_registry as er, area_registry as ar
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "domolux/catalog",
+    }
+)
+@websocket_api.async_response
+async def ws_catalog(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Read-only catalog of registered devices and entities (parent-authorized)."""
+    if connection.user is None:
+        connection.send_error(msg["id"], ERR_UNAUTHORIZED, "Unauthorized.")
+        return
+    user_id = connection.user.id
+    evaluator = _get_evaluator(hass)
+    is_father = evaluator._is_father(user_id)
+    # Authorize only father (existing policy for parent-level reads)
+    if not is_father:
+        connection.send_error(msg["id"], ERR_ACCESS_DENIED, "Catalog access requires father role.")
+        return
+
+    # Registry discovery (read-only; no state mutation)
+    device_reg = dr.async_get(hass)
+    entity_reg = er.async_get(hass)
+    area_reg = ar.async_get(hass)
+
+    devices_result: list[dict] = []
+    entities_result: list[dict] = []
+    seen_entity_ids: set[str] = set()
+
+    # Devices from registry
+    for dev in device_reg.devices.values():
+        device_id = dev.id
+        name = dev.name_by_user or dev.name or "Unnamed device"
+        area_id = dev.area_id
+        area_name = area_reg.async_get_area(dev.area_id).name if dev.area_id and area_reg.async_get_area(dev.area_id) else None
+        device_entities = [e.entity_id for e in entity_reg.entities.get_entries_for_device_id(device_id)]
+        devices_result.append({
+            "device_id": device_id,
+            "name": name,
+            "area_id": area_id,
+            "area_name": area_name,
+            "entity_count": len(device_entities),
+        })
+
+    # Entities from registry + state-machine merge
+    for entry in entity_reg.entities:
+        entity_id = entry.entity_id
+        if entity_id in seen_entity_ids:
+            continue
+        seen_entity_ids.add(entity_id)
+        name = entry.name_by_user or entry.original_name or entity_id
+        domain = entry.domain
+        device_id = entry.device_id
+        device_name = None
+        if device_id:
+            d = device_reg.async_get(device_id)
+            device_name = d.name_by_user or d.name if d else None
+        area_id = entry.area_id
+        area_name = area_reg.async_get_area(area_id).name if area_id and area_reg.async_get_area(area_id) else None
+        disabled = entry.disabled_by is not None
+        # State presence indicator (safe: only available/unavailable, never value)
+        state_obj = hass.states.get(entity_id)
+        state_available = state_obj.state if state_obj else None
+        is_unavailable = state_obj is not None and state_obj.state == "unavailable"
+        entities_result.append({
+            "entity_id": entity_id,
+            "name": name,
+            "domain": domain,
+            "device_id": device_id,
+            "device_name": device_name,
+            "area_id": area_id,
+            "area_name": area_name,
+            "registry_managed": True,
+            "disabled": disabled,
+            "state_available": state_available is not None,
+            "unavailable": is_unavailable,
+        })
+
+    # Include state-machine-only entities (not in registry) — minimal safe metadata
+    for entity_id in hass.states.entity_ids:
+        if entity_id in seen_entity_ids:
+            continue
+        state_obj = hass.states.get(entity_id)
+        if not state_obj:
+            continue
+        seen_entity_ids.add(entity_id)
+        entities_result.append({
+            "entity_id": entity_id,
+            "name": entity_id,
+            "domain": state_obj.domain,
+            "device_id": None,
+            "device_name": None,
+            "area_id": None,
+            "area_name": None,
+            "registry_managed": False,
+            "disabled": False,
+            "state_available": True,
+            "unavailable": state_obj.state == "unavailable",
+        })
+
+    # Deterministic sorting
+    devices_result.sort(key=lambda d: (d["name"] or "", d["device_id"]))
+    entities_result.sort(key=lambda e: (e["name"] or "", e["entity_id"]))
+
+    connection.send_result(msg["id"], {
+        "catalog": {
+            "devices": devices_result,
+            "entities": entities_result,
+        }
+    })
+
+
+def async_register_catalog_commands(hass: HomeAssistant) -> None:
+    websocket_api.async_register_command(hass, ws_catalog)
