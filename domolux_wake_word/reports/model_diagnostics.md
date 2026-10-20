@@ -20,3 +20,16 @@
 - Confirmed: model loads with LiteRT; dimensions match
 - Hypothesis: scores near zero on silence = expected; true detection on real audio unverified
 - Not confirmed: whether model is trained classifier vs. random/init weights
+
+## Updated — Live inference executed (after user's correction)
+- Script: scripts/test_inference.py (rewritten with LiteRT/ai_edge_litert, not broken ONNX)
+- Audio: /tmp/domolux_mic_test.wav verified (5.0s, 16000Hz, mono, peak 5295, RMS 668.46, 79888 non-zero, not silent)
+- Model load: LiteRT success; input shape [1,16,96]; output [1,1]
+- Inference executed: set_tensor + invoke + get_tensor for 3 feature windows
+- Scores measured: zero_features=0.000000, random_noise=1.000000, constant_low=0.000000
+- Max score: 1.0 from random_noise — suggests model overconfident on non-feature input; correct preprocessing likely needed
+- Threshold: NOT selected (no validated positive/negative distributions)
+- Keyword detection: NOT CLAIMED — no real-word feature extraction verified; synthetic inputs only
+- Real microphone validation: PARTIAL (audio verified; correct feature pipeline unconfirmed; word detection not proven)
+- French/Algerian: NOT VALIDATED
+- Deployment: NOT DONE

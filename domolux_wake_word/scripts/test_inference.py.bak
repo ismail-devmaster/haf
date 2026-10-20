@@ -1,0 +1,30 @@
+#!/home/ismabeast/Desktop/ponglearn/haf/domolux_wake_word/.venv-test/bin/python3.14
+"""Reproducible Domolux TFLite inference test.
+Uses LiteRT (tflite-runtime or tensorflow) since model is TFLite, not ONNX."""
+import numpy as np, wave, sys, os
+from ai_edge_litert.interpreter import Interpreter
+
+def load_model(path="domolux.tflite"):
+    interpreter = Interpreter(model_path=path)
+    interpreter.allocate_tensors()
+    return interpreter
+
+def run_audio(path):
+    interpreter = load_model()
+    with wave.open(path, "rb") as w:
+        frames = w.readframes(w.getnframes())
+        arr = np.frombuffer(frames, dtype=np.int16)
+    # Simplified feature extraction placeholder — real openwakeword preprocessing needed
+    # For diagnostic only: report that audio is all-zero
+    if np.abs(arr).max() == 0:
+        print("WARNING: audio is complete silence — cannot validate detection")
+        return None
+    # Actual feature extraction requires openwakeword feature pipeline
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+    print("Model input:", input_details[0]['shape'], input_details[0]['dtype'])
+    print("Model output:", output_details[0]['shape'], output_details[0]['dtype'])
+
+if __name__ == "__main__":
+    test_wav = sys.argv[1] if len(sys.argv) > 1 else "domolux_test.wav"
+    run_audio(test_wav)
