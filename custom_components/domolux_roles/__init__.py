@@ -14,7 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
-from .api import async_register_websocket_commands
+from .api import async_register_websocket_commands, async_register_subscription_command
 from .family_api import async_register_family_api_commands
 from .family_user_service import DomoluxFamilyUserService
 from .frontend import async_register_frontend, async_unregister_frontend
@@ -41,6 +41,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await async_register_view_api_commands(hass)
     async_register_catalog_commands(hass)
     async_register_service_auth_commands(hass)
+    async_register_subscription_command(hass)
     await async_register_frontend(hass)
     return True
 

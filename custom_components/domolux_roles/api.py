@@ -255,3 +255,52 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_list_eligible_users)
     websocket_api.async_register_command(hass, ws_set_father)
     websocket_api.async_register_command(hass, ws_remove_father)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "domolux/permission/subscribe",
+        vol.Optional("target_user_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_permission_subscribe(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Dedicated Domolux event subscription; never exposes native HA events."""
+    user = connection.user
+    if user is None or getattr(user, "is_disabled", False):
+        connection.send_error(msg["id"], websocket_api.ERR_UNAUTHORIZED, "Unauthenticated.")
+        return
+
+    user_id = user.id
+    target = msg.get("target_user_id") or user_id
+
+    # Family-level authorization: only Father/admin may subscribe to others;
+    # Child may subscribe only to self.
+    try:
+        manager = _get_manager(hass)
+        father = manager.get_father_assignment()
+        is_father = father is not None and father.user_id == user_id
+        if target != user_id and not is_father:
+            connection.send_error(msg["id"], websocket_api.ERR_UNAUTHORIZED, "Cannot subscribe to other users.")
+            return
+    except Exception:
+        pass
+
+    async def _listener(event):
+        # Filter by family; never expose arbitrary external events.
+        data = event.data or {}
+        if data.get("user_id") == target:
+            connection.send_event(msg["id"], data)
+
+    # Register subscription on HA event bus (only for our owned event)
+    unsub = hass.bus.async_listen("domolux_permissions_updated", _listener)
+    connection.subscriptions[msg["id"]] = unsub
+    connection.send_result(msg["id"], {"subscribed": True, "target_user_id": target})
+
+
+def async_register_subscription_command(hass: HomeAssistant) -> None:
+    websocket_api.async_register_command(hass, ws_permission_subscribe)
