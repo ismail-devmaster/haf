@@ -1,0 +1,11 @@
+# openWakeWord custom model training config — Domolux
+# Status: BLOCKED — framework not installed, compute missing
+model_name: domolux
+trigger: "Domolux"
+pronunciations: ["do-mo-lux", "domolux", "do-molux"]
+negative_samples: []  # requires recordings
+positive_samples: []  # requires recordings
+output_format: tflite
+expected_path: /share/openwakeword/domolux.tflite  # deployment blocked; local alt: ./artifacts/domolux.tflite
+framework_version: openwakeword >= 0.2
+license: Apache-2.0 (openWakeWord framework)
