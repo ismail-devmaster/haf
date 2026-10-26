@@ -446,6 +446,10 @@ class HUIRoot extends LitElement {
     return html`${result}`;
   }
 
+  private get _isNonAdmin(): boolean {
+    return this.hass.user?.is_admin === false;
+  }
+
   protected render(): TemplateResult {
     const views = this.lovelace?.config.views ?? [];
 
@@ -546,76 +550,87 @@ class HUIRoot extends LitElement {
         class=${classMap({
           "edit-mode": this._editMode,
           narrow: this.narrow,
+          "no-header": this._isNonAdmin,
         })}
       >
-        <div class="header">
-          <slot name="toolbar">
-            <div class="toolbar">
-              ${this._editMode
-                ? html`
-                    <div class="main-title">
-                      ${dashboardTitle ||
-                      this.hass!.localize("ui.panel.lovelace.editor.header")}
-                      <ha-icon-button
-                        slot="actionItems"
-                        .label=${this.hass!.localize(
-                          "ui.panel.lovelace.editor.edit_lovelace.edit_title"
-                        )}
-                        .path=${mdiPencil}
-                        class="edit-icon"
-                        @click=${this._editDashboard}
-                      ></ha-icon-button>
-                    </div>
-                    <div class="action-items">${this._renderActionItems()}</div>
-                  `
-                : html`
-                    ${isSubview || this.backButton
-                      ? html`
-                          <ha-icon-button-arrow-prev
-                            .hass=${this.hass}
-                            slot="navigationIcon"
-                            @click=${this._goBack}
-                          ></ha-icon-button-arrow-prev>
-                        `
-                      : html`
-                          <ha-menu-button
-                            slot="navigationIcon"
-                            .hass=${this.hass}
-                            .narrow=${this.narrow}
-                          ></ha-menu-button>
-                        `}
-                    ${isSubview
-                      ? html`
-                          <div class="main-title">${curViewConfig.title}</div>
-                        `
-                      : hasTabViews
-                        ? tabs
-                        : html`
-                            <div class="main-title">
-                              ${views[0]?.title ?? dashboardTitle}
-                            </div>
-                          `}
-                    <div class="action-items">${this._renderActionItems()}</div>
-                  `}
-            </div>
-            ${this._editMode
-              ? html`
-                  <div class="tab-bar">
-                    ${tabs}
-                    <ha-icon-button
-                      slot="nav"
-                      id="add-view"
-                      @click=${this._addView}
-                      .label=${this.hass!.localize(
-                        "ui.panel.lovelace.editor.edit_view.add"
-                      )}
-                      .path=${mdiPlus}
-                    ></ha-icon-button>
-                  </div>
-                `
-              : nothing}
-          </slot>
-        </div>
+        ${this._isNonAdmin
+          ? nothing
+          : html`<div class="header">
+              <slot name="toolbar">
+                <div class="toolbar">
+                  ${this._editMode
+                    ? html`
+                        <div class="main-title">
+                          ${dashboardTitle ||
+                          this.hass!.localize(
+                            "ui.panel.lovelace.editor.header"
+                          )}
+                          <ha-icon-button
+                            slot="actionItems"
+                            .label=${this.hass!.localize(
+                              "ui.panel.lovelace.editor.edit_lovelace.edit_title"
+                            )}
+                            .path=${mdiPencil}
+                            class="edit-icon"
+                            @click=${this._editDashboard}
+                          ></ha-icon-button>
+                        </div>
+                        <div class="action-items">
+                          ${this._renderActionItems()}
+                        </div>
+                      `
+                    : html`
+                        ${isSubview || this.backButton
+                          ? html`
+                              <ha-icon-button-arrow-prev
+                                .hass=${this.hass}
+                                slot="navigationIcon"
+                                @click=${this._goBack}
+                              ></ha-icon-button-arrow-prev>
+                            `
+                          : html`
+                              <ha-menu-button
+                                slot="navigationIcon"
+                                .hass=${this.hass}
+                                .narrow=${this.narrow}
+                              ></ha-menu-button>
+                            `}
+                        ${isSubview
+                          ? html`
+                              <div class="main-title">
+                                ${curViewConfig.title}
+                              </div>
+                            `
+                          : hasTabViews
+                            ? tabs
+                            : html`
+                                <div class="main-title">
+                                  ${views[0]?.title ?? dashboardTitle}
+                                </div>
+                              `}
+                        <div class="action-items">
+                          ${this._renderActionItems()}
+                        </div>
+                      `}
+                </div>
+                ${this._editMode
+                  ? html`
+                      <div class="tab-bar">
+                        ${tabs}
+                        <ha-icon-button
+                          slot="nav"
+                          id="add-view"
+                          @click=${this._addView}
+                          .label=${this.hass!.localize(
+                            "ui.panel.lovelace.editor.edit_view.add"
+                          )}
+                          .path=${mdiPlus}
+                        ></ha-icon-button>
+                      </div>
+                    `
+                  : nothing}
+              </slot>
+            </div>`}
         <hui-view-container
           class=${this._editMode ? "has-tab-bar" : ""}
           .hass=${this.hass}
@@ -1301,7 +1316,7 @@ class HUIRoot extends LitElement {
           padding-top: var(--safe-area-inset-top);
           padding-right: var(--safe-area-inset-right);
           z-index: 4;
-          border-bottom: 1px solid rgba(0,0,0,0.04);
+          border-bottom: 1px solid rgba(0, 0, 0, 0.04);
         }
         .narrow .header {
           width: calc(
@@ -1313,7 +1328,7 @@ class HUIRoot extends LitElement {
           padding-left: var(--safe-area-inset-left);
         }
         :host([scrolled]) .header {
-          box-shadow: 0 1px 3px 0 rgba(0,0,0,0.04);
+          box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
         }
         .edit-mode .header {
           background-color: var(--app-header-edit-background-color, #455a64);
@@ -1328,7 +1343,7 @@ class HUIRoot extends LitElement {
           padding: 0px 12px;
           font-weight: 500;
           box-sizing: border-box;
-          font-family: 'Google Sans', 'Product Sans', sans-serif;
+          font-family: "Google Sans", "Product Sans", sans-serif;
         }
         .edit-mode .toolbar {
           border-bottom: none;
@@ -1346,7 +1361,7 @@ class HUIRoot extends LitElement {
           min-width: 0;
           font-size: 18px;
           font-weight: 500;
-          font-family: 'Google Sans', 'Product Sans', sans-serif;
+          font-family: "Google Sans", "Product Sans", sans-serif;
         }
         .narrow .main-title {
           margin-inline-start: 8px;
@@ -1358,8 +1373,8 @@ class HUIRoot extends LitElement {
           gap: 2px;
         }
         ha-tab-group {
-          --ha-tab-indicator-color: var(--primary-color, #006D6D);
-          --ha-tab-active-text-color: var(--primary-color, #006D6D);
+          --ha-tab-indicator-color: var(--primary-color, #006d6d);
+          --ha-tab-active-text-color: var(--primary-color, #006d6d);
           --ha-tab-track-color: transparent;
           align-self: flex-end;
           flex-grow: 1;

@@ -239,6 +239,7 @@ export class HomeAssistantMain extends LitElement {
     );
 
     toggleAttribute(this, "no-sidebar", this._isNonAdmin);
+    toggleAttribute(this, "no-header", this._isNonAdmin);
   }
 
   private get _sidebarNarrow() {
@@ -272,6 +273,22 @@ export class HomeAssistantMain extends LitElement {
       --ha-sidebar-width: unset;
       --mdc-top-app-bar-width: unset;
       --safe-area-content-inset-left: var(--safe-area-inset-left);
+    }
+    :host([no-header]) {
+      --header-height: 0px;
+      --app-header-background-color: transparent;
+    }
+    :host([no-header]) .mdc-top-app-bar,
+    :host([no-header]) .mdc-top-app-bar__row,
+    :host([no-header]) ha-top-app-bar,
+    :host([no-header]) ha-top-app-bar-fixed {
+      display: none !important;
+      height: 0 !important;
+      min-height: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border: none !important;
+      overflow: hidden !important;
     }
     :host([modal]) partial-panel-resolver {
       height: calc(100% - 88px);

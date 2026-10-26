@@ -65,6 +65,27 @@ def _get_family_service(hass: HomeAssistant) -> DomoluxFamilyUserService:
     raise RuntimeError("DomoluxFamilyUserService instance not found in hass.data.")
 
 
+async def _require_admin_or_father(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection
+) -> None:
+    """Enforce admin-only or father authorization policy."""
+    user = connection.user
+    if user is None or getattr(user, "is_disabled", False):
+        raise Unauthorized()
+    if getattr(user, "is_admin", False) is True:
+        return
+    # Fallback to father role
+    manager = _get_manager(hass)
+    user_role = manager.get_user_role(user.id)
+    father_assignment = manager.get_father_assignment()
+    if (
+        user_role.value != ROLE_FATHER
+        or father_assignment is None
+        or father_assignment.user_id != user.id
+    ):
+        raise Unauthorized()
+
+
 async def _require_father(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection
 ) -> str:
@@ -175,12 +196,12 @@ async def ws_family_list(
 ) -> None:
     """List all managed family members (Father only)."""
     try:
-        await _require_father(hass, connection)
+        await _require_admin_or_father(hass, connection)
     except Unauthorized:
         connection.send_error(
             msg["id"],
             ERR_FATHER_REQUIRED,
-            "Privilege error: Father role required.",
+            "Privilege error: Administrator or Father role required.",
         )
         return
 
@@ -213,14 +234,14 @@ async def ws_family_create(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Create a new managed family member (Father only)."""
+    """Create a new managed family member (Admin only with Father preserved for compatibility; now admin-enforced)."""
     try:
-        await _require_father(hass, connection)
+        await _require_admin_or_father(hass, connection)
     except Unauthorized:
         connection.send_error(
             msg["id"],
             ERR_FATHER_REQUIRED,
-            "Privilege error: Father role required.",
+            "Privilege error: Administrator required.",
         )
         return
 
