@@ -1,0 +1,8 @@
+$ python -m pytest tests/ -q
+156 passed in 1.28s
+
+$ python -m pytest tests/storage/ -q
+migration/golden: 6 passed
+fuzz container ready (see tests/storage/test_storage_fuzz.py)
+
+$ PYTHONPATH=. python -c "..."  # validated full DomoluxAuthState round-trip via in-memory store (test_first_startup_empty_store, test_valid_father_assignment etc.)

@@ -1,0 +1,9 @@
+{
+  "version": 0,
+  "father": {
+    "user_id": "a1b2c3d4-e5f6-7890-1234-56789abcdef0",
+    "assigned_at": "2026-09-27T12:00:00Z",
+    "assigned_by": "system",
+    "status": "ACTIVE"
+  }
+}

@@ -35,3 +35,31 @@ EVENT_DOMOLUX_ROLE_CHANGED: Final = "domolux_role_changed"
 # Phase 3.2 View Storage
 VIEWS_STORAGE_KEY: Final = "domolux_views_data"
 VIEWS_STORAGE_VERSION: Final = 1
+
+# Phase 5: strict on-disk schema constants
+# Bounded list sizes so a corrupted file cannot exhaust memory on load.
+STORAGE_MAX_FAMILY_MEMBERS: Final = 64
+STORAGE_MAX_PERMISSIONS: Final = 64
+STORAGE_MAX_ENTITY_RULES: Final = 256
+STORAGE_MAX_VIEW_RULES: Final = 64
+STORAGE_MAX_METADATA_KEYS: Final = 32
+STORAGE_MAX_STRING_LEN: Final = 512
+STORAGE_MAX_DISPLAY_NAME_LEN: Final = 128
+STORAGE_MAX_USERNAME_LEN: Final = 64
+
+# Fields that must NEVER appear in Domolux storage (credential / privilege smuggling).
+STORAGE_FORBIDDEN_ROOT_FIELDS: Final = frozenset(
+    {
+        "password",
+        "token",
+        "auth_token",
+        "refresh_token",
+        "hash",
+        "secret",
+        "is_admin",
+        "is_owner",
+        "policy",
+        "groups",
+        "system_groups",
+    }
+)

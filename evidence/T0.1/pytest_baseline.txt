@@ -1,0 +1,25 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.7, pytest-9.2.0, pluggy-1.7.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/ismabeast/Desktop/ponglearn/haf
+configfile: pyproject.toml
+plugins: asyncio-1.4.1.post1, typeguard-4.4.4
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 14 items
+
+tests/isolated_security/test_child_readonly_exact_replacement.py::test_import_and_single_call PASSED [  7%]
+tests/isolated_security/test_child_readonly_exact_replacement.py::test_owner_rejected_before_provisioning PASSED [ 14%]
+tests/isolated_security/test_child_readonly_exact_replacement.py::test_fail_closed_if_unavailable PASSED [ 21%]
+tests/isolated_security/test_child_readonly_exact_replacement.py::test_post_verify_and_deactivate PASSED [ 28%]
+tests/isolated_security/test_child_readonly_exact_replacement.py::test_no_duplicate_call PASSED [ 35%]
+tests/isolated_security/test_frontend_screens_real.py::test_s1_loading_state_exists PASSED [ 42%]
+tests/isolated_security/test_frontend_screens_real.py::test_s2_child_permissions_readonly_context PASSED [ 50%]
+tests/isolated_security/test_frontend_screens_real.py::test_child_readonly_access_restriction PASSED [ 57%]
+tests/isolated_security/test_frontend_screens_real.py::test_all_screens_have_rtl_media PASSED [ 64%]
+tests/isolated_security/test_frontend_screens_real.py::test_no_placeholder_stubs_remaining PASSED [ 71%]
+tests/isolated_security/test_isolated_auth_native_groups.py::test_native_group_replacement_readonly PASSED [ 78%]
+tests/isolated_security/test_isolated_auth_native_groups.py::test_service_target_resolution_safe PASSED [ 85%]
+tests/isolated_security/test_p4_revocation_isolated.py::test_p4_store_flush_exists PASSED [ 92%]
+tests/isolated_security/test_p4_revocation_isolated.py::test_p4_adapter_revocation_exists PASSED [100%]
+
+============================== 14 passed in 0.17s ==============================

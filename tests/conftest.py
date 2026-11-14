@@ -26,6 +26,13 @@ if "homeassistant" not in sys.modules:
     sys.modules["homeassistant.helpers.storage"] = ha_mock.helpers.storage
     sys.modules["homeassistant.helpers.typing"] = ha_mock.helpers.typing
 
+    auth_mock = MagicMock()
+    auth_const_mock = MagicMock()
+    auth_const_mock.GROUP_ID_READ_ONLY = "system-read-only"
+    auth_mock.const = auth_const_mock
+    sys.modules["homeassistant.auth"] = auth_mock
+    sys.modules["homeassistant.auth.const"] = auth_const_mock
+
     class MockUnauthorized(Exception):
         def __init__(
             self,

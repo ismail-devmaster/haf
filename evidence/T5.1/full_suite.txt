@@ -1,0 +1,64 @@
+/home/ismabeast/.local/lib/python3.14/site-packages/pytest_asyncio/plugin.py:300: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the "fixture" caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to "function" scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.14.7, pytest-9.2.0, pluggy-1.7.0
+rootdir: /home/ismabeast/Desktop/ponglearn/haf
+configfile: pyproject.toml
+plugins: asyncio-1.4.1.post1, typeguard-4.4.4
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 2165 items
+
+tests/isolated_security/test_child_readonly_exact_replacement.py .....   [  0%]
+tests/isolated_security/test_frontend_screens_real.py .....              [  0%]
+tests/isolated_security/test_isolated_auth_native_groups.py ..           [  0%]
+tests/isolated_security/test_p4_revocation_isolated.py ..                [  0%]
+tests/storage/test_restore_safety.py .....                               [  0%]
+tests/storage/test_secrets_hygiene.py ....                               [  1%]
+tests/storage/test_storage_fuzz.py ..................................... [  2%]
+........................................................................ [  6%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+........................................................................ [ 16%]
+........................................................................ [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 26%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+........................................................................ [ 42%]
+........................................................................ [ 46%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 55%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+........................................................................ [ 65%]
+........................................................................ [ 69%]
+........................................................................ [ 72%]
+........................................................................ [ 75%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 85%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+...................                                                      [ 93%]
+tests/storage/test_storage_migration.py ........                         [ 93%]
+tests/test_domolux_api.py ...........                                    [ 94%]
+tests/test_domolux_catalog_api.py ......                                 [ 94%]
+tests/test_domolux_family_api.py ........                                [ 94%]
+tests/test_domolux_family_user_service.py ..........                     [ 95%]
+tests/test_domolux_ha_auth_adapter.py ...........................        [ 96%]
+tests/test_domolux_permission_api.py .......                             [ 96%]
+tests/test_domolux_permission_evaluator.py ....                          [ 97%]
+tests/test_domolux_permission_transactions.py ..........                 [ 97%]
+tests/test_domolux_roles.py ...........                                  [ 98%]
+tests/test_domolux_service_auth.py ......                                [ 98%]
+tests/test_domolux_subscription.py ....                                  [ 98%]
+tests/test_domolux_view_api.py ................                          [ 99%]
+tests/test_domolux_view_manager.py .....                                 [ 99%]
+tests/test_domolux_view_store.py .........                               [100%]
+
+============================= 2165 passed in 4.82s =============================

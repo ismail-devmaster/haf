@@ -15,7 +15,7 @@ import re
 from typing import Any, Optional
 import uuid
 
-from .const import ACCESS_LEVEL_CONTROL, ACCESS_LEVEL_READ
+from .const import ACCESS_LEVEL_CONTROL, ACCESS_LEVEL_READ, STORAGE_FORBIDDEN_ROOT_FIELDS
 from .models import UUID4_PATTERN, validate_user_id
 
 VIEW_PATH_PATTERN = re.compile(r"^[a-z0-9-]+$")
@@ -25,7 +25,6 @@ EXECUTABLE_CONTENT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-FORBIDDEN_FIELDS = {"password", "token", "auth_token", "hash", "secret"}
 
 
 class DomoluxViewValidationError(Exception):
@@ -96,7 +95,7 @@ def assert_no_forbidden_fields(obj: Any, path: str = "root") -> None:
     if isinstance(obj, dict):
         for k, v in obj.items():
             k_str = str(k).lower()
-            if k_str in FORBIDDEN_FIELDS:
+            if k_str in STORAGE_FORBIDDEN_ROOT_FIELDS:
                 raise DomoluxViewValidationError(
                     f"Security Violation: Forbidden credential field '{k}' found at path '{path}'."
                 )

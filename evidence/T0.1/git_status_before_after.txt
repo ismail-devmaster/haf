@@ -1,0 +1,80 @@
+On branch domolux-roles/baseline-p0
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   .gitignore
+	modified:   custom_components/domolux_roles/frontend.py
+	modified:   custom_components/domolux_roles/ha_auth_adapter.py
+	modified:   custom_components/domolux_roles/store.py
+	deleted:    dashboards/lovelace.dashboard_home.yaml
+	deleted:    dashboards/lovelace.dashboard_user.yaml
+	deleted:    dashboards/lovelace.fethi_room.yaml
+	deleted:    dashboards/lovelace.kitchen_dashboard.yaml
+	deleted:    dashboards/lovelace.meeting_room.yaml
+	deleted:    dashboards/lovelace.salle_de_bain.yaml
+	deleted:    dashboards/lovelace.working_space.yaml
+	modified:   pyproject.toml
+	modified:   src/panels/lovelace/views/hui-view-background.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	components/
+	custom_components/domolux_roles/.claude/
+	custom_components/domolux_roles/frontend/11584.d4170153ed4ba5d1.js
+	custom_components/domolux_roles/frontend/child_readonly_view.js
+	custom_components/domolux_roles/frontend/family_permissions_ui.js
+	custom_components/domolux_roles/frontend/s1_family_dashboard.js
+	custom_components/domolux_roles/frontend/s2_child_permissions.js
+	custom_components/domolux_roles/frontend/s3_view_access.js
+	custom_components/domolux_roles/frontend/s4_device_entity_control.js
+	custom_components/domolux_roles/frontend/s5_service_target_resolution.js
+	custom_components/domolux_roles/frontend/s6_audit_log.js
+	custom_components/domolux_roles/frontend/s7_family_isolation.js
+	custom_components/domolux_roles/frontend/s8_child_routing.js
+	custom_components/domolux_roles/frontend/s9_responsive_rtl.js
+	docs/AUTONOMOUS_EXECUTION_PROMPT.md
+	docs/domolux-roles/
+	evidence/
+	tests/isolated_security/
+
+no changes added to commit (use "git add" and/or "git commit -a")
+On branch domolux-roles/hardening-p1
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   .gitignore
+	modified:   custom_components/domolux_roles/frontend.py
+	modified:   custom_components/domolux_roles/ha_auth_adapter.py
+	modified:   custom_components/domolux_roles/store.py
+	deleted:    dashboards/lovelace.dashboard_home.yaml
+	deleted:    dashboards/lovelace.dashboard_user.yaml
+	deleted:    dashboards/lovelace.fethi_room.yaml
+	deleted:    dashboards/lovelace.kitchen_dashboard.yaml
+	deleted:    dashboards/lovelace.meeting_room.yaml
+	deleted:    dashboards/lovelace.salle_de_bain.yaml
+	deleted:    dashboards/lovelace.working_space.yaml
+	modified:   pyproject.toml
+	modified:   src/panels/lovelace/views/hui-view-background.ts
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	components/
+	custom_components/domolux_roles/.claude/
+	custom_components/domolux_roles/frontend/11584.d4170153ed4ba5d1.js
+	custom_components/domolux_roles/frontend/child_readonly_view.js
+	custom_components/domolux_roles/frontend/family_permissions_ui.js
+	custom_components/domolux_roles/frontend/s1_family_dashboard.js
+	custom_components/domolux_roles/frontend/s2_child_permissions.js
+	custom_components/domolux_roles/frontend/s3_view_access.js
+	custom_components/domolux_roles/frontend/s4_device_entity_control.js
+	custom_components/domolux_roles/frontend/s5_service_target_resolution.js
+	custom_components/domolux_roles/frontend/s6_audit_log.js
+	custom_components/domolux_roles/frontend/s7_family_isolation.js
+	custom_components/domolux_roles/frontend/s8_child_routing.js
+	custom_components/domolux_roles/frontend/s9_responsive_rtl.js
+	docs/AUTONOMOUS_EXECUTION_PROMPT.md
+	docs/domolux-roles/
+	evidence/
+	tests/isolated_security/
+
+no changes added to commit (use "git add" and/or "git commit -a")
