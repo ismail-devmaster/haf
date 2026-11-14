@@ -26,3 +26,4 @@
 | T5.3 | BLOCKED | —                | `evidence/T5.3/store_atomicity.md`                        | HA Store atomic semantics documented; kill -9 container test deferred to Phase 11 (no HA container on host)                   |
 | T5.4 | DONE    | (pending commit) | `evidence/T5.4/restore_run.txt`                           | Restore re-validated against live hass.auth; deleted/disabled/admin Father never resurrected                                  |
 | T5.5 | DONE    | (pending commit) | `evidence/T5.5/hygiene_run.txt`                           | No credential fields stored or logged; source + runtime assertions                                                            |
+| T6.1 | DONE    | (pending commit) | `evidence/T6.1/gate_matrix_run.txt`                      | Gate matrix for every domolux/* command published in docs/WS_API.md; auto-generated test fails CI if a command lacks a row (56 passed) |
