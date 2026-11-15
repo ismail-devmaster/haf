@@ -9,6 +9,7 @@ Implements Phase 3 Rule Evaluation Hierarchy:
 """
 
 from dataclasses import dataclass
+import inspect
 import logging
 from typing import Any, Optional
 
@@ -79,10 +80,19 @@ class DomoluxPermissionEvaluator:
         """Check if user_id is a Home Assistant Core Administrator or Owner."""
         if not hasattr(self.hass, "auth") or self.hass.auth is None:
             return False
-        user = await self.hass.auth.async_get_user(user_id)
+        try:
+            res = self.hass.auth.async_get_user(user_id)
+            if inspect.isawaitable(res):
+                user = await res
+            else:
+                user = res
+        except Exception:
+            return False
         if user is None:
             return False
-        return bool(user.is_admin or user.is_owner)
+        is_admin = getattr(user, "is_admin", False)
+        is_owner = getattr(user, "is_owner", False)
+        return bool((is_admin is True) or (is_owner is True))
 
     def _get_entity_device_and_area(
         self, entity_id: str

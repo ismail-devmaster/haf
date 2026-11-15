@@ -29,6 +29,12 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import Unauthorized
 import voluptuous as vol
 
+from .api_schemas import (
+    BOUNDED_STR,
+    SANITIZED_DISPLAY_NAME,
+    VIEW_PATH_SCHEMA,
+    VIEW_UUID_SCHEMA,
+)
 from .const import ACCESS_LEVEL_CONTROL, ACCESS_LEVEL_READ, DOMAIN
 from .family_api import ERR_FATHER_REQUIRED, ERR_INVALID_INPUT, _require_father
 from .permission_evaluator import DomoluxPermissionEvaluator
@@ -185,8 +191,8 @@ async def ws_view_list(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/view/get",
-        vol.Optional("view_id"): str,
-        vol.Optional("view_path"): str,
+        vol.Optional("view_id"): VIEW_UUID_SCHEMA,
+        vol.Optional("view_path"): VIEW_PATH_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -273,10 +279,10 @@ async def ws_view_get(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/view/create",
-        vol.Required("title"): str,
-        vol.Required("view_path"): str,
-        vol.Optional("icon"): str,
-        vol.Optional("layout"): str,
+        vol.Required("title"): SANITIZED_DISPLAY_NAME,
+        vol.Required("view_path"): VIEW_PATH_SCHEMA,
+        vol.Optional("icon"): BOUNDED_STR,
+        vol.Optional("layout"): vol.In(["grid", "masonry", "sections", "single-column"]),
         vol.Optional("cards"): list,
     }
 )
@@ -335,7 +341,7 @@ async def ws_view_create(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/view/update",
-        vol.Required("view_id"): str,
+        vol.Required("view_id"): VIEW_UUID_SCHEMA,
         vol.Required("updates"): dict,
     }
 )
@@ -392,7 +398,7 @@ async def ws_view_update(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/view/delete",
-        vol.Required("view_id"): str,
+        vol.Required("view_id"): VIEW_UUID_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -478,8 +484,8 @@ async def _async_forward_evaluated_event(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/view/subscribe",
-        vol.Optional("view_id"): str,
-        vol.Optional("view_path"): str,
+        vol.Optional("view_id"): VIEW_UUID_SCHEMA,
+        vol.Optional("view_path"): VIEW_PATH_SCHEMA,
     }
 )
 @websocket_api.async_response

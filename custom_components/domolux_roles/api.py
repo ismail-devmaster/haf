@@ -16,6 +16,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 import voluptuous as vol
 
+from .api_schemas import USER_ID_SCHEMA
 from .const import DOMAIN, ROLE_FATHER, ROLE_USER
 from .models import DomoluxRoleValidationError
 from .role_manager import DomoluxRoleManager
@@ -148,7 +149,7 @@ async def ws_list_eligible_users(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/role/set_father",
-        vol.Required("user_id"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -260,7 +261,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/permission/subscribe",
-        vol.Optional("target_user_id"): str,
+        vol.Optional("target_user_id"): USER_ID_SCHEMA,
     }
 )
 @websocket_api.async_response

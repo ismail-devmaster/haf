@@ -21,6 +21,16 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import Unauthorized
 import voluptuous as vol
 
+from .api_schemas import (
+    ACCESS_LEVEL,
+    BOUNDED_STR,
+    EFFECT,
+    EVALUATE_TARGET_TYPE,
+    RULE_ID,
+    TARGET_TYPE,
+    USER_ID_SCHEMA,
+    VIEW_PATH_SCHEMA,
+)
 from .const import (
     ACCESS_LEVEL_CONTROL,
     ACCESS_LEVEL_NONE,
@@ -227,7 +237,7 @@ async def _verify_target_family_member(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/permission/get",
-        vol.Required("user_id"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -262,8 +272,8 @@ async def ws_permission_get(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/permission/set_default_level",
-        vol.Required("user_id"): str,
-        vol.Required("default_access_level"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
+        vol.Required("default_access_level"): ACCESS_LEVEL,
     }
 )
 @websocket_api.async_response
@@ -324,11 +334,11 @@ async def ws_permission_set_default_level(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/permission/set_entity_rule",
-        vol.Required("user_id"): str,
-        vol.Required("target_type"): str,
-        vol.Required("target_id"): str,
-        vol.Required("access_level"): str,
-        vol.Optional("rule_id"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
+        vol.Required("target_type"): TARGET_TYPE,
+        vol.Required("target_id"): BOUNDED_STR,
+        vol.Required("access_level"): ACCESS_LEVEL,
+        vol.Optional("rule_id"): RULE_ID,
     }
 )
 @websocket_api.async_response
@@ -419,8 +429,8 @@ async def ws_permission_set_entity_rule(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/permission/remove_entity_rule",
-        vol.Required("user_id"): str,
-        vol.Required("rule_id"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
+        vol.Required("rule_id"): RULE_ID,
     }
 )
 @websocket_api.async_response
@@ -482,9 +492,9 @@ async def ws_permission_remove_entity_rule(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/permission/set_view_rule",
-        vol.Required("user_id"): str,
-        vol.Required("view_path"): str,
-        vol.Required("effect"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
+        vol.Required("view_path"): VIEW_PATH_SCHEMA,
+        vol.Required("effect"): EFFECT,
     }
 )
 @websocket_api.async_response
@@ -559,8 +569,8 @@ async def ws_permission_set_view_rule(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/permission/remove_view_rule",
-        vol.Required("user_id"): str,
-        vol.Required("view_path"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
+        vol.Required("view_path"): VIEW_PATH_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -622,7 +632,7 @@ async def ws_permission_remove_view_rule(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/permission/reset",
-        vol.Required("user_id"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -679,10 +689,10 @@ async def ws_permission_reset(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/permission/evaluate",
-        vol.Required("user_id"): str,
-        vol.Required("target_type"): str,
-        vol.Required("target_id"): str,
-        vol.Optional("required_level"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
+        vol.Required("target_type"): EVALUATE_TARGET_TYPE,
+        vol.Required("target_id"): BOUNDED_STR,
+        vol.Optional("required_level"): ACCESS_LEVEL,
     }
 )
 @websocket_api.async_response

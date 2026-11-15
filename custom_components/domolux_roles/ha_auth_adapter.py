@@ -12,6 +12,7 @@ VERSION ISOLATION & SECURITY BOUNDARY:
 
 from __future__ import annotations
 
+from homeassistant.auth.const import GROUP_ID_READ_ONLY
 import asyncio
 from contextlib import asynccontextmanager
 import inspect
@@ -340,12 +341,24 @@ class DomoluxHAAuthAdapter:
         self._assert_managed_user(user)
 
         try:
-            if hasattr(self.hass.auth, "async_update_user"):
-                await self.hass.auth.async_update_user(user, is_active=True)
-            else:
-                user.is_active = True
-                self._async_schedule_save()
-            _LOGGER.info("Activated Domolux managed user '%s'.", user_id)
+            if not hasattr(self.hass.auth, "async_update_user") or not callable(getattr(self.hass.auth, "async_update_user", None)):
+                raise DomoluxAuthAdapterError("Fail closed: async_update_user unavailable for Child group replacement")
+            # Reject owner before provisioning
+            if getattr(user, "is_owner", False):
+                raise DomoluxAuthAdapterError("Fail closed: owner account rejected for Child provisioning")
+            # Exactly one call, group replacement before activation
+            await self.hass.auth.async_update_user(user, group_ids=[GROUP_ID_READ_ONLY], is_active=True)
+            # Post-verify exact membership
+            actual = {group.id for group in getattr(user, "groups", []) if hasattr(group, "id")}
+            if actual != {GROUP_ID_READ_ONLY}:
+                # Deactivate where supported; do not continue
+                if hasattr(self.hass.auth, "async_update_user") and callable(getattr(self.hass.auth, "async_update_user")):
+                    try:
+                        await self.hass.auth.async_update_user(user, group_ids=[GROUP_ID_READ_ONLY], is_active=False)
+                    except Exception:
+                        pass
+                raise DomoluxAuthAdapterError(f"Fail closed: group verification failed {actual} != {{{GROUP_ID_READ_ONLY}}}")
+            _LOGGER.info("Activated Domolux managed user '%s' with exact read-only group.", user_id)
             return True
         except Exception as err:
             raise DomoluxAuthAdapterError(
@@ -371,6 +384,7 @@ class DomoluxHAAuthAdapter:
                 _LOGGER.warning("Error revoking refresh token for user '%s': %s", user_id, err)
 
         _LOGGER.info("Revoked %d active session tokens for user '%s'.", revoked_count, user_id)
+        # T-SEC-13/15: close active WebSocket connections for revoked user (extend when connection registry available)
         return revoked_count
 
     async def async_delete_managed_user(self, user_id: str) -> bool:

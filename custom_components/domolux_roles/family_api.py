@@ -20,6 +20,13 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import Unauthorized
 import voluptuous as vol
 
+from .api_schemas import (
+    METADATA_SCHEMA,
+    SANITIZED_DISPLAY_NAME,
+    SANITIZED_PASSWORD,
+    USERNAME_STRICT,
+    USER_ID_SCHEMA,
+)
 from .const import DOMAIN, ROLE_FATHER
 from .family_user_service import (
     DomoluxDuplicateUsernameError,
@@ -196,12 +203,12 @@ async def ws_family_list(
 ) -> None:
     """List all managed family members (Father only)."""
     try:
-        await _require_admin_or_father(hass, connection)
+        await _require_father(hass, connection)
     except Unauthorized:
         connection.send_error(
             msg["id"],
             ERR_FATHER_REQUIRED,
-            "Privilege error: Administrator or Father role required.",
+            "Privilege error: Father role required.",
         )
         return
 
@@ -222,10 +229,10 @@ async def ws_family_list(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/family/create",
-        vol.Required("display_name"): str,
-        vol.Required("username"): str,
-        vol.Required("password"): str,
-        vol.Optional("metadata"): dict,
+        vol.Required("display_name"): SANITIZED_DISPLAY_NAME,
+        vol.Required("username"): USERNAME_STRICT,
+        vol.Required("password"): SANITIZED_PASSWORD,
+        vol.Optional("metadata"): METADATA_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -234,14 +241,14 @@ async def ws_family_create(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Create a new managed family member (Admin only with Father preserved for compatibility; now admin-enforced)."""
+    """Create a new managed family member (Father only)."""
     try:
-        await _require_admin_or_father(hass, connection)
+        await _require_father(hass, connection)
     except Unauthorized:
         connection.send_error(
             msg["id"],
             ERR_FATHER_REQUIRED,
-            "Privilege error: Administrator required.",
+            "Privilege error: Father role required.",
         )
         return
 
@@ -288,7 +295,7 @@ async def ws_family_create(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/family/delete",
-        vol.Required("user_id"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -339,7 +346,7 @@ async def ws_family_delete(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/family/disable",
-        vol.Required("user_id"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -392,7 +399,7 @@ async def ws_family_disable(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/family/enable",
-        vol.Required("user_id"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -445,8 +452,8 @@ async def ws_family_enable(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/family/change_password",
-        vol.Required("user_id"): str,
-        vol.Required("new_password"): str,
+        vol.Required("user_id"): USER_ID_SCHEMA,
+        vol.Required("new_password"): SANITIZED_PASSWORD,
     }
 )
 @websocket_api.async_response

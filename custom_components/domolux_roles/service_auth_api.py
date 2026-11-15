@@ -16,6 +16,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import Unauthorized
 import voluptuous as vol
 
+from .api_schemas import (
+    DOMAIN_SCHEMA,
+    ENTITY_ID_LIST_SCHEMA,
+    SERVICE_DATA_SCHEMA,
+    SERVICE_SCHEMA,
+)
 from .const import ACCESS_LEVEL_CONTROL, DOMAIN
 from .permission_evaluator import DomoluxPermissionEvaluator
 from .view_api import _get_evaluator
@@ -30,6 +36,24 @@ ERR_TARGET_INVALID = "target_invalid"
 
 # Supported control services derived from existing Child dashboard capabilities.
 # Admin/core/management services are explicitly excluded.
+DANGEROUS_DOMAINS = {
+    "shell_command",
+    "python_script",
+    "rest_command",
+    "automation",
+    "script",
+    "scene",
+    "persistent_notification",
+    "notify",
+    "tts",
+    "recorder",
+    "logbook",
+    "system_log",
+    "hassio",
+    "homeassistant",
+    "config_entries",
+}
+
 ALLOWED_CONTROL_DOMAINS = {
     "light",
     "switch",
@@ -65,10 +89,10 @@ ALLOWED_CONTROL_SERVICES = {
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/service/authorize",
-        vol.Required("domain"): str,
-        vol.Required("service"): str,
-        vol.Optional("entity_id"): str,
-        vol.Optional("service_data"): dict,
+        vol.Required("domain"): DOMAIN_SCHEMA,
+        vol.Required("service"): SERVICE_SCHEMA,
+        vol.Optional("entity_id"): ENTITY_ID_LIST_SCHEMA,
+        vol.Optional("service_data"): SERVICE_DATA_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -88,9 +112,7 @@ async def ws_service_authorize(
     service = msg.get("service")
     entity_id = msg.get("entity_id")
 
-    # Validate domain/service against deliberate allowlist.
-    # Reject arbitrary, admin-only, core management, and unsupported operations.
-    if domain not in ALLOWED_CONTROL_DOMAINS:
+    if domain in DANGEROUS_DOMAINS or domain not in ALLOWED_CONTROL_DOMAINS:
         connection.send_error(
             msg["id"], ERR_SERVICE_NOT_ALLOWED, f"Domain '{domain}' not permitted for Child control."
         )
@@ -101,23 +123,14 @@ async def ws_service_authorize(
         )
         return
 
-    # Reject wildcard / broad targets that could expand to unauthorized entities.
     if entity_id is not None:
         if isinstance(entity_id, str) and (entity_id == "all" or entity_id.startswith("device.") or entity_id.startswith("area.")):
             connection.send_error(
                 msg["id"], ERR_TARGET_INVALID, "Wildcard or broad targets not supported. Provide explicit entity_id."
             )
             return
-        # Reject list targets that mix allowed and denied (must check each).
-        if isinstance(entity_id, list):
-            if not entity_id:
-                connection.send_error(msg["id"], ERR_TARGET_INVALID, "Empty target list.")
-                return
-            # For now, reject multi-entity targets unless all explicitly permitted.
-            # Full per-item evaluation is required for safe batch control.
-            connection.send_error(
-                msg["id"], ERR_TARGET_INVALID, "Multi-entity batch targets require individual authorization checks per item."
-            )
+        if isinstance(entity_id, list) and not entity_id:
+            connection.send_error(msg["id"], ERR_TARGET_INVALID, "Empty target list.")
             return
 
     if not domain or not service:
@@ -126,13 +139,11 @@ async def ws_service_authorize(
 
     evaluator: DomoluxPermissionEvaluator = _get_evaluator(hass)
 
-    # Father / Admin override -> full control allowed
     is_father = evaluator._is_father(user_id)
     if is_father:
         connection.send_result(msg["id"], {"authorized": True, "reason": "father_override"})
         return
 
-    # Admin / Owner check (same as evaluator)
     try:
         is_admin_owner = await evaluator._is_admin_or_owner(user_id)
     except Exception:
@@ -141,19 +152,20 @@ async def ws_service_authorize(
         connection.send_result(msg["id"], {"authorized": True, "reason": "admin_override"})
         return
 
-    # Evaluate control access on target entity if provided
     if entity_id:
+        targets = [entity_id] if isinstance(entity_id, str) else entity_id
         try:
-            result = await evaluator.evaluate_entity_access(
-                user_id, entity_id, required_level=ACCESS_LEVEL_CONTROL
-            )
+            for tid in targets:
+                result = await evaluator.evaluate_entity_access(
+                    user_id, tid, required_level=ACCESS_LEVEL_CONTROL
+                )
+                if not result.granted:
+                    connection.send_error(
+                        msg["id"], ERR_SERVICE_DENIED, f"Control permission denied for entity '{tid}'."
+                    )
+                    return
         except Exception:
             connection.send_error(msg["id"], "internal_error", "Evaluation failed.")
-            return
-        if not result.granted:
-            connection.send_error(
-                msg["id"], ERR_SERVICE_DENIED, "Control permission denied for entity."
-            )
             return
 
     connection.send_result(msg["id"], {"authorized": True, "reason": "entity_control_granted"})
@@ -162,10 +174,10 @@ async def ws_service_authorize(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "domolux/service/enforce",
-        vol.Required("domain"): str,
-        vol.Required("service"): str,
-        vol.Optional("entity_id"): str,
-        vol.Optional("service_data"): dict,
+        vol.Required("domain"): DOMAIN_SCHEMA,
+        vol.Required("service"): SERVICE_SCHEMA,
+        vol.Optional("entity_id"): ENTITY_ID_LIST_SCHEMA,
+        vol.Optional("service_data"): SERVICE_DATA_SCHEMA,
     }
 )
 @websocket_api.async_response
@@ -181,7 +193,20 @@ async def ws_service_enforce(
         return
 
     user_id = user.id
+    domain = msg.get("domain")
+    service = msg.get("service")
     entity_id = msg.get("entity_id")
+
+    if domain in DANGEROUS_DOMAINS or domain not in ALLOWED_CONTROL_DOMAINS:
+        connection.send_error(
+            msg["id"], ERR_SERVICE_NOT_ALLOWED, f"Domain '{domain}' not permitted for Child control."
+        )
+        return
+    if service not in ALLOWED_CONTROL_SERVICES:
+        connection.send_error(
+            msg["id"], ERR_SERVICE_NOT_ALLOWED, f"Service '{service}' not permitted."
+        )
+        return
 
     evaluator = _get_evaluator(hass)
     is_father = evaluator._is_father(user_id)
@@ -191,17 +216,22 @@ async def ws_service_enforce(
     except Exception:
         pass
 
-    # Authorization gate
-    authorized = False
-    if is_father or is_admin_owner:
-        authorized = True
-    elif entity_id:
-        try:
-            res = await evaluator.evaluate_entity_access(
-                user_id, entity_id, required_level=ACCESS_LEVEL_CONTROL
-            )
-            authorized = res.granted
-        except Exception:
+    # Authorization gate (atomic batch evaluation)
+    authorized = True
+    if not (is_father or is_admin_owner):
+        if entity_id:
+            targets = [entity_id] if isinstance(entity_id, str) else entity_id
+            try:
+                for tid in targets:
+                    res = await evaluator.evaluate_entity_access(
+                        user_id, tid, required_level=ACCESS_LEVEL_CONTROL
+                    )
+                    if not res.granted:
+                        authorized = False
+                        break
+            except Exception:
+                authorized = False
+        else:
             authorized = False
 
     if not authorized:
