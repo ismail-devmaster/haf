@@ -37,6 +37,7 @@ from .family_user_service import (
     DomoluxSecurityInvariantError,
 )
 from .models import FamilyMemberRecord
+from .revocation import get_revocation_orchestrator
 from .role_manager import DomoluxRoleManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -123,8 +124,18 @@ async def _require_father(
     return user.id
 
 
-async def _verify_and_get_target_member(
-    hass: HomeAssistant,
+def _prune_deleted_member(hass: HomeAssistant, user_id: str) -> None:
+    """Remove every residual grant for a deleted family member."""
+    domain_data = hass.data.get(DOMAIN, {})
+    for entry_data in domain_data.values():
+        if isinstance(entry_data, dict) and "store" in entry_data:
+            store = entry_data["store"]
+            store.remove_family_member(user_id)
+            store.reset_user_permissions(user_id)
+            return
+
+
+async def _verify_and_get_target_member(    hass: HomeAssistant,
     family_service: DomoluxFamilyUserService,
     target_user_id: str,
     father_user_id: str,
@@ -324,6 +335,16 @@ async def ws_family_delete(
     try:
         await _verify_and_get_target_member(hass, service, target_user_id, father_id)
         await service.async_delete_family_user(target_user_id)
+        orchestrator = get_revocation_orchestrator(hass)
+        if orchestrator is not None:
+            await orchestrator.async_apply(
+                target_user_id,
+                "family.deleted",
+                mutate=lambda: _prune_deleted_member(hass, target_user_id),
+                revoke_tokens=False,
+                hard_close=True,
+                actor_id=father_id,
+            )
         connection.send_result(
             msg["id"],
             {
@@ -375,6 +396,15 @@ async def ws_family_disable(
     try:
         await _verify_and_get_target_member(hass, service, target_user_id, father_id)
         await service.async_disable_family_user(target_user_id)
+        orchestrator = get_revocation_orchestrator(hass)
+        if orchestrator is not None:
+            await orchestrator.async_apply(
+                target_user_id,
+                "family.disabled",
+                revoke_tokens=False,
+                hard_close=True,
+                actor_id=father_id,
+            )
         member = service.get_family_member(target_user_id)
         connection.send_result(
             msg["id"],

@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
 from .api import async_register_websocket_commands, async_register_subscription_command
+from .audit import get_audit_log
 from .family_api import async_register_family_api_commands
 from .family_user_service import DomoluxFamilyUserService
 from .frontend import async_register_frontend, async_unregister_frontend
@@ -23,6 +24,7 @@ from .const import DOMAIN
 from .role_manager import DomoluxRoleManager
 from .permission_api import async_register_permission_api_commands
 from .permission_evaluator import DomoluxPermissionEvaluator
+from .revocation import DomoluxRevocationOrchestrator
 from .session_registry import (
     DomoluxSessionRegistry,
     async_register_session_registry,
@@ -62,6 +64,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     view_store = DomoluxViewStore(hass)
     view_manager = DomoluxViewManager(hass, view_store, manager)
     session_registry = DomoluxSessionRegistry()
+    audit_log = get_audit_log(hass)
+    revocation = DomoluxRevocationOrchestrator(
+        hass,
+        store,
+        registry=session_registry,
+        adapter=adapter,
+        audit=audit_log,
+    )
 
     await manager.async_initialize()
     await view_manager.async_initialize()
@@ -77,6 +87,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "view_store": view_store,
         "view_manager": view_manager,
         "session_registry": session_registry,
+        "audit_log": audit_log,
+        "revocation": revocation,
         "unregister_stop": unregister_stop,
     }
 

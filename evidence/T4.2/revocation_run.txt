@@ -1,0 +1,12 @@
+# T4.2/T4.3 revocation validation
+# date: 2026-11-15T13:51:57Z
+# command: python -m pytest tests/test_domolux_revocation.py -q
+collected 17 items
+
+tests/test_domolux_revocation.py .................                       [100%]
+
+============================== 17 passed in 0.12s ==============================
+
+# command: full suite
+
+============================= 2474 passed in 5.40s =============================

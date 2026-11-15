@@ -20,6 +20,7 @@ from .api_schemas import USER_ID_SCHEMA
 from .const import DOMAIN, ROLE_FATHER, ROLE_USER
 from .models import DomoluxRoleValidationError
 from .role_manager import DomoluxRoleManager
+from .revocation import get_revocation_orchestrator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,6 +48,22 @@ def track_connection(hass: HomeAssistant, connection) -> None:
     registry = get_session_registry(hass)
     if registry is not None:
         registry.register_connection(connection)
+
+
+async def _revoke_all_refresh_tokens(hass: HomeAssistant, user_id: str) -> int:
+    """Revoke every refresh token for ``user_id`` through the supported API."""
+    auth = getattr(hass, "auth", None)
+    if auth is None:
+        raise RuntimeError("Home Assistant auth unavailable; cannot revoke tokens.")
+    user = await auth.async_get_user(user_id)
+    if user is None:
+        return 0
+    tokens = list(getattr(user, "refresh_tokens", {}).values())
+    revoked = 0
+    for token in tokens:
+        await auth.async_remove_refresh_token(token)
+        revoked += 1
+    return revoked
 
 
 def _require_admin(connection: websocket_api.ActiveConnection) -> None:
@@ -246,7 +263,24 @@ async def ws_remove_father(
 
     try:
         manager = _get_manager(hass)
+        previous_father = manager.get_father_assignment()
         revoked = await manager.async_revoke_father()
+
+        # T4.2: revoking Father is a security reduction. Revoke the previous
+        # Father's refresh tokens and close tracked connections before we
+        # report success. The store change above is already durable.
+        if revoked and previous_father is not None:
+            orchestrator = get_revocation_orchestrator(hass)
+            if orchestrator is not None:
+                await orchestrator.async_apply(
+                    previous_father.user_id,
+                    "father.revoked",
+                    reduction=True,
+                    revoke_tokens=True,
+                    hard_close=True,
+                    token_revoker=lambda uid: _revoke_all_refresh_tokens(hass, uid),
+                    actor_id=connection.user.id if connection.user else None,
+                )
 
         connection.send_result(
             msg["id"],

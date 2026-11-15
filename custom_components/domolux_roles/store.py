@@ -59,6 +59,11 @@ class DomoluxRoleStore:
         self.hass = hass
         self._store = self._init_store(hass)
         self._data: DomoluxAuthState = DomoluxAuthState()
+        # Monotonic revisions used to invalidate derived caches and to tell
+        # subscribers that a security-relevant change happened (T4.2/T4.3).
+        self._profile_revision = 0
+        self._registry_revision = 0
+        self._catalog_revision = 0
 
     def _init_store(self, hass: Any) -> Any:
         """Initialize Home Assistant Store helper for domolux_auth key."""
@@ -147,6 +152,36 @@ class DomoluxRoleStore:
         key = (profile_revision, registry_revision, catalog_revision)
         _LOGGER.info("DomoluxRoleStore flush for revisions %s (P4)", key)
         # No token storage; only cache invalidation by revision tuple.
+
+    @property
+    def revisions(self) -> dict[str, int]:
+        """Return the current revision counters."""
+        return {
+            "profile": self._profile_revision,
+            "registry": self._registry_revision,
+            "catalog": self._catalog_revision,
+        }
+
+    def bump_revisions(
+        self,
+        *,
+        profile: bool = True,
+        registry: bool = False,
+        catalog: bool = False,
+    ) -> dict[str, int]:
+        """Increment the requested revisions and return the new counters.
+
+        This is synchronous on purpose: callers must bump *before* flushing
+        security-reducing state so no reader can observe stale grants paired
+        with a new revision.
+        """
+        if profile:
+            self._profile_revision += 1
+        if registry:
+            self._registry_revision += 1
+        if catalog:
+            self._catalog_revision += 1
+        return self.revisions
 
     def validate(self, raw_data: dict[str, Any]) -> dict[str, Any]:
         """Validate raw input structure, forbid secrets, enforce single-father rule.

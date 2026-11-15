@@ -59,6 +59,11 @@ from .models import (
     ViewPermissionRule,
 )
 from .permission_evaluator import DomoluxPermissionEvaluator
+from .revocation import (
+    get_revocation_orchestrator,
+    is_permission_reduction,
+    reduced_targets,
+)
 from .store import DomoluxRoleStore
 
 _LOGGER = logging.getLogger(__name__)
@@ -151,10 +156,31 @@ async def _execute_atomic_permission_mutation(
                 target_user_id, new_perm_set.to_dict()
             )
 
-        # Step 5: Persist New Domolux State
+        # Step 5: Persist New Domolux State through the ordered revocation
+        # routine. Reductions bump revisions and flush durably before the
+        # caller can report success; increases bump and save as well.
         store.set_user_permissions(new_perm_set)
+        new_dict = new_perm_set.to_dict()
+        reduction = is_permission_reduction(old_dict, new_dict)
+        removed = reduced_targets(old_dict, new_dict) if reduction else []
+        orchestrator = get_revocation_orchestrator(hass)
         try:
-            await store.async_save()
+            if orchestrator is not None:
+                await orchestrator.async_apply(
+                    target_user_id,
+                    "permission.reduced" if reduction else "permission.updated",
+                    reduction=reduction,
+                    revoke_tokens=False,
+                    hard_close=False,
+                    removed_targets=removed,
+                    details={
+                        "source": "permission_api",
+                        "reduction": reduction,
+                        "removed_targets": removed,
+                    },
+                )
+            else:
+                await store.async_save()
         except Exception as persist_err:
             _LOGGER.error(
                 "Domolux store persistence failed for user %s, rolling back HA policy: %s",
