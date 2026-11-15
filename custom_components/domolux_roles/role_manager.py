@@ -45,6 +45,55 @@ class DomoluxRoleManager:
             await self.store.async_load()
             await self._async_validate_and_sync_locked()
 
+    async def async_reconcile(self) -> None:
+        """Full startup reconciliation: Father, family members, permissions."""
+        async with self._lock:
+            await self._async_validate_and_sync_locked()
+            await self._async_reconcile_family_locked()
+
+    async def _async_reconcile_family_locked(self) -> None:
+        """Prune orphans, suspend disabled/admin members, drop dangling grants."""
+        from .const import STATUS_SUSPENDED_ADMIN, STATUS_SUSPENDED_DISABLED
+        from .models import FamilyMemberRecord  # noqa: F401
+
+        changed = False
+        auth = getattr(self.hass, "auth", None)
+
+        for user_id, member in list(self.store.data.family_members.items()):
+            user = None
+            if auth is not None and hasattr(auth, "async_get_user"):
+                try:
+                    user = await auth.async_get_user(user_id)
+                except Exception:
+                    user = None
+
+            if user is None and auth is not None:
+                # Deleted from HA: prune member and its grants.
+                self.store.remove_family_member(user_id)
+                self.store.reset_user_permissions(user_id)
+                changed = True
+                continue
+
+            if user is not None:
+                if getattr(user, "is_disabled", False):
+                    if getattr(member, "status", None) != STATUS_SUSPENDED_DISABLED:
+                        member.status = STATUS_SUSPENDED_DISABLED
+                        changed = True
+                    continue
+                if getattr(user, "is_admin", False) or getattr(user, "is_owner", False):
+                    if getattr(member, "status", None) != STATUS_SUSPENDED_ADMIN:
+                        member.status = STATUS_SUSPENDED_ADMIN
+                        changed = True
+
+        # Drop permissions for users that are not managed family members.
+        for user_id in list(self.store.data.permissions.keys()):
+            if self.store.get_family_member(user_id) is None:
+                self.store.reset_user_permissions(user_id)
+                changed = True
+
+        if changed:
+            await self.store.async_save()
+
     def get_father_assignment(self) -> Optional[FatherRoleAssignment]:
         """Return active Father assignment if present."""
         father = self.store.get_father()

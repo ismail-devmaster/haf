@@ -75,7 +75,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await manager.async_initialize()
     await view_manager.async_initialize()
+    await manager.async_reconcile()
     unregister_stop = async_register_session_registry(hass, session_registry)
+    bus = getattr(hass, "bus", None)
+    if bus is not None and hasattr(bus, "async_listen"):
+        def _on_started(_event):
+            hass.async_create_task(manager.async_reconcile())
+        bus.async_listen("homeassistant_started", _on_started)
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
