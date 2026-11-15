@@ -18,6 +18,7 @@ import voluptuous as vol
 
 from .api_schemas import USER_ID_SCHEMA
 from .const import DOMAIN, ROLE_FATHER, ROLE_USER
+from .audit import get_audit_log
 from .models import DomoluxRoleValidationError
 from .role_manager import DomoluxRoleManager
 from .revocation import get_revocation_orchestrator
@@ -70,9 +71,28 @@ def _require_admin(connection: websocket_api.ActiveConnection) -> None:
     """Check if the connected user is an active Home Assistant Administrator or Owner."""
     user = connection.user
     if user is None or getattr(user, "is_disabled", False):
+        _record_denied(connection, "admin_required")
         raise websocket_api.Unauthorized()
     if not (getattr(user, "is_admin", False) or getattr(user, "is_owner", False)):
+        _record_denied(connection, "admin_required")
         raise websocket_api.Unauthorized(user_id=user.id)
+
+
+def _record_denied(connection, reason: str) -> None:
+    """Best-effort audit recording; never raises and never blocks denial."""
+    hass = getattr(connection, "hass", None)
+    if hass is None:
+        return
+    try:
+        user = getattr(connection, "user", None)
+        get_audit_log(hass).record(
+            "command.denied",
+            actor_id=getattr(user, "id", None),
+            outcome="denied",
+            reason=reason,
+        )
+    except Exception:
+        pass
 
 @websocket_api.websocket_command(
     {

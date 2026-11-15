@@ -56,6 +56,7 @@ class SubscriptionRecord:
     user_id: str
     kind: str
     unsub: Callable[[], Any]
+    notify: Optional[Callable[[], Any]] = None
 
     def describe(self) -> dict[str, Any]:
         """Return a serialisable description (never includes the callback)."""
@@ -168,6 +169,7 @@ class DomoluxSessionRegistry:
         unsub: Callable[[], Any],
         *,
         kind: str = "permission",
+        notify: Optional[Callable[[], Any]] = None,
     ) -> Optional[SubscriptionRecord]:
         """Track a Domolux subscription and make sure it is cleaned up.
 
@@ -192,6 +194,7 @@ class DomoluxSessionRegistry:
             user_id=record.user_id,
             kind=kind,
             unsub=_cleanup,
+            notify=notify,
         )
         record.subscriptions[subscription_id] = sub_record
         return sub_record
@@ -258,16 +261,19 @@ class DomoluxSessionRegistry:
     ) -> int:
         """Signal that ``user_id``'s permissions changed.
 
-        Invokes every Domolux subscription callback for the user (which, for a
-        subscription command, re-sends the current view) and keeps the
-        connection open. Returns the number of refreshed subscriptions.
+        Invokes each subscription's *notify* callback (never its unsubscribe
+        hook) and keeps the connection open. Returns the number of notified
+        subscriptions. Subscriptions registered without a notify hook are left
+        untouched.
         """
         count = 0
         for record in list(self._connections.values()):
             if record.user_id != user_id:
                 continue
             for subscription_id, sub in list(record.subscriptions.items()):
-                _invoke_safely(sub.unsub)
+                if sub.notify is None:
+                    continue
+                _invoke_safely(sub.notify)
                 count += 1
                 _LOGGER.debug(
                     "Refreshed subscription %s (%s) for user %s: %s",

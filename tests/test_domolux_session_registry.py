@@ -154,16 +154,25 @@ def test_refresh_only_affects_target_user():
     other_calls = []
 
     registry.register_subscription(
-        child, "sub-1", lambda: child_calls.append(1), kind="permission"
+        child,
+        "sub-1",
+        lambda: child_calls.append("unsub"),
+        kind="permission",
+        notify=lambda: child_calls.append("notify"),
     )
     registry.register_subscription(
-        other, "sub-2", lambda: other_calls.append(1), kind="permission"
+        other,
+        "sub-2",
+        lambda: other_calls.append("unsub"),
+        kind="permission",
+        notify=lambda: other_calls.append("notify"),
     )
 
     refreshed = registry.refresh_user_subscriptions("child")
 
     assert refreshed == 1
-    assert child_calls == [1]
+    # Refresh notifies; it must never unsubscribe or close the socket.
+    assert child_calls == ["notify"]
     assert other_calls == []
     # Soft refresh never closes the connection.
     assert registry.is_tracked(child) is True

@@ -81,6 +81,7 @@ async def _require_admin_or_father(
     track_connection(hass, connection)
     user = connection.user
     if user is None or getattr(user, "is_disabled", False):
+        _record_denied(connection, "admin_or_father_required")
         raise Unauthorized()
     if getattr(user, "is_admin", False) is True:
         return
@@ -93,6 +94,7 @@ async def _require_admin_or_father(
         or father_assignment is None
         or father_assignment.user_id != user.id
     ):
+        _record_denied(connection, "admin_or_father_required")
         raise Unauthorized()
 
 
@@ -108,6 +110,7 @@ async def _require_father(
     track_connection(hass, connection)
     user = connection.user
     if user is None or getattr(user, "is_disabled", False):
+        _record_denied(connection, "father_required")
         raise Unauthorized()
 
     manager = _get_manager(hass)
@@ -119,6 +122,7 @@ async def _require_father(
         or father_assignment is None
         or father_assignment.user_id != user.id
     ):
+        _record_denied(connection, "father_required")
         raise Unauthorized(user_id=user.id)
 
     return user.id
@@ -133,6 +137,25 @@ def _prune_deleted_member(hass: HomeAssistant, user_id: str) -> None:
             store.remove_family_member(user_id)
             store.reset_user_permissions(user_id)
             return
+
+
+def _record_denied(connection, reason: str) -> None:
+    """Best-effort audit recording; never raises."""
+    hass = getattr(connection, "hass", None)
+    if hass is None:
+        return
+    try:
+        from .audit import get_audit_log
+
+        user = getattr(connection, "user", None)
+        get_audit_log(hass).record(
+            "command.denied",
+            actor_id=getattr(user, "id", None),
+            outcome="denied",
+            reason=reason,
+        )
+    except Exception:
+        pass
 
 
 async def _verify_and_get_target_member(    hass: HomeAssistant,
