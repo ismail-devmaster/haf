@@ -1,0 +1,46 @@
+T6.2 — Input validation evidence
+================================
+
+Date: 2026-11-14
+Command: python -m pytest tests/ -q
+Exit code: 0
+
+$ python -m pytest tests/storage/test_input_validation.py -x -q
+...
+tests/storage/test_input_validation.py ................................. [ 14%]
+........................................................................ [ 47%]
+........................................................................ [ 79%]
+.............................................                            [100%]
+============================= 222 passed in 0.35s =============================
+
+$ python -m pytest tests/ -q
+collected 2443 items
+...
+============================= 2443 passed in 5.16s =============================
+
+What is covered (tests/storage/test_input_validation.py):
+- Pure validator behavior: user_id UUID4 format, enum membership (access
+  level / target type / effect / evaluate target type), length bounds,
+  entity-id format, view_path format, username format + normalization,
+  password bounds, service_data/metadata flatness and key caps, entity-id
+  list bounds.
+- XSS rejection on every sanitized text field: display_name, username,
+  title, view_path reject all 9 executable-content payloads.
+- Structural wiring: every registered domolux/* command block discovered
+  from the five WS registries (>= 20 commands); every command has a type
+  field; strict fields use the shared validators; metadata/service_data/
+  entity_id fields use the bounded schemas.
+
+Honest limitations (documented, not verified here):
+- voluptuous is mocked by tests/conftest.py (real package not installed on
+  this host, PEP 668), so schema *composition* behavior (enum enforcement by
+  vol.In, PREVENT_EXTRA, chaining) cannot be behavior-tested on this host.
+  Security-rejecting logic lives in pure validators that ARE tested directly.
+- "Extra keys are rejected" for these WS commands therefore relies on HA's
+  @websocket_api.websocket_command applying vol.Schema(..., extra=PREVENT_EXTRA)
+  in production. HA is not importable on this host, so that is an unverified
+  assumption, recorded here per the plan's evidence rule. The Domolux schemas
+  themselves do not set extra=PREVENT_EXTRA.
+- The `_clean_username` regex hardening (^[a-z0-9._-]+$, matching
+  family_user_service.USERNAME_REGEX) was added so the WS boundary enforces
+  the same rule as the service layer.
