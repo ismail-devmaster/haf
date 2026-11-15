@@ -1,0 +1,20 @@
+{
+  "entrypoint": "entrypoint.js",
+  "assets": [
+    "entrypoint.js",
+    "node_modules_formatjs_intl-datetimeformat_polyfill-force_js.js",
+    "node_modules_formatjs_intl-displaynames_polyfill-force_js.js",
+    "node_modules_formatjs_intl-durationformat_polyfill-force_js.js",
+    "node_modules_formatjs_intl-getcanonicallocales_polyfill-force_js.js",
+    "node_modules_formatjs_intl-listformat_polyfill-force_js.js",
+    "node_modules_formatjs_intl-locale_polyfill-force_js.js",
+    "node_modules_formatjs_intl-numberformat_polyfill-force_js.js",
+    "node_modules_formatjs_intl-pluralrules_locale-data_en_js.js",
+    "node_modules_formatjs_intl-pluralrules_polyfill-force_js.js",
+    "node_modules_formatjs_intl-relativetimeformat_polyfill-force_js.js",
+    "src_dialogs_generic_dialog-box_ts.js",
+    "src_resources_esphome-logo-svg_ts.js",
+    "src_resources_home-assistant-logo-svg_ts.js",
+    "src_resources_music-assistant-logo-svg_ts.js"
+  ]
+}

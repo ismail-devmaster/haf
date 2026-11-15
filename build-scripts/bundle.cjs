@@ -254,16 +254,20 @@ module.exports.config = {
     return {
       name: "domolux-roles" + nameSuffix(latestBuild),
       entry: {
-        "domolux-roles": "./src/entrypoints/domolux-roles.ts",
+        entrypoint: "./src/entrypoints/domolux-roles.ts",
       },
-      outputPath: outputPath(paths.app_output_root, latestBuild),
-      publicPath: publicPath(latestBuild),
+      // Use a dedicated output directory so every emitted asset belongs to
+      // this build and can be discovered from its manifest.
+      outputPath: paths.domolux_roles_output_root,
+      // Async chunks are imported relative to the entrypoint module, so the
+      // bundle can be served from any URL prefix.
+      publicPath: "",
       isProdBuild,
       latestBuild,
       isStatsBuild,
       isTestBuild,
       isWDS,
-      dontHash: new Set(["domolux-roles"]),
+      dontHash: new Set(["entrypoint"]),
     };
   },
 

@@ -1,5 +1,5 @@
 /* global require, module, __dirname */
-const { existsSync } = require("fs");
+const { existsSync, writeFileSync } = require("fs");
 const path = require("path");
 const rspack = require("@rspack/core");
 // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -28,6 +28,53 @@ class LogStartCompilePlugin {
       }
       log("Changes detected. Starting compilation");
     });
+  }
+}
+
+const DOMOLUX_ASSET_MANIFEST = "domolux-assets.json";
+
+/**
+ * Writes a manifest of every runtime asset emitted by the Domolux Roles build.
+ *
+ * The regular WebpackManifestPlugin only lists initial JavaScript files, which
+ * misses dynamically imported chunks. This plugin records all emitted assets
+ * (excluding source maps and extracted license files) so the deployment step
+ * can copy the complete, self-contained bundle into the integration.
+ */
+class DomoluxAssetManifestPlugin {
+  constructor(outputPath) {
+    this.outputPath = outputPath;
+  }
+
+  apply(compiler) {
+    compiler.hooks.afterEmit.tap(
+      "DomoluxAssetManifestPlugin",
+      (compilation) => {
+        const assets = compilation
+          .getAssets()
+          .map((asset) => asset.name)
+          .filter(
+            (name) =>
+              !path.isAbsolute(name) &&
+              !name.startsWith("../") &&
+              name !== DOMOLUX_ASSET_MANIFEST &&
+              name !== "manifest.json" &&
+              !name.endsWith(".map") &&
+              !name.endsWith(".LICENSE.txt")
+          )
+          .sort();
+
+        const manifest = {
+          entrypoint: "entrypoint.js",
+          assets,
+        };
+
+        writeFileSync(
+          path.join(this.outputPath, DOMOLUX_ASSET_MANIFEST),
+          `${JSON.stringify(manifest, null, 2)}\n`
+        );
+      }
+    );
   }
 }
 
@@ -109,7 +156,13 @@ const createRspackConfig = ({
         }),
       ],
       moduleIds: isProdBuild && !isStatsBuild ? "deterministic" : "named",
-      chunkIds: isProdBuild && !isStatsBuild ? "deterministic" : "named",
+      // The Domolux bundle is deployed as a self-contained asset directory.
+      // Keep readable chunk names so the manifest and served URLs stay stable
+      // and can be identified directly from the entrypoint.
+      chunkIds:
+        isProdBuild && !isStatsBuild && !isDomoluxBuild
+          ? "deterministic"
+          : "named",
       splitChunks: isDomoluxBuild
         ? false
         : {
@@ -130,8 +183,7 @@ const createRspackConfig = ({
           },
     },
     plugins: [
-      isDomoluxBuild &&
-        new rspack.optimize.LimitChunkCountPlugin({ maxChunks: 1 }),
+      isDomoluxBuild && new DomoluxAssetManifestPlugin(outputPath),
       !isStatsBuild && new SafeWebpackBar({ fancy: !isProdBuild }),
       new WebpackManifestPlugin({
         // Only include the JS of entrypoints
@@ -279,8 +331,11 @@ const createRspackConfig = ({
         !isProdBuild || isStatsBuild || dontHash.has(chunk.name)
           ? "[name].js"
           : "[name].[contenthash].js",
-      chunkFilename:
-        isProdBuild && !isStatsBuild ? "[name].[contenthash].js" : "[name].js",
+      chunkFilename: isDomoluxBuild
+        ? "[name].js"
+        : isProdBuild && !isStatsBuild
+          ? "[name].[contenthash].js"
+          : "[name].js",
       assetModuleFilename:
         isProdBuild && !isStatsBuild ? "[id].[contenthash][ext]" : "[id][ext]",
       crossOriginLoading: "use-credentials",

@@ -58,17 +58,19 @@ gulp.task(
     async function setEnv() {
       process.env.NODE_ENV = "production";
     },
-    "rspack-prod-domolux-roles",
-    async function copyDomoluxBundle() {
+    async function cleanDomoluxBuild() {
       const fs = await import("fs");
-      const path = await import("path");
       const paths = (await import("../paths.cjs")).default;
-      const src = path.join(paths.app_output_latest, "domolux-roles.js");
-      const dest = path.resolve(
-        paths.root_dir,
-        "custom_components/domolux_roles/frontend/entrypoint.js"
-      );
-      fs.copyFileSync(src, dest);
+      fs.rmSync(paths.domolux_roles_output_root, {
+        recursive: true,
+        force: true,
+      });
+    },
+    "rspack-prod-domolux-roles",
+    async function deployDomoluxBundle() {
+      const { deployDomoluxRoles } =
+        await import("../deploy-domolux-roles.mjs");
+      await deployDomoluxRoles();
     }
   )
 );

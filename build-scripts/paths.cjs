@@ -1,3 +1,4 @@
+/* global require, module, __dirname */
 const path = require("path");
 
 module.exports = {
@@ -11,6 +12,12 @@ module.exports = {
     "../hass_frontend/frontend_latest"
   ),
   app_output_es5: path.resolve(__dirname, "../hass_frontend/frontend_es5"),
+
+  domolux_roles_output_root: path.resolve(__dirname, "../build/domolux_roles"),
+  domolux_roles_frontend: path.resolve(
+    __dirname,
+    "../custom_components/domolux_roles/frontend"
+  ),
 
   demo_dir: path.resolve(__dirname, "../demo"),
   demo_output_root: path.resolve(__dirname, "../demo/dist"),

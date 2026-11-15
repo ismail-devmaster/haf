@@ -1,6 +1,11 @@
 """Real frontend screen behavior verification (isolated — no browser automation required)."""
+import re
 import sys, pathlib
 sys.path.insert(0, '.')
+
+# Formatters may insert spaces inside the media query; the requirement is that
+# the responsive breakpoint exists, not how it is laid out.
+RESPONSIVE_MEDIA = re.compile(r"@media\s*\(max-width:\s*600px\)")
 
 def test_s1_loading_state_exists():
     p = pathlib.Path('custom_components/domolux_roles/frontend/s1_family_dashboard.js')
@@ -22,7 +27,7 @@ def test_all_screens_have_rtl_media():
         p = pathlib.Path(f'custom_components/domolux_roles/frontend/s{i}_' +
             ('family_dashboard' if i==1 else 'child_permissions' if i==2 else 'view_access' if i==3 else 'device_entity_control' if i==4 else 'service_target_resolution' if i==5 else 'audit_log' if i==6 else 'family_isolation' if i==7 else 'child_routing' if i==8 else 'responsive_rtl') + '.js')
         t = p.read_text()
-        assert '@media(max-width:600px)' in t, f"S{i} responsive"
+        assert RESPONSIVE_MEDIA.search(t), f"S{i} responsive"
         assert ('dir="ltr"' in t or 'dir=' in t), f"S{i} direction"
 
 def test_no_placeholder_stubs_remaining():

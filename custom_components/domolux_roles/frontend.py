@@ -43,6 +43,13 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     frontend_dir.mkdir(parents=True, exist_ok=True)
 
     js_url_path = f"/api/{DOMAIN}/frontend"
+    entrypoint = frontend_dir / "entrypoint.js"
+    if not entrypoint.is_file():
+        _LOGGER.error(
+            "Domolux Roles frontend bundle is missing from %s. "
+            "Build and deploy it with `yarn build:domolux`.",
+            frontend_dir,
+        )
     await hass.http.async_register_static_paths([
         StaticPathConfig(
             url_path=js_url_path,
