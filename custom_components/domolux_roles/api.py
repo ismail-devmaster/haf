@@ -33,6 +33,22 @@ def _get_manager(hass: HomeAssistant) -> DomoluxRoleManager:
     raise RuntimeError("DomoluxRoleManager instance not found in hass.data.")
 
 
+def get_session_registry(hass: HomeAssistant):
+    """Return the live Domolux session registry, or None when not set up."""
+    domain_data = hass.data.get(DOMAIN, {})
+    for entry_data in domain_data.values():
+        if isinstance(entry_data, dict) and "session_registry" in entry_data:
+            return entry_data["session_registry"]
+    return None
+
+
+def track_connection(hass: HomeAssistant, connection) -> None:
+    """Register a live connection for revocation tracking (best effort)."""
+    registry = get_session_registry(hass)
+    if registry is not None:
+        registry.register_connection(connection)
+
+
 def _require_admin(connection: websocket_api.ActiveConnection) -> None:
     """Check if the connected user is an active Home Assistant Administrator or Owner."""
     user = connection.user
@@ -40,7 +56,6 @@ def _require_admin(connection: websocket_api.ActiveConnection) -> None:
         raise websocket_api.Unauthorized()
     if not (getattr(user, "is_admin", False) or getattr(user, "is_owner", False)):
         raise websocket_api.Unauthorized(user_id=user.id)
-
 
 @websocket_api.websocket_command(
     {
@@ -299,7 +314,13 @@ async def ws_permission_subscribe(
 
     # Register subscription on HA event bus (only for our owned event)
     unsub = hass.bus.async_listen("domolux_permissions_updated", _listener)
-    connection.subscriptions[msg["id"]] = unsub
+    registry = get_session_registry(hass)
+    if registry is not None:
+        registry.register_subscription(
+            connection, msg["id"], unsub, kind="permission"
+        )
+    else:  # pragma: no cover - registry is present in normal setups
+        connection.subscriptions[msg["id"]] = unsub
     connection.send_result(msg["id"], {"subscribed": True, "target_user_id": target})
 
 

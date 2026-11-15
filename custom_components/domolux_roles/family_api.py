@@ -27,6 +27,7 @@ from .api_schemas import (
     USERNAME_STRICT,
     USER_ID_SCHEMA,
 )
+from .api import track_connection
 from .const import DOMAIN, ROLE_FATHER
 from .family_user_service import (
     DomoluxDuplicateUsernameError,
@@ -76,6 +77,7 @@ async def _require_admin_or_father(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection
 ) -> None:
     """Enforce admin-only or father authorization policy."""
+    track_connection(hass, connection)
     user = connection.user
     if user is None or getattr(user, "is_disabled", False):
         raise Unauthorized()
@@ -102,6 +104,7 @@ async def _require_father(
     which the websocket framework maps to ERR_UNAUTHORIZED ("unauthorized") automatically.
     Returns father_user_id if valid; otherwise raises Unauthorized.
     """
+    track_connection(hass, connection)
     user = connection.user
     if user is None or getattr(user, "is_disabled", False):
         raise Unauthorized()

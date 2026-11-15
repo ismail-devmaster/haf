@@ -23,6 +23,10 @@ from .const import DOMAIN
 from .role_manager import DomoluxRoleManager
 from .permission_api import async_register_permission_api_commands
 from .permission_evaluator import DomoluxPermissionEvaluator
+from .session_registry import (
+    DomoluxSessionRegistry,
+    async_register_session_registry,
+)
 from .store import DomoluxRoleStore
 from .service_auth_api import async_register_service_auth_commands
 from .view_api import async_register_view_api_commands, async_register_catalog_commands
@@ -57,9 +61,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     evaluator = DomoluxPermissionEvaluator(hass, store)
     view_store = DomoluxViewStore(hass)
     view_manager = DomoluxViewManager(hass, view_store, manager)
+    session_registry = DomoluxSessionRegistry()
 
     await manager.async_initialize()
     await view_manager.async_initialize()
+    unregister_stop = async_register_session_registry(hass, session_registry)
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
@@ -70,6 +76,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "evaluator": evaluator,
         "view_store": view_store,
         "view_manager": view_manager,
+        "session_registry": session_registry,
+        "unregister_stop": unregister_stop,
     }
 
     _LOGGER.info("Domolux Roles integration setup completed successfully.")
@@ -83,6 +91,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if DOMAIN in hass.data and entry.entry_id in hass.data[DOMAIN]:
         data = hass.data[DOMAIN].pop(entry.entry_id)
         store: DomoluxRoleStore = data["store"]
+        registry: DomoluxSessionRegistry | None = data.get("session_registry")
+        if registry is not None:
+            registry.clear()
+        unregister_stop = data.get("unregister_stop")
+        if callable(unregister_stop):
+            unregister_stop()
         # Save any pending role state on unload
         await store.async_save()
 

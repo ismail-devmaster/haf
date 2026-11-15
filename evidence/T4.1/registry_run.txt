@@ -1,0 +1,13 @@
+# T4.1 session registry validation
+# date: 2026-11-15T13:39:37Z
+# command: python -m pytest tests/test_domolux_session_registry.py -q
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 14 items
+
+tests/test_domolux_session_registry.py ..............                    [100%]
+
+============================== 14 passed in 0.08s ==============================
+
+# command: python -m pytest tests/ -q (full suite)
+
+============================= 2457 passed in 5.36s =============================
