@@ -18,12 +18,18 @@ from .api import async_register_websocket_commands, async_register_subscription_
 from .audit import get_audit_log
 from .family_api import async_register_family_api_commands
 from .family_user_service import DomoluxFamilyUserService
-from .frontend import async_register_frontend, async_unregister_frontend
+from .frontend import (
+    async_register_frontend,
+    async_register_revocation_watcher,
+    async_unregister_frontend,
+    async_unregister_revocation_watcher,
+)
 from .ha_auth_adapter import DomoluxHAAuthAdapter
 from .const import DOMAIN
 from .role_manager import DomoluxRoleManager
 from .permission_api import async_register_permission_api_commands
 from .permission_evaluator import DomoluxPermissionEvaluator
+from .read_channel_guard import install_read_channel_guard, uninstall_read_channel_guard
 from .revocation import DomoluxRevocationOrchestrator
 from .session_registry import (
     DomoluxSessionRegistry,
@@ -31,6 +37,7 @@ from .session_registry import (
 )
 from .store import DomoluxRoleStore
 from .service_auth_api import async_register_service_auth_commands
+from .service_guard import install_service_guard, uninstall_service_guard
 from .view_api import async_register_view_api_commands, async_register_catalog_commands
 from .view_manager import DomoluxViewManager
 from .view_store import DomoluxViewStore
@@ -49,6 +56,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async_register_service_auth_commands(hass)
     async_register_subscription_command(hass)
     await async_register_frontend(hass)
+    await async_register_revocation_watcher(hass)
     return True
 
 
@@ -57,8 +65,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _LOGGER.info("Initializing Domolux Roles integration (Phase 1 Foundation & Phase 2 Family API)")
 
     store = DomoluxRoleStore(hass)
-    manager = DomoluxRoleManager(hass, store)
     adapter = DomoluxHAAuthAdapter(hass)
+    manager = DomoluxRoleManager(hass, store, adapter=adapter)
     family_service = DomoluxFamilyUserService(hass, adapter, store)
     evaluator = DomoluxPermissionEvaluator(hass, store)
     view_store = DomoluxViewStore(hass)
@@ -98,6 +106,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "unregister_stop": unregister_stop,
     }
 
+    install_service_guard(hass)
+    install_read_channel_guard(hass)
     _LOGGER.info("Domolux Roles integration setup completed successfully.")
     return True
 
@@ -118,6 +128,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Save any pending role state on unload
         await store.async_save()
 
+    uninstall_read_channel_guard()
+    uninstall_service_guard()
+    await async_unregister_revocation_watcher(hass)
     await async_unregister_frontend(hass)
 
     return True

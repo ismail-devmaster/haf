@@ -8,7 +8,11 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 
 from homeassistant.components import panel_custom
-from homeassistant.components.frontend import async_remove_panel
+from homeassistant.components.frontend import (
+    add_extra_js_url,
+    async_remove_panel,
+    remove_extra_js_url,
+)
 
 from .const import DOMAIN
 
@@ -122,6 +126,24 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
         )
 
     _LOGGER.info("Domolux Roles frontend registered at %s", js_url_path)
+
+
+async def async_register_revocation_watcher(hass: HomeAssistant) -> None:
+    """Load the live permission refresh module on every Home Assistant page.
+
+    Home Assistant keeps an entity in ``hass.states`` after a permission is
+    revoked, because it no longer receives state updates for it.  The watcher
+    listens for ``domolux_permissions_updated`` and refreshes the page when the
+    change targets the signed-in user, so revoked resources disappear without
+    the user having to clear any cache.
+    """
+    add_extra_js_url(hass, f"/api/{DOMAIN}/frontend/domolux_revoke_watch.js")
+    _LOGGER.info("Domolux Roles live permission refresh module registered.")
+
+
+async def async_unregister_revocation_watcher(hass: HomeAssistant) -> None:
+    """Stop loading the live permission refresh module."""
+    remove_extra_js_url(hass, f"/api/{DOMAIN}/frontend/domolux_revoke_watch.js")
 
 
 async def async_unregister_frontend(hass: HomeAssistant) -> None:
