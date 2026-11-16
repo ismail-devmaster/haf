@@ -12,7 +12,7 @@ import logging
 from typing import Any
 
 from homeassistant.components import websocket_api
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Context, HomeAssistant
 from homeassistant.exceptions import Unauthorized
 import voluptuous as vol
 
@@ -85,6 +85,21 @@ ALLOWED_CONTROL_SERVICES = {
     "select_previous",
 }
 
+# Home Assistant wildcard sentinels: "all" applies the service to every
+# entity of the domain, "none" matches nothing.
+WILDCARD_ENTITY_IDS = frozenset({"all", "none"})
+
+
+def _contains_wildcard_entity(entity_id: Any) -> bool:
+    """Return True when the target contains a Home Assistant wildcard."""
+    if entity_id is None:
+        return False
+    items = entity_id if isinstance(entity_id, (list, tuple, set)) else [entity_id]
+    return any(
+        isinstance(item, str) and item.strip().lower() in WILDCARD_ENTITY_IDS
+        for item in items
+    )
+
 
 @websocket_api.websocket_command(
     {
@@ -124,13 +139,27 @@ async def ws_service_authorize(
         return
 
     if entity_id is not None:
-        if isinstance(entity_id, str) and (entity_id == "all" or entity_id.startswith("device.") or entity_id.startswith("area.")):
+        if _contains_wildcard_entity(entity_id):
+            connection.send_error(
+                msg["id"], ERR_TARGET_INVALID, "Wildcard or broad targets not supported. Provide explicit entity_id."
+            )
+            return
+        if isinstance(entity_id, str) and (entity_id.startswith("device.") or entity_id.startswith("area.")):
             connection.send_error(
                 msg["id"], ERR_TARGET_INVALID, "Wildcard or broad targets not supported. Provide explicit entity_id."
             )
             return
         if isinstance(entity_id, list) and not entity_id:
             connection.send_error(msg["id"], ERR_TARGET_INVALID, "Empty target list.")
+            return
+        if isinstance(entity_id, list) and any(
+            isinstance(item, str)
+            and (item.startswith("device.") or item.startswith("area."))
+            for item in entity_id
+        ):
+            connection.send_error(
+                msg["id"], ERR_TARGET_INVALID, "Wildcard or broad targets not supported. Provide explicit entity_id."
+            )
             return
 
     if not domain or not service:
@@ -208,6 +237,32 @@ async def ws_service_enforce(
         )
         return
 
+    # The executed call must target exactly the entities that were authorised,
+    # so wildcards, broad selectors and empty targets are rejected here.
+    if entity_id is not None:
+        if _contains_wildcard_entity(entity_id):
+            connection.send_error(
+                msg["id"], ERR_TARGET_INVALID, "Wildcard or broad targets not supported. Provide explicit entity_id."
+            )
+            return
+        if isinstance(entity_id, str) and (entity_id.startswith("device.") or entity_id.startswith("area.")):
+            connection.send_error(
+                msg["id"], ERR_TARGET_INVALID, "Wildcard or broad targets not supported. Provide explicit entity_id."
+            )
+            return
+        if isinstance(entity_id, list) and not entity_id:
+            connection.send_error(msg["id"], ERR_TARGET_INVALID, "Empty target list.")
+            return
+        if isinstance(entity_id, list) and any(
+            isinstance(item, str)
+            and (item.startswith("device.") or item.startswith("area."))
+            for item in entity_id
+        ):
+            connection.send_error(
+                msg["id"], ERR_TARGET_INVALID, "Wildcard or broad targets not supported. Provide explicit entity_id."
+            )
+            return
+
     evaluator = _get_evaluator(hass)
     is_father = evaluator._is_father(user_id)
     is_admin_owner = False
@@ -241,9 +296,12 @@ async def ws_service_enforce(
         return
 
     # Execute via HA service call.
-    # The backend performs a mediated, privileged action for the permitted target.
-    # We do NOT pass the Child's native user context via service_data; instead the
-    # operation is executed by the trusted backend, with audit attribution preserved.
+    # The backend performs a mediated action for the permitted target. The
+    # Home Assistant user context is intentionally left empty: managed Children
+    # are members of the native read-only group, so Home Assistant refuses
+    # entity service calls that carry a Child's user id.  The mediated path is
+    # the only control channel a Child has and it is gated by the canonical
+    # Domolux authorization check performed above.
     try:
         domain = msg["domain"]
         service = msg["service"]
@@ -253,34 +311,83 @@ async def ws_service_enforce(
         # Remove misleading user_id from service payload; it does not establish
         # Home Assistant execution identity (Core uses context=, not service_data).
         service_data.pop("user_id", None)
-        # Reject attempts to smuggle target entities through service_data (e.g., target, entity_id inside payload).
-        for key in ("entity_id", "target", "device_id", "area_id", "group_id"):
+
+        # SECURITY: reject any attempt to smuggle a *different* target through
+        # the service payload. Home Assistant merges `target` into the service
+        # data and the entity platform then expands entity_id / device_id /
+        # area_id / floor_id / label_id from that payload.  A payload carrying
+        # `device_id` or `area_id` would therefore reach entities that were
+        # never authorised, so only the already-authorised `entity_id` may be
+        # present and it must match the authorised target exactly.
+        for key in ("target", "device_id", "area_id", "floor_id", "label_id", "group_id"):
             if key in service_data:
-                # If payload tries to set target separately from msg, reject.
-                # Only allow entity-specific keys that do not redefine authorization.
-                if key == "entity_id" and service_data[key] != msg.get("entity_id"):
-                    connection.send_error(
-                        msg["id"], ERR_TARGET_INVALID, f"Target mismatch in service_data ({key})."
-                    )
-                    return
+                connection.send_error(
+                    msg["id"],
+                    ERR_TARGET_INVALID,
+                    f"Target smuggling via service_data ({key}) is not permitted.",
+                )
+                return
+
+        authorised_entities = msg.get("entity_id")
+        authorised_set = (
+            {authorised_entities}
+            if isinstance(authorised_entities, str)
+            else set(authorised_entities or [])
+        )
+        payload_entities = service_data.get("entity_id")
+        if payload_entities is not None:
+            payload_set = (
+                {payload_entities}
+                if isinstance(payload_entities, str)
+                else set(payload_entities)
+            )
+            if payload_set != authorised_set:
+                connection.send_error(
+                    msg["id"],
+                    ERR_TARGET_INVALID,
+                    "Target mismatch in service_data (entity_id).",
+                )
+                return
+        # Execute against exactly the authorised target, never against a
+        # target supplied by the payload.
+        if authorised_set:
+            service_data["entity_id"] = (
+                authorised_entities
+                if isinstance(authorised_entities, str)
+                else sorted(authorised_set)
+            )
 
         # Execute with blocking=True so failure is observable before reporting.
         # Only request response for services that declare SupportsResponse.
         # Ordinary control services (turn_on, toggle, etc.) typically use NONE.
         result = None
         try:
-            service_obj = hass.services.async_get(domain, service)
-            supports_response = getattr(service_obj, "supports_response", None)
-            # If service supports response and we can determine safely, request it.
-            # For ordinary control operations we keep blocking without response
-            # to avoid ServiceValidationError on ServicesResponse.NONE.
-            use_response = False
-            if supports_response is not None:
-                # Only use return_response when service explicitly supports it
-                from homeassistant.helpers.service import SupportsResponse
-                use_response = supports_response == SupportsResponse.REQUIRED or supports_response == SupportsResponse.OPTIONAL
+            # Home Assistant exposes the response capability of a service via
+            # ``ServiceRegistry.supports_response``.  (There is no
+            # ``async_get`` method on the registry - using one makes every
+            # mediated control call fail with an internal error.)
+            supports_response = hass.services.supports_response(domain, service)
+            # Ordinary control services (turn_on, toggle, ...) use NONE.
+            # ONLY services *require* a response to be requested.
+            use_response = getattr(supports_response, "name", "") in (
+                "OPTIONAL",
+                "REQUIRED",
+                "ONLY",
+            )
             result = await hass.services.async_call(
-                domain, service, service_data, blocking=True, return_response=use_response
+                domain,
+                service,
+                service_data,
+                blocking=True,
+                return_response=use_response,
+                # The execution is performed by the trusted backend, without a
+                # Home Assistant user context.  Managed Children live in the
+                # native ``system-read-only`` group, so Home Assistant itself
+                # refuses *every* entity service call they make directly.
+                # The mediated path is therefore the only way a Child can
+                # control anything, and it is gated by the canonical Domolux
+                # authorization check performed above.
+                context=Context(),
             )
         except Exception as err:
             _LOGGER.error("Service execution failed: %s", err)

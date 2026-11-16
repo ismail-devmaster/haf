@@ -67,3 +67,8 @@ htmlcov/
 .pytest_cache/
 .gradle/
 ```
+
+# Domolux E2E run artifacts that hold live test credentials.
+evidence/E2E/state/
+evidence/E2E/browser-state/
+evidence/E2E/logs/

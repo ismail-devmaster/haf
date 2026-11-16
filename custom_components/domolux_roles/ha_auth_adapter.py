@@ -12,12 +12,19 @@ VERSION ISOLATION & SECURITY BOUNDARY:
 
 from __future__ import annotations
 
-from homeassistant.auth.const import GROUP_ID_READ_ONLY
+from homeassistant.auth.const import GROUP_ID_READ_ONLY, GROUP_ID_USER
 import asyncio
 from contextlib import asynccontextmanager
 import inspect
 import logging
 from typing import Any, Optional
+
+from .const import (
+    ACCESS_LEVEL_CONTROL,
+    TARGET_AREA,
+    TARGET_DEVICE,
+    TARGET_ENTITY,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -336,7 +343,14 @@ class DomoluxHAAuthAdapter:
             ) from err
 
     async def async_activate_managed_user(self, user_id: str) -> bool:
-        """Activate a managed family user."""
+        """Activate a managed family user.
+
+        The managed group is the user's *only* group.  It carries the complete
+        native permission policy for this Child, so no permissive system group
+        (such as ``system-read-only`` or ``system-users``) may remain
+        attached: Home Assistant merges group policies permissively, so a
+        leftover group would silently widen the Child's access.
+        """
         user = await self._get_user_by_id(user_id)
         self._assert_managed_user(user)
 
@@ -346,19 +360,29 @@ class DomoluxHAAuthAdapter:
             # Reject owner before provisioning
             if getattr(user, "is_owner", False):
                 raise DomoluxAuthAdapterError("Fail closed: owner account rejected for Child provisioning")
+
+            group_id = get_managed_group_id(user_id)
+            # The managed group must exist before it can be bound.
+            if await self.async_get_managed_group(user_id) is None:
+                await self.async_create_or_update_managed_group(
+                    user_id, {"entities": {}}, bind=False
+                )
+
             # Exactly one call, group replacement before activation
-            await self.hass.auth.async_update_user(user, group_ids=[GROUP_ID_READ_ONLY], is_active=True)
+            await self.hass.auth.async_update_user(user, group_ids=[group_id], is_active=True)
             # Post-verify exact membership
             actual = {group.id for group in getattr(user, "groups", []) if hasattr(group, "id")}
-            if actual != {GROUP_ID_READ_ONLY}:
+            if actual != {group_id}:
                 # Deactivate where supported; do not continue
                 if hasattr(self.hass.auth, "async_update_user") and callable(getattr(self.hass.auth, "async_update_user")):
                     try:
-                        await self.hass.auth.async_update_user(user, group_ids=[GROUP_ID_READ_ONLY], is_active=False)
+                        await self.hass.auth.async_update_user(user, group_ids=[group_id], is_active=False)
                     except Exception:
                         pass
-                raise DomoluxAuthAdapterError(f"Fail closed: group verification failed {actual} != {{{GROUP_ID_READ_ONLY}}}")
-            _LOGGER.info("Activated Domolux managed user '%s' with exact read-only group.", user_id)
+                raise DomoluxAuthAdapterError(f"Fail closed: group verification failed {actual} != {{{group_id}}}")
+            self._invalidate_user_cache(user)
+            self._async_schedule_save()
+            _LOGGER.info("Activated Domolux managed user '%s' with exact managed group.", user_id)
             return True
         except Exception as err:
             raise DomoluxAuthAdapterError(
@@ -425,9 +449,15 @@ class DomoluxHAAuthAdapter:
         return groups_dict.get(group_id)
 
     async def async_create_or_update_managed_group(
-        self, user_id: str, policy: dict[str, Any]
+        self, user_id: str, policy: dict[str, Any], *, bind: bool = True
     ) -> Any:
-        """Create or update the dedicated custom group domolux-family-<user_id>."""
+        """Create or update the dedicated custom group domolux-family-<user_id>.
+
+        When ``bind`` is true the group also becomes the user's *only* group.
+        The membership is written through the supported
+        ``hass.auth.async_update_user`` API so that it is persisted in
+        ``.storage/auth`` and reloaded correctly after a restart.
+        """
         user = await self._get_user_by_id(user_id)
         self._assert_managed_user(user)
 
@@ -460,14 +490,17 @@ class DomoluxHAAuthAdapter:
         if groups_dict is not None:
             groups_dict[group_id] = group
 
-        # Bind group to user if not already bound
-        user_groups = getattr(user, "groups", None)
-        if isinstance(user_groups, list):
-            if not any(getattr(g, "id", None) == group_id for g in user_groups):
-                user_groups.append(group)
-        elif hasattr(user, "group_ids") and isinstance(user.group_ids, list):
-            if group_id not in user.group_ids:
-                user.group_ids.append(group_id)
+        # Bind the group to the user as their only group.  The managed group
+        # carries the complete native permission policy, so no additional
+        # system group (for example the permissive ``system-read-only``) may
+        # stay attached: Home Assistant merges group policies permissively.
+        if bind:
+            update_user = getattr(self.hass.auth, "async_update_user", None)
+            if not callable(update_user):
+                raise DomoluxGroupError(
+                    "Fail closed: Home Assistant async_update_user is unavailable."
+                )
+            await update_user(user, group_ids=[group_id])
 
         # Clear permission cache & schedule disk save
         self._invalidate_user_cache(user)
@@ -476,17 +509,96 @@ class DomoluxHAAuthAdapter:
         _LOGGER.debug("Updated managed group '%s' for user '%s'.", group_id, user_id)
         return group
 
+    async def async_assign_native_user_group(self, user_id: str, group_id: str) -> bool:
+        """Replace the native group membership of a user with a single group.
+
+        Used for the Father, who is a trusted (non-admin) Home Assistant user
+        and therefore needs the standard user group to be able to see and
+        operate the household at all.
+        """
+        user = await self._get_user_by_id(user_id)
+        self._assert_managed_user(user)
+
+        update_user = getattr(self.hass.auth, "async_update_user", None)
+        if not callable(update_user):
+            raise DomoluxGroupError(
+                "Fail closed: Home Assistant async_update_user is unavailable."
+            )
+        await update_user(user, group_ids=[group_id])
+
+        actual = {getattr(g, "id", None) for g in getattr(user, "groups", [])}
+        if actual != {group_id}:
+            raise DomoluxGroupError(
+                f"Fail closed: group verification failed {actual} != {{{group_id}}}"
+            )
+        self._invalidate_user_cache(user)
+        self._async_schedule_save()
+        return True
+
+    @staticmethod
+    def _build_native_policy(permission_set: dict[str, Any]) -> dict[str, Any]:
+        """Translate a Domolux permission set into a native HA entity policy.
+
+        Home Assistant expects the entity policy to be shaped as::
+
+            {"entities": {"entity_ids": {"light.kitchen": {"read": True,
+                                                           "control": True}}}}
+
+        The target kind selects the matching native sub-category
+        (``entity_ids`` / ``device_ids`` / ``area_ids``) so that Home
+        Assistant itself enforces exactly the Domolux decision - including
+        read isolation for entities that are not granted at all.
+
+        A permission set without grants produces ``{"entities": {}}``, which
+        Home Assistant evaluates as *deny everything*.
+        """
+        from .const import ACCESS_LEVEL_CONTROL, ACCESS_LEVEL_READ
+
+        sub_categories: dict[str, dict[str, dict[str, bool]]] = {
+            "entity_ids": {},
+            "device_ids": {},
+            "area_ids": {},
+        }
+
+        target_type_to_sub_category = {
+            TARGET_ENTITY: "entity_ids",
+            TARGET_DEVICE: "device_ids",
+            TARGET_AREA: "area_ids",
+        }
+
+        for rule in (permission_set.get("entity_rules") or {}).values():
+            if not isinstance(rule, dict):
+                continue
+            target_type = str(rule.get("target_type") or "")
+            target_id = str(rule.get("target_id") or "")
+            access_level = str(rule.get("access_level") or "")
+            sub_category = target_type_to_sub_category.get(target_type)
+            if sub_category is None or not target_id:
+                continue
+
+            entry: dict[str, bool] = {}
+            if access_level in (ACCESS_LEVEL_READ, ACCESS_LEVEL_CONTROL):
+                entry["read"] = True
+            if access_level == ACCESS_LEVEL_CONTROL:
+                entry["control"] = True
+            if not entry:
+                continue
+            sub_categories[sub_category][target_id] = entry
+
+        entities = {
+            key: value for key, value in sub_categories.items() if value
+        }
+        return {"entities": entities}
+
     async def async_sync_managed_user_permissions(
         self, user_id: str, permission_set: dict[str, Any]
     ) -> Any:
         """Synchronize Domolux permission rules into managed group's HA policy.
 
-        TRANSACTION: old group policy -> build new in memory -> validate ->
-        apply -> refresh user.permissions -> verify -> persist metadata.
-        On failure: restore previous group policy.
+        TRANSACTION: old group policy -> build new in memory -> apply ->
+        refresh the user's permission cache -> verify -> persist.  On failure
+        the previous group policy is restored (fail closed).
         """
-        from .const import ACCESS_LEVEL_READ, ACCESS_LEVEL_CONTROL
-
         user = await self._get_user_by_id(user_id)
         self._assert_managed_user(user)
 
@@ -495,27 +607,7 @@ class DomoluxHAAuthAdapter:
         if group is not None:
             old_policy = dict(getattr(group, "policy", {}) or {})
 
-        # Build HA policy from Domolux rules
-        new_policy = dict(old_policy) if old_policy else {}
-        entities = dict(new_policy.get("entities", {}))
-
-        # Translate entity rules
-        for ent_id, rule in permission_set.get("entity_rules", {}).items():
-            entry = entities.get(ent_id) or {}
-            # READ -> POLICY_READ
-            if rule.get("access_level") in (ACCESS_LEVEL_READ, ACCESS_LEVEL_CONTROL):
-                entry["read"] = [True]  # POLICY_READ
-            else:
-                entry.pop("read", None)
-            # CONTROL -> POLICY_CONTROL
-            if rule.get("access_level") == ACCESS_LEVEL_CONTROL:
-                entry["control"] = [True]  # POLICY_CONTROL
-            else:
-                entry.pop("control", None)
-            entities[ent_id] = entry
-
-        # Area/device rules (simplified mapping for proof)
-        new_policy["entities"] = entities
+        new_policy = self._build_native_policy(permission_set)
 
         # Apply
         try:
@@ -529,14 +621,14 @@ class DomoluxHAAuthAdapter:
                     pass
             raise DomoluxAuthAdapterError(f"Failed to apply group policy: {err}") from err
 
-        # Refresh permissions and verify
+        # Refresh permissions and verify that Home Assistant now evaluates the
+        # Domolux decision exactly.  A mismatch means the native enforcement
+        # layer and the Domolux policy disagree - that must never pass
+        # silently, because it would either hide granted access or expose
+        # denied access.
         try:
             self._invalidate_user_cache(user)
-            # Verify via user.permissions
-            permissions = getattr(user, "permissions", None)
-            if permissions is not None and hasattr(permissions, "check_entity"):
-                # Verification step — check a known test entity if provided
-                pass
+            self._verify_native_policy(user, permission_set)
         except Exception:
             # Rollback if verification fails
             if old_policy is not None:
@@ -548,6 +640,54 @@ class DomoluxHAAuthAdapter:
 
         _LOGGER.info("Synced permissions for managed user '%s'.", user_id)
         return group
+
+    def _verify_native_policy(
+        self, user: Any, permission_set: dict[str, Any]
+    ) -> None:
+        """Verify that Home Assistant enforces the Domolux decision natively.
+
+        Fails closed: when the native permission layer cannot be evaluated the
+        policy is considered not applied and the caller rolls back.
+        """
+        permissions = getattr(user, "permissions", None)
+        if permissions is None or not hasattr(permissions, "check_entity"):
+            # No native permission layer available (older Home Assistant or a
+            # test double).  The Domolux guard remains the authority.
+            _LOGGER.debug(
+                "Native permission verification skipped: no check_entity available."
+            )
+            return
+
+        expected: dict[str, bool] = {}
+        for rule in (permission_set.get("entity_rules") or {}).values():
+            if not isinstance(rule, dict):
+                continue
+            if str(rule.get("target_type") or "") != TARGET_ENTITY:
+                # Device and area rules are resolved by Home Assistant itself.
+                continue
+            target_id = str(rule.get("target_id") or "")
+            if not target_id:
+                continue
+            expected[target_id] = str(rule.get("access_level") or "") == ACCESS_LEVEL_CONTROL
+
+        for entity_id, should_control in expected.items():
+            try:
+                can_control = bool(permissions.check_entity(entity_id, "control"))
+                can_read = bool(permissions.check_entity(entity_id, "read"))
+            except Exception as err:
+                raise DomoluxAuthAdapterError(
+                    f"Native permission verification failed for '{entity_id}': {err}"
+                ) from err
+
+            if can_control != should_control:
+                raise DomoluxAuthAdapterError(
+                    "Native permission verification failed for "
+                    f"'{entity_id}': control={can_control} expected={should_control}"
+                )
+            if not can_read:
+                raise DomoluxAuthAdapterError(
+                    f"Native permission verification failed for '{entity_id}': read denied"
+                )
 
     async def async_delete_managed_group(self, user_id: str) -> bool:
         """Delete dedicated custom group domolux-family-<user_id>."""

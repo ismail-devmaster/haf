@@ -34,9 +34,18 @@ _LOGGER = logging.getLogger(__name__)
 class DomoluxRoleManager:
     """Manages role state, rule evaluations, and registry cross-validation."""
 
-    def __init__(self, hass: Any, store: DomoluxRoleStore) -> None:
+    def __init__(
+        self,
+        hass: Any,
+        store: DomoluxRoleStore,
+        adapter: Optional[Any] = None,
+    ) -> None:
         self.hass = hass
         self.store = store
+        # Optional Home Assistant auth adapter.  It is used to give the Father
+        # a working native (non-admin) Home Assistant account; the adapter is
+        # optional so the role manager stays usable in isolation.
+        self.adapter = adapter
         self._lock = asyncio.Lock()
 
     async def async_initialize(self) -> None:
@@ -205,6 +214,14 @@ class DomoluxRoleManager:
             self.store.set_father(assignment)
             await self.store.async_save()
 
+            # The Father is a trusted, non-admin Home Assistant user.  Without a
+            # native group membership the account would have *no* Home Assistant
+            # permissions at all (an empty group list evaluates to deny-all),
+            # which would leave the Father with an empty dashboard.  The
+            # standard user group grants the household read/write access
+            # without granting administrator rights.
+            await self._async_ensure_father_native_group(valid_target_id)
+
             _LOGGER.info(
                 "Domolux Role 'father' assigned successfully to HA user ID: %s",
                 valid_target_id,
@@ -291,6 +308,30 @@ class DomoluxRoleManager:
             )
             father.status = FatherRoleStatus.ACTIVE
             await self.store.async_save()
+
+    async def _async_ensure_father_native_group(self, user_id: str) -> None:
+        """Give the Father a working native Home Assistant group membership.
+
+        The Father must remain a non-admin, non-owner user.  Only the standard
+        ``system-users`` group is granted; administrator groups are never
+        assigned by Domolux Roles.
+        """
+        if self.adapter is None:
+            return
+        try:
+            from homeassistant.auth.const import GROUP_ID_USER
+
+            await self.adapter.async_assign_native_user_group(user_id, GROUP_ID_USER)
+        except Exception as err:
+            # Fail closed for the *permission* decision, but do not lose the
+            # role assignment: the Father keeps the role and the problem is
+            # reported loudly.
+            _LOGGER.error(
+                "Could not assign the native Home Assistant group to the Father "
+                "(%s): %s",
+                user_id,
+                err,
+            )
 
     async def _async_get_ha_user(self, user_id: str) -> Any:
         """Fetch user object safely from Home Assistant auth manager."""

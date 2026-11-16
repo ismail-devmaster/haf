@@ -350,15 +350,23 @@ async def ws_permission_subscribe(
 
     # Family-level authorization: only Father/admin may subscribe to others;
     # Child may subscribe only to self.
+    #
+    # SECURITY: the check must fail *closed*.  If the role manager cannot be
+    # reached the subscription is refused rather than silently allowed,
+    # otherwise a Child could subscribe to another user's permission stream.
     try:
         manager = _get_manager(hass)
         father = manager.get_father_assignment()
-        is_father = father is not None and father.user_id == user_id
-        if target != user_id and not is_father:
-            connection.send_error(msg["id"], websocket_api.ERR_UNAUTHORIZED, "Cannot subscribe to other users.")
-            return
     except Exception:
-        pass
+        connection.send_error(
+            msg["id"], websocket_api.ERR_UNAUTHORIZED, "Cannot subscribe to other users."
+        )
+        return
+
+    is_father = father is not None and father.user_id == user_id
+    if target != user_id and not is_father:
+        connection.send_error(msg["id"], websocket_api.ERR_UNAUTHORIZED, "Cannot subscribe to other users.")
+        return
 
     async def _listener(event):
         # Filter by family; never expose arbitrary external events.
