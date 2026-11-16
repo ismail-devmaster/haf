@@ -1,9 +1,5 @@
-# Home Assistant Hook Points & Survey
+# HA Hook Points (pinned HA Core 2026.2.3)
 
-| Channel           | Function / API                                          | File:Line                                         | Interceptable?              | How                                                  | Risk          |
-| ----------------- | ------------------------------------------------------- | ------------------------------------------------- | --------------------------- | ---------------------------------------------------- | ------------- |
-| Service Call      | `ServiceRegistry.async_call`                            | `homeassistant/core.py`                           | Yes                         | Instance wrapper / guard                             | CRITICAL (D1) |
-| State Read        | `States.async_all`, `async_subscribe_users`             | `homeassistant/core.py`                           | Partial                     | Native user.permissions + WS filters                 | HIGH (D2)     |
-| WebSocket API     | `websocket_api` commands (`call_service`, `get_states`) | `homeassistant/components/websocket_api/`         | Yes                         | Custom command handlers & wrappers                   | HIGH (D1/D2)  |
-| Script/Automation | `script.async_turn_on`, automation engine               | `homeassistant/components/script/`, `automation/` | Yes via context propagation | Service guard checking originating context `user_id` | CRITICAL (D1) |
-| History / Logbook | `/api/history`, logbook collector                       | `homeassistant/components/history/`               | Partial                     | REST / WS filtering wrapper                          | HIGH (D2)     |
+- ServiceRegistry.__slots__ = ("_hass", "_services"); hass.services is a plain instance attribute.
+- Guard installed by replacing ServiceRegistry.async_call at class level (reversible by identity).
+- Originating user carried via Context.user_id; parent_id available on Context.

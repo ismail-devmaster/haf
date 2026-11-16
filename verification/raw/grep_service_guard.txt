@@ -1,0 +1,4 @@
+custom_components/domolux_roles/permission_api.py:132:    store persistence errors). In the event of an un-interceptable process crash or power loss between
+custom_components/domolux_roles/role_manager.py:235:        """Public thread-safe wrapper for state cross-validation."""
+custom_components/domolux_roles/service_auth_api.py:4:- Only evaluates; never monkey-patches HA service handlers.
+custom_components/domolux_roles/session_registry.py:176:        The wrapper stored in ``connection.subscriptions`` removes the record

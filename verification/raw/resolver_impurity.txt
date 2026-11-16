@@ -1,0 +1,12 @@
+70:    def __init__(self, hass: Any, store: DomoluxRoleStore) -> None:
+71:        self.hass = hass
+81:        if not hasattr(self.hass, "auth") or self.hass.auth is None:
+84:            res = self.hass.auth.async_get_user(user_id)
+85:            if inspect.isawaitable(res):
+86:                user = await res
+109:            ent_reg = er.async_get(self.hass)
+110:            entity_entry = ent_reg.async_get(entity_id)
+117:                    dev_reg = dr.async_get(self.hass)
+118:                    device_entry = dev_reg.async_get(device_id)
+150:        if await self._is_admin_or_owner(user_id):
+239:        if await self._is_admin_or_owner(user_id):

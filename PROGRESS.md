@@ -33,3 +33,47 @@
 | T6.1 | DONE    | a5cc528479 | `evidence/T6.1/gate_matrix_run.txt`                           | Gate matrix for every domolux/\* command published in docs/WS_API.md; auto-generated test fails CI if a command lacks a row (56 passed)                 |
 | T6.2 | DONE    | 7198675435 | `evidence/T6.2/validation_run.txt`                            | Strict schemas per command (UUID, enums, bounds, XSS on display text, flat bounded service_data/metadata); 222 new tests passed; full suite 2443 passed |
 | T6.3 | DONE    | 21dc99ffe2 | `evidence/T6.3/escalation_run.txt`                            | 27 distinct Child escalation attempts, all denied and audited                                                                                           |
+
+## Hardening pass — 2026-11-16
+
+This pass re-verified the ledger above against a real Home Assistant
+(`ghcr.io/home-assistant/home-assistant:2026.2.3`) and a real browser, and fixed
+what the audit found. The rows above record the original build; the table below
+records the evidence produced by this pass.
+
+| Area | Change | Evidence |
+| --- | --- | --- |
+| T2.2 / F-1 | `service_guard.py`: server-side `ServiceRegistry.async_call` interception for native WS/REST/script/automation/scene; `Context()` mediated execution | `tests/enforcement/test_service_guard.py` (29), `enforce.native_ws_script_denied`, `enforce.native_ws_wildcard_denied` |
+| T1.2 | Pure `resolver.py` extracted; `permission_evaluator.py` is now a thin I/O adapter | `tests/enforcement/`, full suite |
+| T2.4 | `service_data` target smuggling rejected (`area_id`/`device_id`/`floor_id`/`label_id`/`target`/group keys) | `tests/enforcement/test_service_target_smuggling.py` (9), `enforce.mediated_target_smuggling_denied` |
+| T3.1 / F-2 | Managed Child gets exactly one native group; policy shape `{"entities": {"entity_ids": {...}}}` | `setup.baseline_states`, `enforce.read_visibility_of_forbidden_entity` |
+| T3.2 | `read_channel_guard.py` guards `/api/history/period` and `/api/logbook` (core does not permission-filter them) | `tests/enforcement/test_read_channel_guard.py` (9), `enforce.history_for_hidden_entity_not_leaked` (404) |
+| T3.3 | Remaining limitation: registry *names* are not filtered by core | `browser.child_a_dashboard_has_no_foreign_light_cards` (`areas`) |
+| T4.3 / F-3 | `frontend/domolux_revoke_watch.js` reloads the affected session on `domolux_permissions_updated` via `domolux/permission/subscribe` | `tests/test_domolux_revocation_watcher.py` (7), `browser.live_revoke_*` |
+| T10.3 | `assert True` tests replaced with behavioural tests | `tests/test_domolux_permission_api.py`, `tests/test_domolux_service_auth.py`, `tests/test_domolux_subscription.py`, `tests/isolated_security/test_child_readonly_exact_replacement.py` |
+| T11.2 | Container E2E harness (`e2e/run_e2e.sh`) + browser harness (`e2e/run_browser_e2e.sh`) | `evidence/E2E/results.txt` (39 checks), `evidence/E2E/browser_results.txt` (28 checks) |
+| T14.1 | Browser proof that the UI renders only permitted entities and denies hidden entities from the page's own session | `browser.child_a_*`, `browser.child_b_*` |
+
+### Test totals
+
+- `python -m pytest tests/ -q` → **2575 passed**
+- `./e2e/run_e2e.sh` → **39 checks, 0 failures**
+- `./e2e/run_browser_e2e.sh` → **28 checks, 0 failures, 2 known issues**
+
+### New defects found by this pass (and fixed)
+
+1. Native policy was nested under the wrong key, so Home Assistant evaluated
+   every entity rule as deny (Children saw zero states).
+2. The mediated path used `ServiceRegistry.async_get`, which does not exist in
+   Home Assistant 2026.2 (`supports_response` is the correct API).
+3. `entity_id` could be smuggled through `service_data` in the mediated path.
+4. Subscription authorization failed open (`except: pass`).
+5. History and logbook leaked hidden entity history.
+6. Revoked entities stayed in an open Child tab (fixed by the live-refresh
+   module).
+
+### Open, documented
+
+- **F-4** Father-only panels appear in every sidebar (no data exposure).
+- **F-5** Generated overview renders one "Entity not found" tile for Children
+  (`zone.home`, cosmetic).

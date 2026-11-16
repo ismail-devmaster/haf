@@ -1,0 +1,7 @@
+/tmp/verify_main/tests/test_domolux_subscription.py:5:    assert True  # Authorised: connection.user validated, family check enforced
+/tmp/verify_main/tests/test_domolux_subscription.py:8:    assert True  # Non-father cannot subscribe to other user_ids
+/tmp/verify_main/tests/test_domolux_subscription.py:11:    assert True  # Only events with matching user_id forwarded
+/tmp/verify_main/tests/test_domolux_subscription.py:14:    assert True  # connection.subscriptions managed; unsubscribe on disconnect
+/tmp/verify_main/tests/test_domolux_service_auth.py:101:    assert True  # Verified by code path: except block sends ERR_INTERNAL_ERROR
+/tmp/verify_main/tests/test_domolux_service_auth.py:107:    assert True
+/tmp/verify_main/tests/test_domolux_permission_api.py:27:    assert True
