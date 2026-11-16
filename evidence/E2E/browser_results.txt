@@ -1,26 +1,26 @@
 RESULT {"check": "setup.onboard_admin", "ok": true, "status": 200}
 RESULT {"check": "setup.onboarding_complete", "ok": true, "pending": []}
 RESULT {"check": "setup.install_integration", "ok": true, "status": 200, "result": "create_entry", "error": null}
-RESULT {"check": "setup.create_father_user", "ok": true, "user_id": "81281421ad2e425caeb40dcafa9aecec"}
+RESULT {"check": "setup.create_father_user", "ok": true, "user_id": "67febae375444d72b3608b755035f1bc"}
 RESULT {"check": "setup.set_father_credentials", "ok": true, "error": null}
 RESULT {"check": "setup.set_father_role", "ok": true, "error": null}
-RESULT {"check": "setup.father_sees_father_role", "ok": true, "response": {"user_id": "81281421ad2e425caeb40dcafa9aecec", "role": "father", "is_father": true, "father_assigned": true}}
-RESULT {"check": "setup.create_children", "ok": true, "child_a": "34b8b1402b0e418d95c2b9f43b17d644", "child_b": "5f5603f91f254cc7922d392b0fcde1fe", "error_a": null, "error_b": null}
+RESULT {"check": "setup.father_sees_father_role", "ok": true, "response": {"user_id": "67febae375444d72b3608b755035f1bc", "role": "father", "is_father": true, "father_assigned": true}}
+RESULT {"check": "setup.create_children", "ok": true, "child_a": "1a3ca2d2fd3343ba82ab85158f128660", "child_b": "e9b31f3225b84d69947a79ac37d89c11", "error_a": null, "error_b": null}
 RESULT {"check": "setup.demo_lights_found", "ok": true, "lights": ["light.bed_light", "light.ceiling_lights", "light.entrance_color_white_lights", "light.kitchen_lights", "light.living_room_rgbww_lights", "light.office_rgbw_lights"]}
-RESULT {"check": "setup.grant_child_a_control", "ok": true, "rule_id": "rule_entity_0932de6e", "error": null}
-RESULT {"check": "setup.grant_child_b_read", "ok": true, "rule_id": "rule_entity_785fa428", "error": null}
+RESULT {"check": "setup.grant_child_a_control", "ok": true, "rule_id": "rule_entity_1aecdc72", "error": null}
+RESULT {"check": "setup.grant_child_b_read", "ok": true, "rule_id": "rule_entity_6fa892d7", "error": null}
 RESULT {"check": "setup.child_logins", "ok": true}
 RESULT {"check": "setup.baseline_states", "ok": true, "permitted": "off", "forbidden": "on"}
 SUMMARY phase=setup checks=13 failures=0
-RESULT {"check":"browser.father_login","ok":true,"user":{"id":"81281421ad2e425caeb40dcafa9aecec","name":"E2E Father","is_admin":false}}
+RESULT {"check":"browser.father_login","ok":true,"user":{"id":"67febae375444d72b3608b755035f1bc","name":"E2E Father","is_admin":false}}
 RESULT {"check":"browser.father_sees_household","ok":true,"lights":["light.bed_light","light.ceiling_lights","light.entrance_color_white_lights","light.kitchen_lights","light.living_room_rgbww_lights","light.office_rgbw_lights"]}
 RESULT {"check":"browser.father_dashboard_renders","ok":true,"entities":["weather.demo_weather_north","zone.home"]}
-RESULT {"check":"browser.child_a_login","ok":true,"user":{"id":"34b8b1402b0e418d95c2b9f43b17d644","name":"Child A","is_admin":false}}
+RESULT {"check":"browser.child_a_login","ok":true,"user":{"id":"1a3ca2d2fd3343ba82ab85158f128660","name":"Child A","is_admin":false}}
 RESULT {"check":"browser.child_a_sees_only_permitted_light","ok":true,"lights":["light.bed_light"],"permitted":"light.bed_light"}
 RESULT {"check":"browser.child_a_dashboard_has_no_foreign_light_cards","ok":true,"entities":["zone.home"],"areas":["bedroom","kitchen","living_room"]}
 RESULT {"check":"browser.child_a_dashboard_renders","ok":true,"has_lights_section":true,"cards":4}
 RESULT {"check":"browser.child_a_overview_has_no_broken_cards","ok":false,"finding":"F-5","warnings":1,"unresolved_entities":["zone.home"],"note":"the generated Devices tile targets zone.home, which deny-by-default hides from a Child","status":"known_issue"}
-RESULT {"check":"browser.child_a_ui_can_control_permitted_entity","ok":true,"response":{"ok":true,"result":{"context":{"id":"01M7J4R0S64NJTBBERD1ZFVGKX","parent_id":null,"user_id":"34b8b1402b0e418d95c2b9f43b17d644"}}}}
+RESULT {"check":"browser.child_a_ui_can_control_permitted_entity","ok":true,"response":{"ok":true,"result":{"context":{"id":"01M7J5RBCC04MX3QPS6E3JRKVJ","parent_id":null,"user_id":"1a3ca2d2fd3343ba82ab85158f128660"}}}}
 RESULT {"check":"browser.child_a_permitted_entity_state_changed","ok":true,"state":"on"}
 RESULT {"check":"browser.child_a_ui_cannot_control_hidden_entity","ok":true,"error":{"code":"home_assistant_error","message":"Unauthorized"}}
 RESULT {"check":"browser.child_a_ui_wildcard_denied","ok":true,"error":{"code":"home_assistant_error","message":"Unauthorized"}}
@@ -28,15 +28,15 @@ RESULT {"check":"browser.child_a_rest_hidden_entity_denied","ok":true,"status":4
 RESULT {"check":"browser.child_a_parent_console_has_no_family_data","ok":true,"url":"http://127.0.0.1:8123/domolux-manage"}
 RESULT {"check":"browser.child_a_family_manager_has_no_family_data","ok":true,"url":"http://127.0.0.1:8123/domolux-family"}
 RESULT {"check":"browser.child_a_parent_console_hidden_from_sidebar","ok":false,"finding":"F-4","observed_sidebar_entry":true,"note":"Father-only panels are listed in every sidebar; opening them exposes no data.","status":"known_issue"}
-RESULT {"check":"browser.child_b_login","ok":true,"user":{"id":"5f5603f91f254cc7922d392b0fcde1fe","name":"Child B","is_admin":false}}
+RESULT {"check":"browser.child_b_login","ok":true,"user":{"id":"e9b31f3225b84d69947a79ac37d89c11","name":"Child B","is_admin":false}}
 RESULT {"check":"browser.child_b_sees_only_permitted_light","ok":true,"lights":["light.ceiling_lights"]}
 RESULT {"check":"browser.child_b_read_only_cannot_control","ok":true,"error":{"code":"home_assistant_error","message":"Unauthorized"}}
 RESULT {"check":"browser.live_refresh_module_loaded","ok":true,"state":{"loaded":true,"subscribed":true,"attempts":1,"disabled":false,"reloads":0}}
-RESULT {"check":"browser.father_revokes_child_a_rule","ok":true,"response":{"ok":true,"result":{"success":true,"permissions":{"user_id":"34b8b1402b0e418d95c2b9f43b17d644","default_access_level":"none","entity_rules":{},"view_rules":{},"updated_at":"2026-11-16T12:19:00.337595+00:00"}}}}
+RESULT {"check":"browser.father_revokes_child_a_rule","ok":true,"response":{"ok":true,"result":{"success":true,"permissions":{"user_id":"1a3ca2d2fd3343ba82ab85158f128660","default_access_level":"none","entity_rules":{},"view_rules":{},"updated_at":"2026-11-16T12:36:40.246357+00:00"}}}}
 RESULT {"check":"browser.live_revoke_child_page_refreshed","ok":true,"reloads":1}
 RESULT {"check":"browser.live_revoke_entity_disappeared","ok":true,"lights":[]}
 RESULT {"check":"browser.live_revoke_direct_call_denied","ok":true,"error":{"code":"home_assistant_error","message":"Unauthorized"}}
-RESULT {"check":"browser.account_switch_identity","ok":true,"user":{"id":"34b8b1402b0e418d95c2b9f43b17d644","name":"Child A","is_admin":false}}
+RESULT {"check":"browser.account_switch_identity","ok":true,"user":{"id":"1a3ca2d2fd3343ba82ab85158f128660","name":"Child A","is_admin":false}}
 RESULT {"check":"browser.account_switch_no_father_data_left","ok":true,"states":[]}
 RESULT {"check":"browser.account_switch_no_father_name_rendered","ok":true,"observed_child_welcome":false}
 RESULT {"check":"browser.no_failed_page_requests","ok":true,"pages":[]}
