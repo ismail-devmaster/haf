@@ -26,3 +26,7 @@ include = ["hass_frontend*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 addopts = "-v"
+# The Domolux Roles integration test suite lives in `tests/`.  Restricting the
+# default collection keeps unrelated trees (e.g. `domolux_wake_word/scripts/`)
+# from breaking collection with missing optional dependencies.
+testpaths = ["tests"]

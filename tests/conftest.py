@@ -11,6 +11,26 @@ if "voluptuous" not in sys.modules:
     vol_mock.Schema = lambda s: s
     sys.modules["voluptuous"] = vol_mock
 
+# Minimal aiohttp stand-in.  The Domolux read-channel guard imports aiohttp
+# lazily; the integration unit tests do not need the real HTTP stack.
+if "aiohttp" not in sys.modules:
+    aiohttp_mock = MagicMock()
+
+    class _FakeHTTPResponse:
+        def __init__(self, status: int = 200, body: object = None) -> None:
+            self.status = status
+            self.body = body
+
+    def _json_response(payload=None, status: int = 200, **kwargs):
+        return _FakeHTTPResponse(status=status, body=payload)
+
+    aiohttp_mock.web = MagicMock()
+    aiohttp_mock.web.json_response = _json_response
+    aiohttp_mock.web.Response = _FakeHTTPResponse
+    aiohttp_mock.ClientError = type("ClientError", (Exception,), {})
+    aiohttp_mock.ClientSession = MagicMock()
+    sys.modules["aiohttp"] = aiohttp_mock
+
 if "homeassistant" not in sys.modules:
     ha_mock = MagicMock()
 

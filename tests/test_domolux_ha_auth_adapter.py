@@ -48,6 +48,17 @@ def _setup_mock_hass():
     auth.async_deactivate_user = AsyncMock()
     auth.async_remove_refresh_token = AsyncMock()
 
+    async def _async_update_user(user, group_ids=None, is_active=None, **kwargs):
+        """Simulate Home Assistant's group replacement semantics."""
+        if group_ids is not None:
+            user.groups = [
+                mock_store._groups.get(gid) or MagicMock(id=gid) for gid in group_ids
+            ]
+        if is_active is not None:
+            user.is_active = is_active
+
+    auth.async_update_user = AsyncMock(side_effect=_async_update_user)
+
     hass.auth = auth
     return hass, mock_store, provider
 

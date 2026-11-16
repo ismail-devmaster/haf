@@ -20,11 +20,35 @@ from custom_components.domolux_roles.const import (
 
 @pytest.mark.asyncio
 async def test_permission_api_register():
-    """Verify permission WebSocket commands register correctly."""
+    """Verify every permission command is registered with its WS type."""
+    from custom_components.domolux_roles import permission_api
+
+    expected = {
+        "domolux/permission/get",
+        "domolux/permission/set_default_level",
+        "domolux/permission/set_entity_rule",
+        "domolux/permission/remove_entity_rule",
+        "domolux/permission/set_view_rule",
+        "domolux/permission/remove_view_rule",
+        "domolux/permission/reset",
+        "domolux/permission/evaluate",
+        "domolux/permission/my_views",
+    }
+
     hass = MagicMock()
-    async_register_permission_api_commands(hass)
-    # If no exception raised, commands registered successfully
-    assert True
+    with patch(
+        "custom_components.domolux_roles.permission_api.websocket_api.async_register_command"
+    ) as register:
+        async_register_permission_api_commands(hass)
+
+    registered = {
+        call.args[1]._ws_schema["type"]: call.args[1]
+        for call in register.call_args_list
+    }
+    assert set(registered) == expected
+    for command in registered.values():
+        assert hasattr(command, "_ws_schema")
+        assert callable(command)
 
 
 @pytest.mark.asyncio

@@ -1,62 +1,149 @@
-"""Isolated test for child native read-only enforcement (Req 5.1, 6). Not live HA."""
-import sys, pathlib
-sys.path.insert(0, "custom_components")
+"""Behavioural tests for the native group replacement of a managed Child.
 
-def test_import_and_single_call():
-    src = pathlib.Path("custom_components/domolux_roles/ha_auth_adapter.py").read_text()
-    assert "from homeassistant.auth.const import GROUP_ID_READ_ONLY" in src, "Import required"
-    # Hardcode removed from call site (line 252 set still allows "system-read-only" as literal in forbidden list — OK)
-    assert 'group_ids=[GROUP_ID_READ_ONLY]' in src, "Exactly one call with const"
-    # Verify not hardcoded in the call
-    call_region = src.split('await self.hass.auth.async_update_user(user, group_ids=[GROUP_ID_READ_ONLY]')[1].split(')')[0]
-    assert '"system-read-only"' not in call_region, "No hardcoded string in call"
-    print("PASS: import + single call with const verified")
+A managed Child must end up with **exactly one** Home Assistant group: its
+Domolux managed group, which carries the complete native permission policy
+for that Child.  A leftover permissive system group (for example
+``system-read-only``) would silently widen the Child's access, because Home
+Assistant merges group policies permissively.
 
-def test_owner_rejected_before_provisioning():
-    src = pathlib.Path("custom_components/domolux_roles/ha_auth_adapter.py").read_text()
-    assert 'if getattr(user, "is_owner", False):' in src
-    assert "Fail closed: owner account rejected" in src
-    # Must occur BEFORE await async_update_user — verify by line order
-    lines = src.splitlines()
-    owner_line = next(i for i, l in enumerate(lines) if 'is_owner' in l and 'reject' in lines[i+1])
-    call_line = next(i for i, l in enumerate(lines) if 'await self.hass.auth.async_update_user' in l and 'group_ids' in l)
-    assert owner_line < call_line, "Owner rejected before provisioning call"
-    print("PASS: owner rejected before provisioning")
+These tests assert the observable behaviour of the adapter instead of
+inspecting the source text.
+"""
 
-def test_fail_closed_if_unavailable():
-    src = pathlib.Path("custom_components/domolux_roles/ha_auth_adapter.py").read_text()
-    assert 'not callable(getattr(self.hass.auth, "async_update_user", None))' in src
-    assert "Fail closed: async_update_user unavailable" in src
-    # No fallback to user.is_active = True in this block
-    block = src.split('if not hasattr(self.hass.auth')[1].split('await self.hass.auth.async_update_user')[0]
-    assert 'user.is_active = True' not in block, "No fallback activation when unavailable"
-    print("PASS: fail closed when unavailable (no fallback)")
+from unittest.mock import AsyncMock, MagicMock
 
-def test_post_verify_and_deactivate():
-    src = pathlib.Path("custom_components/domolux_roles/ha_auth_adapter.py").read_text()
-    assert 'actual = {group.id' in src
-    assert "actual != {GROUP_ID_READ_ONLY}" in src
-    assert "is_active=False" in src  # deactivation attempted
-    assert "raise DomoluxAuthAdapterError" in src  # explicit error after verification failure
-    print("PASS: post-verify + deactivate + raise on failure")
+import pytest
 
-def test_no_duplicate_call():
-    src = pathlib.Path("custom_components/domolux_roles/ha_auth_adapter.py").read_text()
-    # Count awaits in activation block only
-    block_start = src.find('try:\n            if not hasattr')
-    block_end = src.find('_LOGGER.info("Activated Domolux', block_start)
-    block = src[block_start:block_end]
-    count = block.count('await self.hass.auth.async_update_user')
-    # One for update, one for deactivate (only in failure branch) — total 2 possible, but exactly one in success path
-    # We verify the success path has exactly one by checking structure
-    assert count >= 1
-    print(f"PASS: call count in block = {count} (1 success + 1 deactivate-fallback)")
+from custom_components.domolux_roles.ha_auth_adapter import (
+    DomoluxAuthAdapterError,
+    DomoluxHAAuthAdapter,
+    get_managed_group_id,
+)
 
-if __name__ == "__main__":
-    test_import_and_single_call()
-    test_owner_rejected_before_provisioning()
-    test_fail_closed_if_unavailable()
-    test_post_verify_and_deactivate()
-    test_no_duplicate_call()
-    print("=== SOURCE-LEVEL ISOLATED TESTS COMPLETE ===")
-    print("NOTE: Live HA verification BLOCKED — requires real AuthManager instance")
+CHILD_ID = "22222222-2222-4222-8222-222222222222"
+
+
+def _hass():
+    hass = MagicMock()
+    store = MagicMock()
+    store._groups = {}
+    store._async_schedule_save = MagicMock()
+
+    auth = MagicMock()
+    auth._store = store
+    auth.auth_providers = []
+
+    async def _async_update_user(user, group_ids=None, is_active=None, **kwargs):
+        if group_ids is not None:
+            user.groups = [
+                store._groups.get(gid) or MagicMock(id=gid) for gid in group_ids
+            ]
+        if is_active is not None:
+            user.is_active = is_active
+
+    auth.async_update_user = AsyncMock(side_effect=_async_update_user)
+    auth.async_get_user = AsyncMock(return_value=None)
+    hass.auth = auth
+    return hass, store
+
+
+def _child():
+    user = MagicMock()
+    user.id = CHILD_ID
+    user.is_admin = False
+    user.is_owner = False
+    user.is_active = True
+    user.groups = []
+    user.invalidate_cache = MagicMock()
+    return user
+
+
+@pytest.mark.asyncio
+async def test_child_is_bound_to_exactly_the_managed_group():
+    """Activation replaces every group with the Domolux managed group."""
+    hass, store = _hass()
+    adapter = DomoluxHAAuthAdapter(hass)
+    user = _child()
+    hass.auth.async_get_user.return_value = user
+
+    assert await adapter.async_activate_managed_user(CHILD_ID) is True
+
+    group_ids = {group.id for group in user.groups}
+    assert group_ids == {get_managed_group_id(CHILD_ID)}
+    # No permissive system group may remain attached.
+    assert "system-read-only" not in group_ids
+    assert "system-users" not in group_ids
+    assert "system-admin" not in group_ids
+    hass.auth.async_update_user.assert_called_once_with(
+        user, group_ids=[get_managed_group_id(CHILD_ID)], is_active=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_owner_account_is_rejected_before_provisioning():
+    """An owner account is never provisioned as a managed Child."""
+    hass, store = _hass()
+    adapter = DomoluxHAAuthAdapter(hass)
+    user = _child()
+    user.is_owner = True
+    hass.auth.async_get_user.return_value = user
+
+    with pytest.raises(DomoluxAuthAdapterError):
+        await adapter.async_activate_managed_user(CHILD_ID)
+
+    hass.auth.async_update_user.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_fails_closed_when_group_update_is_unavailable():
+    """Without ``async_update_user`` the adapter refuses to provision."""
+    hass, store = _hass()
+    adapter = DomoluxHAAuthAdapter(hass)
+    user = _child()
+    hass.auth.async_get_user.return_value = user
+    hass.auth.async_update_user = MagicMock()
+
+    with pytest.raises(DomoluxAuthAdapterError):
+        await adapter.async_activate_managed_user(CHILD_ID)
+
+    # No silent fallback activation.
+    assert user.is_active is True  # untouched by the adapter
+    assert not user.groups
+
+
+@pytest.mark.asyncio
+async def test_group_mismatch_deactivates_and_raises():
+    """When the membership cannot be verified the account is deactivated."""
+    hass, store = _hass()
+    adapter = DomoluxHAAuthAdapter(hass)
+    user = _child()
+    hass.auth.async_get_user.return_value = user
+
+    async def _wrong_update(_user, group_ids=None, is_active=None, **kwargs):
+        # Simulate Home Assistant not applying the requested membership.
+        if group_ids is not None:
+            _user.groups = []
+        if is_active is not None:
+            _user.is_active = is_active
+
+    hass.auth.async_update_user = AsyncMock(side_effect=_wrong_update)
+
+    with pytest.raises(DomoluxAuthAdapterError):
+        await adapter.async_activate_managed_user(CHILD_ID)
+
+    # The deactivation fallback was attempted.
+    assert hass.auth.async_update_user.await_count >= 2
+
+
+@pytest.mark.asyncio
+async def test_managed_group_is_created_with_deny_all_policy():
+    """A brand new managed group grants nothing until a policy is synced."""
+    hass, store = _hass()
+    adapter = DomoluxHAAuthAdapter(hass)
+    user = _child()
+    hass.auth.async_get_user.return_value = user
+
+    await adapter.async_activate_managed_user(CHILD_ID)
+
+    group = store._groups[get_managed_group_id(CHILD_ID)]
+    assert group.policy == {"entities": {}}

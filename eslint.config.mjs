@@ -13,7 +13,9 @@ import importX from "eslint-plugin-import-x";
 
 export default tseslint.config(
   {
-    ignores: ["custom_components/**"],
+    // `custom_components` is Python, and `e2e` holds Node test harnesses that
+    // run against a live Home Assistant, not frontend sources.
+    ignores: ["custom_components/**", "e2e/**"],
   },
   js.configs.recommended,
   eslintConfigPrettier,
