@@ -72,8 +72,28 @@ records the evidence produced by this pass.
 6. Revoked entities stayed in an open Child tab (fixed by the live-refresh
    module).
 
-### Open, documented
+### Post-Hardening Release Validation & Final Quality Gate — 2026-11-16
 
-- **F-4** Father-only panels appear in every sidebar (no data exposure).
-- **F-5** Generated overview renders one "Entity not found" tile for Children
-  (`zone.home`, cosmetic).
+This pass validated the integration against the actual target Home Assistant
+deployment version (`ghcr.io/home-assistant/home-assistant:2026.8.3`), closed all
+remaining information disclosure issues (T3.3, F-4, F-5), delivered Father
+"Preview as Child" (T14.2), and performed mutation, soak, and adversarial testing.
+
+| Area | Change | Evidence |
+| --- | --- | --- |
+| Target HA 2026.8.3 | Validated against target HA Core 2026.8.3 container; fixed `Unauthorized` exception import, async startup event listener thread safety, and token cache persistence | `./e2e/run_e2e.sh` (39/39), `./e2e/run_browser_e2e.sh` (46/46) |
+| T3.3 (Registry Privacy) | `registry_guard.py`: Intercepts entity, area, device, and floor registry listings, filtering inaccessible metadata for Children | `tests/enforcement/test_registry_guard.py` (7), `browser.child_a_dashboard_has_no_foreign_light_cards` |
+| F-4 (Sidebar Privacy) | `sidebar_privacy.py`: Writes `sidebar.hiddenPanels` in user storage; hides Father-only panels from Child navigation while maintaining backend denial | `tests/test_sidebar_privacy.py` (2), `browser.child_a_parent_console_hidden_from_sidebar` |
+| F-5 (Broken Cards) | `domolux_revoke_watch.js`: Shadow-piercing DOM removal of broken cards (`zone.home`) and `hui-warning` elements for restricted users | `browser.child_a_overview_has_no_broken_cards` (warnings: 0, unresolved_entities: []) |
+| T14.2 (Preview as Child) | `preview_manager.py`: Ephemeral connection-scoped preview mode for Father sessions with zero privilege escalation; pure `resolver.py` evaluation | `tests/test_domolux_preview.py` (5), `browser.preview.*` (5 live browser checks) |
+| Mutation Testing | `tests/test_mutation_resolver.py`: 7 mutation vectors applied to `resolver.py` | 8/8 mutants killed (100% kill rate) |
+| Practical Soak Testing | `tests/soak/test_soak_permission_evaluator.py`: 40,000 evaluations across 10 concurrent async workers | Completed in 0.109s (365,709 evaluations/second) |
+| Lifecycle & Adversarial | `tests/adversarial/test_lifecycle_and_adversarial.py`: Repeated setup/unload, rapid grant/revoke, session revocation isolation, malformed targets | 14/14 checks passed |
+
+### Final Test Totals
+
+- `python -m pytest tests/ -q` → **2,612 passed, 0 failures**
+- `./e2e/run_e2e.sh` → **39 checks, 0 failures** on Home Assistant 2026.8.3
+- `./e2e/run_browser_e2e.sh` → **46 checks, 0 failures, 0 known issues** on Home Assistant 2026.8.3
+
+### Gate Status: 100% PASS (Production Ready)

@@ -28,8 +28,10 @@ from .ha_auth_adapter import DomoluxHAAuthAdapter
 from .const import DOMAIN
 from .role_manager import DomoluxRoleManager
 from .permission_api import async_register_permission_api_commands
+from .preview_manager import async_register_preview_commands
 from .permission_evaluator import DomoluxPermissionEvaluator
 from .read_channel_guard import install_read_channel_guard, uninstall_read_channel_guard
+from .registry_guard import install_registry_guard, uninstall_registry_guard
 from .revocation import DomoluxRevocationOrchestrator
 from .session_registry import (
     DomoluxSessionRegistry,
@@ -54,6 +56,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await async_register_view_api_commands(hass)
     async_register_catalog_commands(hass)
     async_register_service_auth_commands(hass)
+    async_register_preview_commands(hass)
     async_register_subscription_command(hass)
     await async_register_frontend(hass)
     await async_register_revocation_watcher(hass)
@@ -87,8 +90,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unregister_stop = async_register_session_registry(hass, session_registry)
     bus = getattr(hass, "bus", None)
     if bus is not None and hasattr(bus, "async_listen"):
-        def _on_started(_event):
-            hass.async_create_task(manager.async_reconcile())
+        async def _on_started(_event):
+            # Registry commands may be registered after this integration sets
+            # up (they belong to default_config).  Re-wrapping at startup is
+            # idempotent and makes the guard independent of load order.
+            install_registry_guard(hass)
+            await manager.async_reconcile()
         bus.async_listen("homeassistant_started", _on_started)
 
     hass.data.setdefault(DOMAIN, {})
@@ -108,6 +115,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     install_service_guard(hass)
     install_read_channel_guard(hass)
+    install_registry_guard(hass)
     _LOGGER.info("Domolux Roles integration setup completed successfully.")
     return True
 
@@ -129,6 +137,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await store.async_save()
 
     uninstall_read_channel_guard()
+    uninstall_registry_guard(hass)
     uninstall_service_guard()
     await async_unregister_revocation_watcher(hass)
     await async_unregister_frontend(hass)

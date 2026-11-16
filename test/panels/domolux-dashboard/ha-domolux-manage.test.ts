@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { HaDomoluxManage } from "../../../src/panels/domolux-dashboard/ha-domolux-manage";
+import type { Route } from "../../../src/types";
 
 describe("Parent Console (manage route)", () => {
   it("route /domolux-dashboard/manage is not a view path", () => {
@@ -38,11 +40,11 @@ describe("management console behavioral routing", () => {
     el.route = { path: "/manage" } as Route;
     // After load, _view should be null (manage is not a view) but render should not show the empty-state message
     // This is structural: the fix requires management mode; we verify code path
-    expect(el._getViewPath()).toBe("");
+    expect((el as any)._getViewPath()).toBe("");
   });
   it("route /home keeps view rendering", () => {
     const el = new HaDomoluxManage();
     el.route = { path: "/home" } as Route;
-    expect(el._getViewPath()).toBe("home");
+    expect((el as any)._getViewPath()).toBe("home");
   });
 });

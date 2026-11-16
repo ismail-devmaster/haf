@@ -134,16 +134,26 @@ export class HUIViewBackground extends LitElement {
   }
 
   static styles = css`
-    /* Fixed background hack for Safari iOS */
+    /* Fixed background fix for full coverage */
     :host([fixed-background]) {
       display: block;
-      z-index: -1;
+      z-index: 0;
       position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
       background-attachment: scroll !important;
+      pointer-events: none;
     }
     :host(:not([fixed-background])) {
-      z-index: -1;
+      z-index: 0;
       position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
     }
     :host {
       top: 0;

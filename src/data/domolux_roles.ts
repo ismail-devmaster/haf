@@ -172,23 +172,29 @@ export function subscribeDomoluxRole(
   };
 
   if (hass?.connection && typeof hass.connection.subscribeEvents === "function") {
-    hass.connection
-      .subscribeEvents((_event: any) => {
-        update();
-      }, "domolux_role_changed")
-      .then((unsubFunc) => {
-        unsub = unsubFunc;
-      })
-      .catch(() => {
-        // Ignore subscription errors
-      });
+    const res = hass.connection.subscribeEvents((_event: any) => {
+      update();
+    }, "domolux_role_changed");
+    if (res && typeof (res as any).then === "function") {
+      (res as any)
+        .then((unsubFunc: any) => {
+          unsub = unsubFunc;
+        })
+        .catch(() => {
+          // Ignore subscription errors
+        });
+    } else if (typeof res === "function") {
+      unsub = res;
+    }
   }
 
   // Initial fetch
   update();
 
   return () => {
-    // No native event subscription cleanup needed; refresh is explicit.
+    if (unsub) {
+      unsub();
+    }
   };
 }
 
@@ -243,12 +249,33 @@ export function subscribeMyViewPermissions(
     callback(myViews);
   };
 
-  // Use explicit refresh after permission updates instead of native event bus.
-  // Cross-session updates via dedicated Domolux WebSocket subscription (domolux/permission/subscribe)
-  // when needed; for local session refresh, call update() directly after mutation.
+  if (hass?.connection && typeof hass.connection.subscribeEvents === "function") {
+    const res = hass.connection.subscribeEvents((event: any) => {
+      const targetUserId = event?.data?.user_id;
+      const currentUserId = hass?.user?.id;
+      if (!targetUserId || targetUserId === currentUserId) {
+        update();
+      }
+    }, "domolux_permissions_updated");
+    if (res && typeof (res as any).then === "function") {
+      (res as any)
+        .then((unsubFunc: any) => {
+          unsub = unsubFunc;
+        })
+        .catch(() => {
+          // Ignore subscription errors
+        });
+    } else if (typeof res === "function") {
+      unsub = res;
+    }
+  }
+
+  // Initial fetch
   update();
 
   return () => {
-    // No native event subscription cleanup needed; refresh is explicit.
+    if (unsub) {
+      unsub();
+    }
   };
 }

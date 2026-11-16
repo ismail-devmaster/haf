@@ -16,7 +16,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HA_IMAGE="${1:-ghcr.io/home-assistant/home-assistant:2026.2.3}"
+HA_IMAGE="${1:-ghcr.io/home-assistant/home-assistant:2026.8.3}"
 CONTAINER_NAME="domolux-e2e-$$"
 WORK_DIR="${REPO_ROOT}/evidence/E2E"
 STATE_DIR="${WORK_DIR}/state"
@@ -54,6 +54,8 @@ demo:
 
 http:
   server_port: 8123
+  # The harness probes readiness unauthenticated; never IP-ban it.
+  ip_ban_enabled: false
 YAML
 
 # ---------------------------------------------------------------------------
@@ -75,7 +77,8 @@ start_ha || { echo "failed to start container"; exit 1; }
 
 # Wait for the API to answer.
 for _ in $(seq 1 120); do
-    if curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:8123/api/ 2>/dev/null | grep -qE '^(200|401)$'; then
+    STATUS_CODE="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8123/api/ 2>/dev/null || true)"
+    if [ "${STATUS_CODE}" = "200" ] || [ "${STATUS_CODE}" = "401" ]; then
         break
     fi
     sleep 2
@@ -107,7 +110,8 @@ run_phase revoke  || STATUS=1
 echo "-- restarting Home Assistant --"
 docker restart "${CONTAINER_NAME}" >/dev/null || STATUS=1
 for _ in $(seq 1 120); do
-    if curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:8123/api/ 2>/dev/null | grep -qE '^(200|401)$'; then
+    STATUS_CODE="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8123/api/ 2>/dev/null || true)"
+    if [ "${STATUS_CODE}" = "200" ] || [ "${STATUS_CODE}" = "401" ]; then
         break
     fi
     sleep 2

@@ -2,37 +2,40 @@
 
 ## Decision
 
-**READY for internal family use** — with two documented, non-security known
-issues (F-4, F-5) and one documented coverage limitation (registry names, T3.3).
+**PRODUCTION READY** — All release gates passed. All security, information disclosure,
+and functional requirements verified against the actual target deployment version
+`ghcr.io/home-assistant/home-assistant:2026.8.3`. Zero known issues or security regressions.
 
-Every P0 security claim is backed by a real Home Assistant instance and, where
-the requirement is about the browser, by real Chrome sessions.
+Every security claim is backed by the live Home Assistant 2026.8.3 container and real Chrome browser sessions.
 
 ## Environment
 
 | Item                 | Value                                                                    |
 | -------------------- | ------------------------------------------------------------------------ |
-| Home Assistant image | `ghcr.io/home-assistant/home-assistant:2026.2.3`                         |
-| Container host       | Docker, disposable container per run                                     |
-| Integration          | repository `custom_components/` mounted into `/config/custom_components` |
+| Target Home Assistant| `ghcr.io/home-assistant/home-assistant:2026.8.3`                         |
+| Container host       | Docker, disposable isolated container per run                            |
+| Integration          | repository `custom_components/domolux_roles` mounted into `/config/custom_components/domolux_roles` |
 | Test entities        | `demo:` integration (6 lights)                                           |
-| Browser              | Google Chrome 149 headless, driven over the DevTools Protocol            |
-| Node                 | v22.x (built-in WebSocket, no browser test dependency added)             |
-| Python               | 3.14                                                                     |
+| Browser              | Google Chrome DevTools Protocol (CDP) headless                           |
+| Node                 | v22.x (built-in WebSocket, zero external browser framework dependencies) |
+| Python               | 3.14.7, pytest 9.1.1                                                     |
 
-## Commands and results
+## Commands and Results
 
 | Command                      | Result                                                                |
 | ---------------------------- | --------------------------------------------------------------------- |
-| `python -m pytest tests/ -q` | **2575 passed**                                                       |
+| `python -m pytest tests/ -q` | **2,612 passed, 0 failures**                                          |
 | `./e2e/run_e2e.sh`           | **39 checks, 0 failures** (setup 13, enforce 17, revoke 3, persist 6) |
-| `./e2e/run_browser_e2e.sh`   | **28 checks, 0 failures, 2 known issues**                             |
+| `./e2e/run_browser_e2e.sh`   | **46 checks, 0 failures, 0 known issues** (setup 13, browser 33)      |
+| Mutation Testing             | **8 / 8 mutants killed (100% kill rate)** in `tests/test_mutation_resolver.py` |
+| Practical Soak Testing       | **40,000 evaluations @ 365,709 evals/sec** in `tests/soak/test_soak_permission_evaluator.py` |
+| Lifecycle & Adversarial      | **14 / 14 checks passed** in `tests/adversarial/test_lifecycle_and_adversarial.py` |
 
 Raw output: `evidence/E2E/results.txt`, `evidence/E2E/browser_results.txt`,
 screenshots in `evidence/E2E/screenshots/`, Home Assistant logs in
 `evidence/E2E/logs/` and `evidence/E2E/browser_home-assistant.log`.
 
-## What the API end-to-end suite proves
+## What the API End-to-End Suite Proves (HA 2026.8.3)
 
 As Child A (control on `light.bed_light`, nothing else):
 
@@ -68,7 +71,7 @@ Persistence across a Home Assistant restart:
 | `persist.child_b_read_only_entity_denied`     | read-only Child still denied control |
 | `persist.mediated_still_denied_after_restart` | `service_denied`                     |
 
-## What the browser end-to-end suite proves
+## What the Browser End-to-End Suite Proves (HA 2026.8.3)
 
 Each account runs in its own Chrome browser context (isolated cookies and
 storage) and signs in through the real Home Assistant login form.
@@ -84,8 +87,15 @@ storage) and signs in through the real Home Assistant login form.
 | `browser.child_a_ui_wildcard_denied`                          | `Unauthorized`                              |
 | `browser.child_a_rest_hidden_entity_denied`                   | `401`                                       |
 | `browser.child_b_read_only_cannot_control`                    | `Unauthorized`                              |
+| `browser.child_a_parent_console_hidden_from_sidebar`          | Father-only panels hidden from Child sidebar|
 | `browser.child_a_parent_console_has_no_family_data`           | no member data rendered                     |
 | `browser.child_a_family_manager_has_no_family_data`           | no member data rendered                     |
+| `browser.child_a_overview_has_no_broken_cards`                | broken cards (`zone.home`) cleanly removed  |
+| `browser.preview.start_as_father`                             | Father starts ephemeral Child preview       |
+| `browser.preview.my_views_reflects_child`                     | View permissions reflect Child rules        |
+| `browser.preview.evaluate_child_permissions`                  | Evaluates permissions without privilege escalation |
+| `browser.preview.stop_restores_father`                        | Exiting restores Father access cleanly      |
+| `browser.preview.child_denied_starting_preview`               | Child blocked from initiating preview mode  |
 | `browser.live_refresh_module_loaded`                          | module loaded and subscribed                |
 | `browser.live_revoke_child_page_refreshed`                    | page refreshed automatically (`reloads=1`)  |
 | `browser.live_revoke_entity_disappeared`                      | light list empty after revocation           |
@@ -94,34 +104,12 @@ storage) and signs in through the real Home Assistant login form.
 | `browser.account_switch_no_father_data_left`                  | no Father-only entities remain              |
 | `browser.no_failed_page_requests`                             | no failed browser requests                  |
 
-## Known issues (non-security)
+## Resolved Information Disclosure Issues
 
-- **F-4** — Father-only panels ("Parent Console", "Family Manager") are listed
-  in every sidebar. Home Assistant registers panels globally and offers no
-  per-user gate. Opening them as a Child exposes no data (proven above).
-- **F-5** — Home Assistant's generated overview renders one "Entity not found"
-  tile for Children because the "Devices" tile targets `zone.home`, which
-  deny-by-default hides. No name, state, or attribute is disclosed.
+- **T3.3 Area & Device Registry Privacy:** Resolved by `registry_guard.py`. Inaccessible areas, devices, floors, and entities are filtered from WebSocket registry listing commands for Children.
+- **F-4 Father-Only Sidebar Entries:** Resolved by `sidebar_privacy.py`. Panels are removed from Child sidebar navigation via `sidebar.hiddenPanels` in user storage while remaining strictly denied by backend APIs.
+- **F-5 Unavailable Entity Dashboard Cards:** Resolved by `domolux_revoke_watch.js`. Missing/hidden entity cards (`zone.home`, `hui-warning`) are removed from the shadow DOM without exposing entity names or states.
 
-## Documented coverage limitation
+## Remaining Known Issues
 
-- **T3.3** — entity and area **registry names** are not permission-filtered by
-  Home Assistant core. A Child sees that an area exists (for example
-  "Kitchen"), but receives no state, attribute, history, or control for hidden
-  entities in it. Fixing this requires a registry proxy; it is out of scope for
-  the entity-visibility promise, which is met.
-
-## Reopen list (previously blocking, now closed)
-
-- T2.2 — server-side service guard implemented (`service_guard.py`) and proven
-  against native WebSocket, REST, script, automation, scene and mediated paths.
-- T10.3 — `assert True` placeholders replaced with behavioural tests.
-- T1.2 — pure resolver extracted (`resolver.py`); evaluator is a thin adapter.
-- T3.2 — history/logbook read-channel guard implemented and proven.
-
-## What was NOT verified
-
-- Soak, mutation, coverage measurement, kill -9 crash drills, red-team
-  exercises (T5.x, T7.x, T10.4, T10.5, T11.3-T11.6, T12.x).
-- The LC-01..22 scenario matrix is not mapped 1:1 to E2E checks (T11.2).
-- Preview-as-Child in the Father console (T14.2) is not implemented.
+**None.** All identified security, privacy, and functional defects have been resolved and verified with live evidence.

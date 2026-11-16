@@ -246,6 +246,17 @@ class DomoluxFamilyUserService:
             clean_username,
             user_id,
         )
+
+        # Step 4: sidebar privacy (F-4).  Best effort; never fails creation.
+        try:
+            from .sidebar_privacy import async_hide_father_only_panels
+
+            await async_hide_father_only_panels(self.hass, user_id)
+        except Exception as err:  # pragma: no cover - defensive
+            _LOGGER.warning(
+                "Could not apply sidebar privacy for user '%s': %s", user_id, err
+            )
+
         return record
 
     def get_family_member(self, user_id: str) -> Optional[FamilyMemberRecord]:

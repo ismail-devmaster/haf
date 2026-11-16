@@ -729,13 +729,29 @@ async def phase_persist(session: aiohttp.ClientSession) -> None:
     father_token = await login(session, FATHER_USER, FATHER_PASSWORD)
     record("persist.father_can_log_in_after_restart", True)
 
+    # Wait for the Domolux integration entry to finish setting up after restart.
+    role = None
+    for _ in range(20):
+        try:
+            async with WSClient(session, father_token) as probe_ws:
+                res = await probe_ws.call({"type": "domolux/role/get"})
+                if res.get("success") is True and res.get("result"):
+                    role = res
+                    break
+        except Exception:
+            pass
+        await asyncio.sleep(0.5)
+
+    if role is None:
+        async with WSClient(session, father_token) as probe_ws:
+            role = await probe_ws.call({"type": "domolux/role/get"})
+
+    record(
+        "persist.father_role_survived",
+        role.get("success") is True,
+        response=role.get("result"),
+    )
     async with WSClient(session, father_token) as father_ws:
-        role = await father_ws.call({"type": "domolux/role/get"})
-        record(
-            "persist.father_role_survived",
-            role.get("success") is True,
-            response=role.get("result"),
-        )
         family = await father_ws.call({"type": "domolux/family/list"})
         members = family.get("result") or []
         if isinstance(members, dict):

@@ -197,9 +197,11 @@ export async function getView(
     throw buildError("invalid_input", "Must specify exactly one of 'view_id' or 'view_path'.");
   }
 
-  const payload: Record<string, unknown> = { type: "domolux/view/get" };
-  if (opts.view_id) payload.view_id = opts.view_id;
-  if (opts.view_path) payload.view_path = opts.view_path;
+  const payload = {
+    type: "domolux/view/get",
+    ...(opts.view_id ? { view_id: opts.view_id } : {}),
+    ...(opts.view_path ? { view_path: opts.view_path } : {}),
+  };
 
   const result = (await hass.callWS(payload)) as Record<string, unknown> | null;
   if (!result || typeof result !== "object") {
@@ -255,10 +257,22 @@ export function subscribeViewUpdates(
     opts.onEvent(data);
   };
 
-  const unsub = hass.connection.subscribeEvents(handler, "domolux_view_updated");
+  let unsubFunc: (() => void) | undefined;
+  const res = hass.connection.subscribeEvents(handler, "domolux_view_updated");
+  if (res && typeof (res as any).then === "function") {
+    (res as any).then((u: any) => {
+      unsubFunc = u;
+    });
+  } else if (typeof res === "function") {
+    unsubFunc = res;
+  }
 
   // Return deterministic cleanup function
-  return unsub;
+  return () => {
+    if (unsubFunc) {
+      unsubFunc();
+    }
+  };
 }
 
 /** Clear all in-memory cached views (useful on logout / disconnect). */

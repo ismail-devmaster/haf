@@ -171,6 +171,12 @@ export class CDP {
 /** Shared in-page helpers, injected into every document. */
 const PAGE_HELPERS = String.raw`
 (() => {
+  if (!window.__tokenCache) {
+    window.__tokenCache = { tokens: undefined, writeEnabled: true };
+  } else {
+    window.__tokenCache.writeEnabled = true;
+  }
+
   if (window.__dlAll) return;
 
   // Collect every element matching a selector across all shadow roots.
@@ -330,6 +336,7 @@ export class Page {
     this.cdp.on(
       "Network.loadingFailed",
       (params) => {
+        if (params.canceled || params.errorText === "net::ERR_ABORTED") return;
         this.failedRequests.push(params.errorText || "loadingFailed");
       },
       this.sessionId

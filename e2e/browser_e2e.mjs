@@ -132,6 +132,67 @@ try {
   );
 
   // -------------------------------------------------------------------------
+  // 1b. Father Preview as Child Feature (P1)
+  // -------------------------------------------------------------------------
+  const previewStart = await father.callWS({
+    type: "domolux/preview/start",
+    child_user_id: state.child_a_id,
+  });
+  record(
+    "browser.preview.start_as_father",
+    previewStart.ok === true && previewStart.result?.preview?.active === true,
+    { response: previewStart }
+  );
+
+  const previewViews = await father.callWS({
+    type: "domolux/permission/my_views",
+  });
+  record(
+    "browser.preview.my_views_reflects_child",
+    previewViews.ok === true &&
+      previewViews.result?.preview_mode === true &&
+      previewViews.result?.preview_child_id === state.child_a_id &&
+      previewViews.result?.all_views_allowed === false,
+    { response: previewViews }
+  );
+
+  const previewEval = await father.callWS({
+    type: "domolux/preview/evaluate",
+    child_user_id: state.child_a_id,
+    entity_id: PERMITTED,
+    access_level: "read",
+  });
+  const previewEvalForbidden = await father.callWS({
+    type: "domolux/preview/evaluate",
+    child_user_id: state.child_a_id,
+    entity_id: FORBIDDEN,
+    access_level: "read",
+  });
+  record(
+    "browser.preview.evaluate_child_permissions",
+    previewEval.ok === true &&
+      previewEval.result?.entity_evaluation?.granted === true &&
+      previewEvalForbidden.ok === true &&
+      previewEvalForbidden.result?.entity_evaluation?.granted === false,
+    { permitted: previewEval.result, forbidden: previewEvalForbidden.result }
+  );
+
+  const previewStop = await father.callWS({
+    type: "domolux/preview/stop",
+  });
+  const viewsRestored = await father.callWS({
+    type: "domolux/permission/my_views",
+  });
+  record(
+    "browser.preview.stop_restores_father",
+    previewStop.ok === true &&
+      viewsRestored.ok === true &&
+      viewsRestored.result?.all_views_allowed === true &&
+      viewsRestored.result?.preview_mode === false,
+    { stop: previewStop, restored: viewsRestored }
+  );
+
+  // -------------------------------------------------------------------------
   // 2. Child A signs in in its own isolated browser context
   // -------------------------------------------------------------------------
   const childA = await openPage("childA", CHILD_A);
@@ -171,6 +232,7 @@ try {
   // Home Assistant's generated overview builds a "Devices" tile for
   // `zone.home`; a managed Child is denied that entity, so the tile renders an
   // "Entity not found" warning.  Tracked as F-5.
+  await sleep(1500);
   const warnings = await childA.evaluate(`(() => {
     const warnings = window.__dlAll("hui-warning");
     const entities = [];
@@ -184,11 +246,11 @@ try {
     return { count: warnings.length, entities };
   })()`);
   record("browser.child_a_overview_has_no_broken_cards", warnings.count === 0, {
-    knownIssue: true,
+    knownIssue: false,
     finding: "F-5",
     warnings: warnings.count,
     unresolved_entities: warnings.entities,
-    note: "the generated Devices tile targets zone.home, which deny-by-default hides from a Child",
+    note: "unauthorized and unavailable entity cards are gracefully hidden without disclosure",
   });
   await shot(childA, "child-a-overview");
 
@@ -250,36 +312,48 @@ try {
     { status: directRead.status }
   );
 
-  // Direct navigation to a hidden view must not expose data.
-  await childA.navigate(`${ORIGIN}/domolux-manage`);
-  await sleep(5000);
-  const consoleTexts = (await childA.shortTexts()).join("\n");
+  const childPreviewAttempt = await childA.callWS({
+    type: "domolux/preview/start",
+    child_user_id: state.child_b_id,
+  });
   record(
-    "browser.child_a_parent_console_has_no_family_data",
-    !consoleTexts.includes("Child B") && !consoleTexts.includes("e2e_child_b"),
-    { url: await childA.evaluate("location.href") }
+    "browser.preview.child_denied_starting_preview",
+    childPreviewAttempt.ok === false,
+    { response: childPreviewAttempt }
   );
 
-  // The Family Manager panel is also Father-only; opening it must not leak.
-  await childA.navigate(`${ORIGIN}/domolux-family`);
-  await sleep(5000);
-  const familyTexts = (await childA.shortTexts()).join("\n");
-  record(
-    "browser.child_a_family_manager_has_no_family_data",
-    !familyTexts.includes("Child B") && !familyTexts.includes("e2e_child_b"),
-    { url: await childA.evaluate("location.href") }
-  );
   record(
     "browser.child_a_parent_console_hidden_from_sidebar",
     !childATexts.includes("Parent Console"),
     {
-      knownIssue: true,
+      knownIssue: false,
       finding: "F-4",
       observed_sidebar_entry: childATexts.includes("Parent Console"),
-      note: "Father-only panels are listed in every sidebar; opening them exposes no data.",
+      note: "Father-only panels are hidden from managed Child sidebar.",
     }
   );
-  await shot(childA, "child-a-parent-console");
+
+  // Direct navigation to hidden views must not expose data (tested on probe page).
+  const childProbe = await openPage("childProbe", CHILD_A);
+  await childProbe.navigate(`${ORIGIN}/domolux-manage`);
+  await sleep(5000);
+  const consoleTexts = (await childProbe.shortTexts()).join("\n");
+  record(
+    "browser.child_a_parent_console_has_no_family_data",
+    !consoleTexts.includes("Child B") && !consoleTexts.includes("e2e_child_b"),
+    { url: await childProbe.evaluate("location.href") }
+  );
+
+  // The Family Manager panel is also Father-only; opening it must not leak.
+  await childProbe.navigate(`${ORIGIN}/domolux-family`);
+  await sleep(5000);
+  const familyTexts = (await childProbe.shortTexts()).join("\n");
+  record(
+    "browser.child_a_family_manager_has_no_family_data",
+    !familyTexts.includes("Child B") && !familyTexts.includes("e2e_child_b"),
+    { url: await childProbe.evaluate("location.href") }
+  );
+  await shot(childProbe, "child-a-parent-console");
 
   // -------------------------------------------------------------------------
   // 4. Child B (read-only permission set) signs in

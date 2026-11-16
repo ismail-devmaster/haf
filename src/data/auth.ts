@@ -25,7 +25,16 @@ export interface SignedPath {
 
 export const hassUrl = __HASS_URL__;
 
-export const getConnectionUrl = (): string => hassUrl;
+export const getConnectionUrl = (): string => {
+  if (
+    typeof location !== "undefined" &&
+    location.search &&
+    location.search.includes("auth_callback=1")
+  ) {
+    return `${location.protocol}//${location.host}`;
+  }
+  return hassUrl;
+};
 
 export const autocompleteLoginFields = (schema: HaFormSchema[]) =>
   schema.map((field) => {

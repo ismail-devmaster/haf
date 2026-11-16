@@ -818,6 +818,31 @@ async def ws_permission_my_views(
     is_admin_or_owner = await evaluator._is_admin_or_owner(user_id)
 
     if is_father or is_admin_or_owner:
+        # Check if caller has an active preview session
+        from .preview_manager import get_connection_preview
+
+        preview = get_connection_preview(hass, connection)
+        if preview is not None:
+            child_id = preview.child_user_id
+            child_perm = store.get_user_permissions(child_id)
+            child_view_rules = {
+                view_path: rule.effect
+                for view_path, rule in child_perm.view_rules.items()
+            }
+            connection.send_result(
+                msg["id"],
+                {
+                    "user_id": user_id,
+                    "all_views_allowed": False,
+                    "default_access_level": child_perm.default_access_level,
+                    "view_rules": child_view_rules,
+                    "preview_mode": True,
+                    "preview_child_id": child_id,
+                    "preview_child_name": preview.child_name,
+                },
+            )
+            return
+
         connection.send_result(
             msg["id"],
             {
@@ -825,6 +850,7 @@ async def ws_permission_my_views(
                 "all_views_allowed": True,
                 "default_access_level": ACCESS_LEVEL_CONTROL,
                 "view_rules": {},
+                "preview_mode": False,
             },
         )
         return
@@ -842,6 +868,7 @@ async def ws_permission_my_views(
             "all_views_allowed": False,
             "default_access_level": perm_set.default_access_level,
             "view_rules": view_rules,
+            "preview_mode": False,
         },
     )
 

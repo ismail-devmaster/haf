@@ -354,33 +354,6 @@ export class HaDomoluxFamilyManager extends LitElement {
     }
   }
 
-  private _handleToggleStatusClick(e: Event): void {
-    const member = (e.currentTarget as any).member as DomoluxFamilyMember;
-    if (member) {
-      this._handleToggleStatus(member);
-    }
-  }
-
-  private _openPasswordDialogClick(e: Event): void {
-    const member = (e.currentTarget as any).member as DomoluxFamilyMember;
-    if (member) {
-      this._openPasswordDialog(member);
-    }
-  }
-
-  private _handleDeleteMemberClick(e: Event): void {
-    const member = (e.currentTarget as any).member as DomoluxFamilyMember;
-    if (member) {
-      this._openDeleteDialog(member);
-    }
-  }
-
-  private _openPermissionDialogClick(e: Event): void {
-    const member = (e.currentTarget as any).member as DomoluxFamilyMember;
-    if (member) {
-      this._openPermissionDialog(member);
-    }
-  }
 
   private async _openPermissionDialog(member: DomoluxFamilyMember): Promise<void> {
     if (!this._isFather) {
@@ -797,8 +770,8 @@ export class HaDomoluxFamilyManager extends LitElement {
                                 <ha-button
                                   size="small"
                                   .disabled=${this._submitting}
-                                  .member=${member}
-                                  @click=${this._handleToggleStatusClick}
+                                  @click=${() =>
+                                    this._handleToggleStatus(member)}
                                 >
                                   <ha-svg-icon
                                     .path=${isActive
@@ -813,8 +786,8 @@ export class HaDomoluxFamilyManager extends LitElement {
                                 <ha-button
                                   size="small"
                                   .disabled=${this._submitting}
-                                  .member=${member}
-                                  @click=${this._openPasswordDialogClick}
+                                  @click=${() =>
+                                    this._openPasswordDialog(member)}
                                 >
                                   <ha-svg-icon
                                     .path=${mdiKeyVariant}
@@ -825,8 +798,8 @@ export class HaDomoluxFamilyManager extends LitElement {
                                 <ha-button
                                   size="small"
                                   .disabled=${this._submitting}
-                                  .member=${member}
-                                  @click=${this._openPermissionDialogClick}
+                                  @click=${() =>
+                                    this._openPermissionDialog(member)}
                                 >
                                   <ha-svg-icon
                                     .path=${mdiShieldAccount}
@@ -838,8 +811,8 @@ export class HaDomoluxFamilyManager extends LitElement {
                                   size="small"
                                   class="destructive"
                                   .disabled=${this._submitting}
-                                  .member=${member}
-                                  @click=${this._handleDeleteMemberClick}
+                                  @click=${() =>
+                                    this._openDeleteDialog(member)}
                                 >
                                   <ha-svg-icon
                                     .path=${mdiAccountRemove}

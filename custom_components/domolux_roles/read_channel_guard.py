@@ -66,6 +66,16 @@ def _domolux_entry(hass: Any) -> dict[str, Any] | None:
     return None
 
 
+def is_managed_child(hass: Any, user_id: str | None) -> bool:
+    """Public helper: is ``user_id`` a Domolux-managed Child?"""
+    if not user_id:
+        return False
+    entry = _domolux_entry(hass)
+    if entry is None:
+        return False
+    return _is_managed_child(entry, user_id)
+
+
 def _is_managed_child(entry: dict[str, Any], user_id: str) -> bool:
     """Return True when ``user_id`` is a Domolux-managed Child."""
     store = entry["store"]

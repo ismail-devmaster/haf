@@ -72,3 +72,4 @@ htmlcov/
 evidence/E2E/state/
 evidence/E2E/browser-state/
 evidence/E2E/logs/
+graphify-out/

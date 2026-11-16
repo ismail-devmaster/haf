@@ -1,0 +1,32 @@
+type: custom:domolux-header
+variables:
+  header_title: "Domolux Home"
+  header_subtitle: "Premium Smart Home"
+  active_view: "overview"
+  show_weather: true
+  show_date: true
+  show_user: true
+  show_theme_toggle: true
+  show_navigation: true
+  custom_actions: []
+triggers_update:
+  - weather.domolux
+  - sensor.time
+  - input_select.house_mode
+styles:
+  card:
+    - padding: 0
+    - background: transparent
+    - border: none
+    - box-shadow: none
+    - height: 100%
+  grid:
+    - grid-template-columns: 1fr
+    - grid-template-rows: 1fr
+custom_fields:
+  main: |-
+    <div style="padding:20px;background:rgba(226,232,240,0.8);border-radius:28px;">
+      <h2 style="margin:0;font-family:'Sora',sans-serif;font-size:18px;font-weight:700;">{{variables.header_title}}</h2>
+      <p style="margin:4px 0 0;color:#64748B;font-size:12px;">{{variables.header_subtitle}}</p>
+      <p style="margin:8px 0 0;font-size:11px;color:#94A3B8;">Active: {{variables.active_view}}</p>
+    </div>

@@ -14,10 +14,11 @@ from typing import Any
 
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import Unauthorized
 import voluptuous as vol
 
 from .api_schemas import USER_ID_SCHEMA
-from .const import DOMAIN, ROLE_FATHER, ROLE_USER
+from .const import DOMAIN, ROLE_FATHER, ROLE_USER, ACCESS_LEVEL_READ, ACCESS_LEVEL_CONTROL
 from .audit import get_audit_log
 from .models import DomoluxRoleValidationError
 from .role_manager import DomoluxRoleManager
@@ -72,10 +73,10 @@ def _require_admin(connection: websocket_api.ActiveConnection) -> None:
     user = connection.user
     if user is None or getattr(user, "is_disabled", False):
         _record_denied(connection, "admin_required")
-        raise websocket_api.Unauthorized()
+        raise Unauthorized()
     if not (getattr(user, "is_admin", False) or getattr(user, "is_owner", False)):
         _record_denied(connection, "admin_required")
-        raise websocket_api.Unauthorized(user_id=user.id)
+        raise Unauthorized(user_id=user.id)
 
 
 def _record_denied(connection, reason: str) -> None:
@@ -151,7 +152,7 @@ async def ws_list_eligible_users(
     """List Home Assistant users eligible for Father assignment (Admin only)."""
     try:
         _require_admin(connection)
-    except websocket_api.Unauthorized:
+    except Unauthorized:
         connection.send_error(
             msg["id"],
             websocket_api.ERR_UNAUTHORIZED,
@@ -213,7 +214,7 @@ async def ws_set_father(
     """Assign the Father role to a specified non-admin user (Admin only)."""
     try:
         _require_admin(connection)
-    except websocket_api.Unauthorized:
+    except Unauthorized:
         connection.send_error(
             msg["id"],
             websocket_api.ERR_UNAUTHORIZED,
@@ -273,7 +274,7 @@ async def ws_remove_father(
     """Remove current Father assignment (Admin only)."""
     try:
         _require_admin(connection)
-    except websocket_api.Unauthorized:
+    except Unauthorized:
         connection.send_error(
             msg["id"],
             websocket_api.ERR_UNAUTHORIZED,

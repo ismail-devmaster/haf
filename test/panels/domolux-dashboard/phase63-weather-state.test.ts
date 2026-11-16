@@ -6,7 +6,8 @@ describe("Phase 6.3 weather state access", () => {
     expect(state.attributes.temperature).toBe(23.6);
   });
   it("renders unavailable when state missing (Child denied / missing)", () => {
-    const state = undefined;
+    const getState = (): { state: string } | undefined => undefined;
+    const state = getState();
     expect(!state || state.state === "unavailable").toBe(true);
   });
   it("preserves read-only: no control granted needed", () => {
