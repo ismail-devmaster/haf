@@ -156,3 +156,208 @@ async def test_catalog_no_mutation_no_state_values(mock_hass):
             assert "state" not in entry
             assert "attributes" not in entry
             assert "last_updated" not in entry
+
+
+@pytest.mark.asyncio
+async def test_catalog_mapping_entities_and_device_discovery(mock_hass):
+    """Real HA EntityRegistryItems is a Mapping: iterating it yields keys, values() yields entries."""
+    conn = MagicMock()
+    conn.user.id = FATHER_ID
+    msg = {"id": 100, "type": "domolux/catalog"}
+
+    # Mock device
+    dev = MagicMock()
+    dev.id = "dev_kitchen"
+    dev.name_by_user = "Kitchen Light Fixture"
+    dev.name = "Kitchen Light"
+    dev.area_id = "area_kitchen"
+    dev.entry_type = None
+
+    # Mock entries belonging to device
+    e1 = MagicMock()
+    e1.entity_id = "light.kitchen"
+    e1.domain = "light"
+    e1.disabled_by = None
+    e1.device_id = "dev_kitchen"
+    e1.area_id = "area_kitchen"
+    e1.name_by_user = "Kitchen Main"
+    e1.original_name = "Kitchen"
+
+    # Mapping simulating EntityRegistryItems
+    entity_mapping = {"light.kitchen": e1}
+
+    with patch("custom_components.domolux_roles.view_api._get_evaluator") as mock_eval, \
+         patch("homeassistant.helpers.device_registry.async_get") as mock_dr, \
+         patch("homeassistant.helpers.entity_registry.async_get") as mock_er, \
+         patch("homeassistant.helpers.area_registry.async_get") as mock_ar:
+        evaluator = MagicMock()
+        evaluator._is_father.return_value = True
+        mock_eval.return_value = evaluator
+
+        d_reg = MagicMock()
+        d_reg.devices = {"dev_kitchen": dev}
+        mock_dr.return_value = d_reg
+
+        e_reg = MagicMock()
+        e_reg.entities = entity_mapping
+        mock_er.return_value = e_reg
+
+        a_reg = MagicMock()
+        area_obj = MagicMock()
+        area_obj.name = "Kitchen"
+        a_reg.async_get_area.return_value = area_obj
+        mock_ar.return_value = a_reg
+
+        await ws_catalog(mock_hass, conn, msg)
+
+        conn.send_result.assert_called_once()
+        catalog = conn.send_result.call_args[0][1]["catalog"]
+
+        assert len(catalog["devices"]) >= 1
+        d = next(d for d in catalog["devices"] if d["device_id"] == "dev_kitchen")
+        assert d["name"] == "Kitchen Light Fixture"
+        assert d["area_name"] == "Kitchen"
+        assert d["channels"][0]["entity_id"] == "light.kitchen"
+        assert d["channels"][0]["name"] == "Kitchen Main"
+
+
+@pytest.mark.asyncio
+async def test_catalog_dashboard_discovery_including_custom_dashboard_user(mock_hass):
+    """Lovelace discovery discovers default Overview and custom dashboards such as dashboard-user with actual views."""
+    conn = MagicMock()
+    conn.user.id = FATHER_ID
+    msg = {"id": 101, "type": "domolux/catalog"}
+
+    # Mock Lovelace custom dashboard: dashboard-user
+    dash_user = MagicMock()
+    dash_user.config = {
+        "title": "Family Dashboard",
+        "url_path": "dashboard-user",
+        "icon": "mdi:home-heart",
+    }
+    dash_user_views = {
+        "views": [
+            {
+                "title": "Overview",
+                "path": "overview",
+                "cards": [
+                    {
+                        "type": "entities",
+                        "entities": ["light.living_room", "switch.fan"],
+                    }
+                ],
+            },
+            {
+                "title": "Kids Room",
+                "path": "kids-room",
+                "cards": [
+                    {
+                        "type": "light",
+                        "entity": "light.kids_nightlight",
+                    }
+                ],
+            },
+        ]
+    }
+    dash_user.async_load = MagicMock(return_value=dash_user_views)
+
+    # Mock default overview dashboard in auto-gen mode
+    dash_default = MagicMock()
+    dash_default.config = None
+    dash_default.async_load = MagicMock(side_effect=Exception("auto-gen"))
+
+    mock_lovelace = MagicMock()
+    mock_lovelace.dashboards = {
+        None: dash_default,
+        "dashboard-user": dash_user,
+    }
+    mock_hass.data = {"lovelace": mock_lovelace}
+
+    with patch("custom_components.domolux_roles.view_api._get_evaluator") as mock_eval, \
+         patch("homeassistant.helpers.device_registry.async_get") as mock_dr, \
+         patch("homeassistant.helpers.entity_registry.async_get") as mock_er, \
+         patch("homeassistant.helpers.area_registry.async_get") as mock_ar:
+        evaluator = MagicMock()
+        evaluator._is_father.return_value = True
+        mock_eval.return_value = evaluator
+
+        d_reg = MagicMock()
+        d_reg.devices = {}
+        mock_dr.return_value = d_reg
+
+        e_reg = MagicMock()
+        e_reg.entities = {}
+        mock_er.return_value = e_reg
+        mock_ar.return_value = MagicMock()
+
+        await ws_catalog(mock_hass, conn, msg)
+
+        conn.send_result.assert_called_once()
+        catalog = conn.send_result.call_args[0][1]["catalog"]
+        dashboards = catalog["dashboards"]
+
+        dash_ids = [db["dashboard_id"] for db in dashboards]
+        assert "lovelace" in dash_ids
+        assert "dashboard-user" in dash_ids
+
+        user_db = next(db for db in dashboards if db["dashboard_id"] == "dashboard-user")
+        assert user_db["title"] == "Family Dashboard"
+        assert len(user_db["views"]) == 2
+
+        v0 = user_db["views"][0]
+        assert v0["view_path"] == "overview"
+        assert v0["title"] == "Overview"
+        assert "light.living_room" in v0["entities"]
+
+        v1 = user_db["views"][1]
+        assert v1["view_path"] == "kids-room"
+        assert v1["title"] == "Kids Room"
+        assert "light.kids_nightlight" in v1["entities"]
+
+
+@pytest.mark.asyncio
+async def test_catalog_standalone_entity_discovery_without_device_registry(mock_hass):
+    """Entities without a valid device registry association are discovered as standalone devices."""
+    conn = MagicMock()
+    conn.user.id = FATHER_ID
+    msg = {"id": 102, "type": "domolux/catalog"}
+
+    # Mock helper/standalone switch
+    e_standalone = MagicMock()
+    e_standalone.entity_id = "switch.hallway_fan"
+    e_standalone.domain = "switch"
+    e_standalone.disabled_by = None
+    e_standalone.device_id = None
+    e_standalone.area_id = None
+    e_standalone.name_by_user = "Hallway Fan"
+    e_standalone.original_name = None
+
+    entity_mapping = {"switch.hallway_fan": e_standalone}
+
+    with patch("custom_components.domolux_roles.view_api._get_evaluator") as mock_eval, \
+         patch("homeassistant.helpers.device_registry.async_get") as mock_dr, \
+         patch("homeassistant.helpers.entity_registry.async_get") as mock_er, \
+         patch("homeassistant.helpers.area_registry.async_get") as mock_ar:
+        evaluator = MagicMock()
+        evaluator._is_father.return_value = True
+        mock_eval.return_value = evaluator
+
+        d_reg = MagicMock()
+        d_reg.devices = {}
+        mock_dr.return_value = d_reg
+
+        e_reg = MagicMock()
+        e_reg.entities = entity_mapping
+        mock_er.return_value = e_reg
+        mock_ar.return_value = MagicMock()
+
+        await ws_catalog(mock_hass, conn, msg)
+
+        conn.send_result.assert_called_once()
+        catalog = conn.send_result.call_args[0][1]["catalog"]
+
+        dev = next(d for d in catalog["devices"] if d["target_id"] == "switch.hallway_fan")
+        assert dev["target_type"] == "entity"
+        assert dev["name"] == "Hallway Fan"
+        assert dev["capabilities"] == ["read", "control"]
+        assert dev["channels"][0]["entity_id"] == "switch.hallway_fan"

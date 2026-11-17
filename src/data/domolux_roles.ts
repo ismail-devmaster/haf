@@ -22,6 +22,54 @@ export interface EntityPermissionRule {
 export interface ViewPermissionRule {
   view_path: string;
   effect: "allow" | "deny";
+  access_level?: "none" | "read" | "control";
+}
+
+export interface DeviceChannel {
+  entity_id: string;
+  name: string;
+  domain: string;
+  icon?: string;
+  capabilities: ("read" | "control")[];
+}
+
+export interface HouseholdDevice {
+  device_id: string;
+  target_id: string;
+  target_type: "device" | "entity";
+  name: string;
+  area_id?: string | null;
+  area_name?: string | null;
+  domain: string;
+  icon?: string;
+  entity_count: number;
+  is_multi_entity: boolean;
+  capabilities: ("read" | "control")[];
+  channels: DeviceChannel[];
+  primary_entity_id?: string | null;
+  entities?: string[];
+}
+
+export interface DashboardViewSummary {
+  view_id: string;
+  view_path: string;
+  title: string;
+  icon?: string;
+  entities: string[];
+}
+
+export interface DashboardSummary {
+  dashboard_id: string;
+  title: string;
+  url_path: string;
+  views: DashboardViewSummary[];
+}
+
+export interface HouseholdCatalogResult {
+  devices: HouseholdDevice[];
+  household_devices: HouseholdDevice[];
+  entities: any[];
+  dashboards: DashboardSummary[];
 }
 
 export interface UserPermissionSet {
@@ -278,4 +326,41 @@ export function subscribeMyViewPermissions(
       unsub();
     }
   };
+}
+
+/**
+ * Fetch the Household Device and Dashboard catalog for permission management.
+ */
+export async function fetchHouseholdCatalog(
+  hass: HomeAssistant
+): Promise<HouseholdCatalogResult> {
+  if (!hass?.connection || typeof hass.callWS !== "function") {
+    return {
+      devices: [],
+      household_devices: [],
+      entities: [],
+      dashboards: [],
+    };
+  }
+  try {
+    const res = (await hass.callWS({
+      type: "domolux/catalog",
+    })) as { catalog?: HouseholdCatalogResult } & HouseholdCatalogResult;
+    return (
+      res?.catalog ||
+      (res?.devices || res?.dashboards ? (res as HouseholdCatalogResult) : null) || {
+        devices: [],
+        household_devices: [],
+        entities: [],
+        dashboards: [],
+      }
+    );
+  } catch (_err) {
+    return {
+      devices: [],
+      household_devices: [],
+      entities: [],
+      dashboards: [],
+    };
+  }
 }

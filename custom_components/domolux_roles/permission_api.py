@@ -503,7 +503,7 @@ async def ws_permission_remove_entity_rule(
             hass, target_user_id, mutate
         )
     except Exception as err:
-        _LOGGER.error("Failed to remove entity rule for user %s: %s", target_user_id, err)
+        _LOGGER.exception("Failed to remove entity rule for user %s: %r (%s)", target_user_id, err, type(err))
         connection.send_error(
             msg["id"], ERR_INTERNAL_ERROR, f"Transaction failed: {err}"
         )
@@ -521,6 +521,7 @@ async def ws_permission_remove_entity_rule(
         vol.Required("user_id"): USER_ID_SCHEMA,
         vol.Required("view_path"): VIEW_PATH_SCHEMA,
         vol.Required("effect"): EFFECT,
+        vol.Optional("access_level"): ACCESS_LEVEL,
     }
 )
 @websocket_api.async_response
@@ -541,6 +542,7 @@ async def ws_permission_set_view_rule(
     target_user_id = msg["user_id"]
     view_path = msg["view_path"].strip()
     effect = msg["effect"]
+    access_level = msg.get("access_level")
 
     if not view_path:
         connection.send_error(
@@ -556,6 +558,15 @@ async def ws_permission_set_view_rule(
         )
         return
 
+    if not access_level:
+        access_level = (
+            ACCESS_LEVEL_CONTROL if effect == EFFECT_ALLOW else ACCESS_LEVEL_NONE
+        )
+    elif access_level in (ACCESS_LEVEL_READ, ACCESS_LEVEL_CONTROL):
+        effect = EFFECT_ALLOW
+    elif access_level == ACCESS_LEVEL_NONE:
+        effect = EFFECT_DENY
+
     store = _get_store(hass)
 
     try:
@@ -565,7 +576,7 @@ async def ws_permission_set_view_rule(
         connection.send_error(msg["id"], err_code, err_msg)
         return
 
-    rule = ViewPermissionRule(view_path=view_path, effect=effect)
+    rule = ViewPermissionRule(view_path=view_path, effect=effect, access_level=access_level)
 
     def mutate(ps: UserPermissionSet) -> None:
         ps.view_rules[view_path] = rule

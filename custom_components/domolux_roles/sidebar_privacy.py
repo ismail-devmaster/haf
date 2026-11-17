@@ -28,7 +28,7 @@ from typing import Any, Iterable
 _LOGGER = logging.getLogger(__name__)
 
 # Panels that must never appear in a Child's sidebar.
-FATHER_ONLY_PANELS: tuple[str, ...] = ("domolux-family", "domolux-manage")
+FATHER_ONLY_PANELS: tuple[str, ...] = ("domolux-roles", "domolux-family", "domolux-manage")
 
 SIDEBAR_KEY = "sidebar"
 

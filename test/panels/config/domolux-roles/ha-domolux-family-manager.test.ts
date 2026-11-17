@@ -107,6 +107,72 @@ function createMockHass(options: {
     if (msg.type === "domolux/family/list") {
       return Promise.resolve(familyMembers);
     }
+    if (msg.type === "domolux/catalog") {
+      return Promise.resolve({
+        catalog: {
+          devices: [
+            {
+              device_id: "dev_shade",
+              target_id: "dev_shade",
+              target_type: "device",
+              name: "Hallway Roller Shade",
+              area_id: "hallway",
+              area_name: "Hallway",
+              domain: "cover",
+              icon: "mdi:window-shutter",
+              entity_count: 1,
+              is_multi_entity: false,
+              capabilities: ["read", "control"],
+              channels: [
+                {
+                  entity_id: "cover.zm108m",
+                  name: "Hallway Roller Shade",
+                  domain: "cover",
+                  capabilities: ["read", "control"],
+                },
+              ],
+              primary_entity_id: "cover.zm108m",
+            },
+            {
+              device_id: "dev_pn16",
+              target_id: "dev_pn16",
+              target_type: "device",
+              name: "SONOFF PN16",
+              area_id: "utility",
+              area_name: "Utility Room",
+              domain: "switch",
+              icon: "mdi:toggle-switch",
+              entity_count: 16,
+              is_multi_entity: true,
+              capabilities: ["read", "control"],
+              channels: [
+                { entity_id: "switch.pn16_l1", name: "Channel 1", domain: "switch", capabilities: ["read", "control"] },
+                { entity_id: "switch.pn16_l2", name: "Channel 2", domain: "switch", capabilities: ["read", "control"] },
+                { entity_id: "switch.pn16_l3", name: "Channel 3", domain: "switch", capabilities: ["read", "control"] },
+              ],
+              primary_entity_id: "switch.pn16_l1",
+            },
+          ],
+          household_devices: [],
+          entities: [],
+          dashboards: [
+            {
+              dashboard_id: "lovelace",
+              title: "Home Assistant Overview",
+              url_path: "lovelace",
+              views: [
+                {
+                  view_id: "main",
+                  view_path: "main",
+                  title: "Main View",
+                  entities: ["cover.zm108m", "switch.pn16_l3"],
+                },
+              ],
+            },
+          ],
+        },
+      });
+    }
     if (msg.type === "domolux/family/create") {
       return Promise.resolve({
         success: true,
@@ -989,6 +1055,168 @@ describe("ha-domolux-family-manager component", () => {
       await element.updateComplete;
 
       expect((element as any)._showPermissionDialog).toBe(false);
+    });
+
+    it("loads household catalog and renders device list with recognizable names", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      expect((element as any)._catalogDevices.length).toBe(2);
+      expect((element as any)._catalogDevices[0].name).toBe(
+        "Hallway Roller Shade"
+      );
+      expect((element as any)._catalogDashboards.length).toBe(1);
+    });
+
+    it("assigns CONTROL to single-entity device (Hallway Roller Shade)", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      const shadeDev = (element as any)._catalogDevices[0];
+      await (element as any)._handleSetDevicePermission(shadeDev, "control");
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_entity_rule",
+          user_id: CHILD_USER_ID,
+          target_type: "device",
+          target_id: "dev_shade",
+          access_level: "control",
+        })
+      );
+    });
+
+    it("expands multi-entity device and sets selective channel permission (PN16 Channel 3)", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      const pn16Dev = (element as any)._catalogDevices[1];
+      (element as any)._toggleExpandDevice(pn16Dev.device_id);
+      expect(
+        (element as any)._expandedDeviceIds.has(pn16Dev.device_id)
+      ).toBe(true);
+
+      const ch3 = pn16Dev.channels[2];
+      await (element as any)._handleSetChannelPermission(ch3, "control");
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_entity_rule",
+          user_id: CHILD_USER_ID,
+          target_type: "entity",
+          target_id: "switch.pn16_l3",
+          access_level: "control",
+        })
+      );
+    });
+
+    it("selects all channels for a multi-entity device", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      const pn16Dev = (element as any)._catalogDevices[1];
+      await (element as any)._handleSelectAllChannels(pn16Dev, "control");
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_entity_rule",
+          target_id: "switch.pn16_l1",
+          access_level: "control",
+        })
+      );
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_entity_rule",
+          target_id: "switch.pn16_l2",
+          access_level: "control",
+        })
+      );
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_entity_rule",
+          target_id: "switch.pn16_l3",
+          access_level: "control",
+        })
+      );
+    });
+
+    it("renders dashboards and views tab and sets view rule directly", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      await (element as any)._handleSetViewRuleDirect("main", "control");
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_view_rule",
+          user_id: CHILD_USER_ID,
+          view_path: "main",
+          effect: "allow",
+          access_level: "control",
+        })
+      );
+    });
+
+    it("sets explicit entity override for a device in a view", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      await (element as any)._handleSetEntityOverride(
+        "switch.pn16_l3",
+        "none"
+      );
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_entity_rule",
+          user_id: CHILD_USER_ID,
+          target_type: "entity",
+          target_id: "switch.pn16_l3",
+          access_level: "none",
+        })
+      );
     });
   });
 });

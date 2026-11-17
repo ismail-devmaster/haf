@@ -34,6 +34,7 @@ const STATE_PATH = arg(
 );
 const SHOTS = arg("shots", join(process.cwd(), "evidence/E2E/screenshots"));
 
+const ADMIN = { user: "e2e_admin", password: "e2e-Admin-Pass-1" };
 const FATHER = { user: "e2e_father", password: "e2e-Father-Pass-1" };
 const CHILD_A = { user: "e2e_child_a", password: "e2e-ChildA-Pass-1" };
 const CHILD_B = { user: "e2e_child_b", password: "e2e-ChildB-Pass-1" };
@@ -130,6 +131,235 @@ try {
       entities: fatherCards.entities,
     }
   );
+
+  // -------------------------------------------------------------------------
+  // 1a. Father opens Domolux Roles canonical panel at /domolux-roles
+  // -------------------------------------------------------------------------
+  await father.navigate(`${ORIGIN}/domolux-roles`);
+  await sleep(4000);
+  const fatherRolesUrl = await father.evaluate("location.href");
+  const fatherRolesTexts = (await father.shortTexts()).join("\n");
+  record(
+    "browser.father_domolux_roles_opens_successfully",
+    fatherRolesUrl.includes("/domolux-roles") &&
+      !fatherRolesUrl.includes("/dashboard-user/overview"),
+    { url: fatherRolesUrl }
+  );
+  await shot(father, "father-domolux-roles");
+
+  // Reload page and confirm Father stays on /domolux-roles without redirect
+  await father.evaluate("location.reload()");
+  await sleep(4000);
+  const fatherReloadUrl = await father.evaluate("location.href");
+  record(
+    "browser.father_domolux_roles_reload_no_redirect",
+    fatherReloadUrl.includes("/domolux-roles") &&
+      !fatherReloadUrl.includes("/dashboard-user/overview"),
+    { url: fatherReloadUrl }
+  );
+
+  // -------------------------------------------------------------------------
+  // 1a-2. Father resource discovery in real browser on /domolux-roles
+  // -------------------------------------------------------------------------
+  // 1. Father calls domolux/catalog via WebSocket from browser context
+  const catalogWS = await father.callWS({ type: "domolux/catalog" });
+  const catalogData = catalogWS?.result?.catalog || {};
+  const discoveredDevices = catalogData.devices || [];
+  const discoveredDashboards = catalogData.dashboards || [];
+
+  record(
+    "browser.father_discovers_household_devices",
+    catalogWS.ok === true &&
+      discoveredDevices.length > 0 &&
+      discoveredDevices.some((d) => d.name && d.name !== "Unnamed device"),
+    {
+      device_count: discoveredDevices.length,
+      sample_devices: discoveredDevices.slice(0, 3).map((d) => ({
+        id: d.device_id,
+        name: d.name,
+        channels: d.channels?.length,
+      })),
+    }
+  );
+
+  const discoveredDashIds = discoveredDashboards.map((db) => db.dashboard_id);
+  const userDash = discoveredDashboards.find((db) => db.dashboard_id === "dashboard-user");
+  const userDashViews = (userDash?.views || []).map((v) => v.view_path);
+
+  record(
+    "browser.father_discovers_all_dashboards_and_views",
+    discoveredDashIds.includes("lovelace") &&
+      discoveredDashIds.includes("dashboard-user") &&
+      userDashViews.includes("overview") &&
+      userDashViews.includes("kids-room"),
+    {
+      dashboards: discoveredDashIds,
+      user_dashboard_views: userDashViews,
+    }
+  );
+
+  // Helper script injected into browser context to recursively locate ha-domolux-family-manager
+  // across shadow boundaries and custom panel iframes
+  const findMgrFunc = `
+    function findDomoluxMgr(root = document) {
+      if (!root) return null;
+      if (root.tagName && root.tagName.toLowerCase() === "ha-domolux-family-manager") {
+        return root;
+      }
+      if (root.shadowRoot) {
+        const found = findDomoluxMgr(root.shadowRoot);
+        if (found) return found;
+      }
+      if (root.tagName && root.tagName.toLowerCase() === "iframe") {
+        try {
+          const doc = root.contentDocument || root.contentWindow?.document;
+          if (doc) {
+            const found = findDomoluxMgr(doc);
+            if (found) return found;
+          }
+        } catch (e) {}
+      }
+      const children = root.children || root.childNodes || [];
+      for (const child of children) {
+        if (child.nodeType === 1) {
+          const found = findDomoluxMgr(child);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+  `;
+
+  // 2. Open the Permission Dialog for Child A in the Family Manager DOM
+  await father.evaluate(`(async () => {
+    ${findMgrFunc}
+    const mgr = findDomoluxMgr();
+    if (mgr) {
+      const member = (mgr._familyMembers || []).find((m) => m.display_name === "Child A" || m.user_id === "${state.child_a_id}") || {
+        user_id: "${state.child_a_id}",
+        display_name: "Child A",
+        username: "child_a",
+        managed_by_domolux: true,
+      };
+      await mgr._openPermissionDialog(member);
+      mgr.requestUpdate();
+    }
+  })()`);
+  await sleep(3000);
+
+  // Check dialog rendered with devices
+  const permDialogState = await father.evaluate(`(() => {
+    ${findMgrFunc}
+    const mgr = findDomoluxMgr();
+    if (!mgr) return { found: false };
+    const devCount = (mgr._catalogDevices || []).length;
+    const emptyState = !!mgr.shadowRoot?.querySelector(".empty-state");
+    const deviceCards = mgr.shadowRoot?.querySelectorAll(".device-card")?.length || 0;
+    return {
+      found: true,
+      open: Boolean(mgr._showPermissionDialog),
+      devicesTabActive: mgr._activePermissionTab === "devices",
+      devCount,
+      emptyState,
+      deviceCards,
+    };
+  })()`);
+
+  record(
+    "browser.permission_dialog_shows_household_devices",
+    permDialogState.open === true &&
+      permDialogState.devCount > 0 &&
+      permDialogState.deviceCards > 0 &&
+      permDialogState.emptyState === false,
+    { state: permDialogState }
+  );
+  await shot(father, "father-household-devices-catalog");
+
+  // Switch to "Dashboards and views" tab
+  await father.evaluate(`(() => {
+    ${findMgrFunc}
+    const mgr = findDomoluxMgr();
+    if (mgr) {
+      mgr._activePermissionTab = "dashboards";
+      mgr.requestUpdate();
+    }
+  })()`);
+  await sleep(2000);
+
+  const dashboardsTabState = await father.evaluate(`(() => {
+    ${findMgrFunc}
+    const mgr = findDomoluxMgr();
+    if (!mgr) return { found: false };
+    const dashCount = (mgr._catalogDashboards || []).length;
+    const emptyState = !!mgr.shadowRoot?.querySelector(".empty-state");
+    const dashBlocks = mgr.shadowRoot?.querySelectorAll(".dashboard-block")?.length || 0;
+    const viewCards = mgr.shadowRoot?.querySelectorAll(".view-card")?.length || 0;
+    return {
+      found: true,
+      dashCount,
+      emptyState,
+      dashBlocks,
+      viewCards,
+    };
+  })()`);
+
+  record(
+    "browser.permission_dialog_shows_dashboards_and_views",
+    dashboardsTabState.dashCount >= 2 &&
+      dashboardsTabState.dashBlocks >= 2 &&
+      dashboardsTabState.viewCards >= 2 &&
+      dashboardsTabState.emptyState === false,
+    { state: dashboardsTabState }
+  );
+  await shot(father, "father-dashboards-views-catalog");
+
+  // Father assigns view permission to Child A directly through UI method
+  await father.evaluate(`(async () => {
+    ${findMgrFunc}
+    const mgr = findDomoluxMgr();
+    if (mgr) {
+      await mgr._handleSetViewRuleDirect("kids-room", "read");
+      mgr.requestUpdate();
+    }
+  })()`);
+  await sleep(3000);
+
+  const updatedPermSet = await father.callWS({
+    type: "domolux/permission/get",
+    user_id: state.child_a_id,
+  });
+  const childAViewRule = (
+    updatedPermSet?.result?.view_rules ||
+    updatedPermSet?.result?.permissions?.view_rules ||
+    {}
+  )["kids-room"];
+  record(
+    "browser.father_sets_view_permission_via_catalog",
+    Boolean(childAViewRule && (childAViewRule.effect === "allow" || childAViewRule.access_level === "read")),
+    { view_rule: childAViewRule }
+  );
+
+  // Restore Child A's baseline by removing the temporary view rule
+  await father.callWS({
+    type: "domolux/permission/remove_view_rule",
+    user_id: state.child_a_id,
+    view_path: "kids-room",
+  });
+  await sleep(1000);
+
+  // Close dialog and restore
+  await father.evaluate(`(() => {
+    ${findMgrFunc}
+    const mgr = findDomoluxMgr();
+    if (mgr) {
+      mgr._closePermissionDialog();
+    }
+  })()`);
+  await sleep(1000);
+
+  // Navigate back to overview for subsequent checks
+  await father.navigate(`${ORIGIN}/`);
+  await sleep(2000);
 
   // -------------------------------------------------------------------------
   // 1b. Father Preview as Child Feature (P1)
@@ -323,6 +553,16 @@ try {
   );
 
   record(
+    "browser.child_a_domolux_roles_hidden_from_sidebar",
+    !childATexts.includes("Domolux Roles"),
+    {
+      knownIssue: false,
+      observed_sidebar_entry: childATexts.includes("Domolux Roles"),
+      note: "Domolux Roles canonical panel is hidden from managed Child sidebar.",
+    }
+  );
+
+  record(
     "browser.child_a_parent_console_hidden_from_sidebar",
     !childATexts.includes("Parent Console"),
     {
@@ -353,7 +593,35 @@ try {
     !familyTexts.includes("Child B") && !familyTexts.includes("e2e_child_b"),
     { url: await childProbe.evaluate("location.href") }
   );
+
+  // Direct navigation to canonical /domolux-roles must not expose data to Child.
+  await childProbe.navigate(`${ORIGIN}/domolux-roles`);
+  await sleep(5000);
+  const rolesTexts = (await childProbe.shortTexts()).join("\n");
+  record(
+    "browser.child_a_domolux_roles_has_no_family_data",
+    !rolesTexts.includes("Child B") && !rolesTexts.includes("e2e_child_b"),
+    { url: await childProbe.evaluate("location.href") }
+  );
   await shot(childProbe, "child-a-parent-console");
+
+  // -------------------------------------------------------------------------
+  // 3b. Home Assistant Administrator verification
+  // -------------------------------------------------------------------------
+  const adminPage = await openPage("admin", ADMIN);
+  const adminUser = await adminPage.user();
+  record("browser.admin_login", adminUser?.is_admin === true, {
+    user: adminUser,
+  });
+
+  await adminPage.navigate(`${ORIGIN}/config`);
+  await sleep(3000);
+  const adminConfigUrl = await adminPage.evaluate("location.href");
+  record(
+    "browser.admin_config_accessible",
+    adminConfigUrl.includes("/config"),
+    { url: adminConfigUrl }
+  );
 
   // -------------------------------------------------------------------------
   // 4. Child B (read-only permission set) signs in

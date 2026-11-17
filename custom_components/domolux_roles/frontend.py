@@ -76,21 +76,8 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
         await panel_custom.async_register_panel(
             hass,
             frontend_url_path=PANEL_ID,
-            webcomponent_name="ha-config-domolux-roles",
-            sidebar_title="Domolux Roles",
-            sidebar_icon="mdi:account-cog",
-            js_url=f"{js_url_path}/entrypoint.js",
-            embed_iframe=True,
-            trust_external=False,
-            require_admin=True,
-            config_panel_domain=DOMAIN,
-        )
-    if PANEL_FAMILY_ID not in frontend_panels:
-        await panel_custom.async_register_panel(
-            hass,
-            frontend_url_path=PANEL_FAMILY_ID,
             webcomponent_name="ha-domolux-family-manager",
-            sidebar_title="Family Manager / إدارة العائلة",
+            sidebar_title="Domolux Roles",
             sidebar_icon="mdi:account-group",
             js_url=f"{js_url_path}/entrypoint.js",
             embed_iframe=True,
@@ -105,19 +92,6 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
             webcomponent_name="ha-domolux-dashboard",
             sidebar_title="Domolux Dashboard",
             sidebar_icon="mdi:shield-home",
-            js_url=f"{js_url_path}/entrypoint.js",
-            embed_iframe=True,
-            trust_external=False,
-            require_admin=False,
-            config_panel_domain=DOMAIN,
-        )
-    if PANEL_MANAGE_ID not in frontend_panels:
-        await panel_custom.async_register_panel(
-            hass,
-            frontend_url_path=PANEL_MANAGE_ID,
-            webcomponent_name="ha-domolux-family-manager",
-            sidebar_title="Parent Console / إدارة الوالدين",
-            sidebar_icon="mdi:shield-account",
             js_url=f"{js_url_path}/entrypoint.js",
             embed_iframe=True,
             trust_external=False,
@@ -148,8 +122,9 @@ async def async_unregister_revocation_watcher(hass: HomeAssistant) -> None:
 
 async def async_unregister_frontend(hass: HomeAssistant) -> None:
     async_remove_panel(hass, PANEL_ID, warn_if_unknown=False)
-    async_remove_panel(hass, PANEL_FAMILY_ID, warn_if_unknown=False)
     async_remove_panel(hass, PANEL_DASHBOARD_ID, warn_if_unknown=False)
+    async_remove_panel(hass, PANEL_FAMILY_ID, warn_if_unknown=False)
+    async_remove_panel(hass, PANEL_MANAGE_ID, warn_if_unknown=False)
     _LOGGER.info("Domolux Roles frontend unregistered.")
 
 

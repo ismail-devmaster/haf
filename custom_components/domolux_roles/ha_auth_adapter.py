@@ -25,6 +25,7 @@ from .const import (
     TARGET_DEVICE,
     TARGET_ENTITY,
 )
+from .dependency_discovery import extract_entities_from_card
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -590,6 +591,126 @@ class DomoluxHAAuthAdapter:
         }
         return {"entities": entities}
 
+    def _build_effective_native_policy(self, permission_set: dict[str, Any]) -> dict[str, Any]:
+        """Build native HA policy containing all effective entity permissions.
+
+        Translates explicit entity rules, explicit device rules, and inherited
+        view permissions into native {"entities": {"entity_ids": {...}}}.
+        """
+        from .const import ACCESS_LEVEL_CONTROL, ACCESS_LEVEL_NONE, ACCESS_LEVEL_READ, EFFECT_ALLOW
+
+        base = self._build_native_policy(permission_set)
+        entity_ids: dict[str, dict[str, bool]] = dict(base.get("entities", {}).get("entity_ids", {}))
+
+        if self.hass is not None:
+            try:
+                from homeassistant.helpers import entity_registry as er
+                ent_reg = er.async_get(self.hass)
+            except Exception:
+                ent_reg = None
+
+            # 1. Resolve explicit device rules to underlying entities
+            device_rules: dict[str, str] = {}
+            for rule in (permission_set.get("entity_rules") or {}).values():
+                if isinstance(rule, dict) and str(rule.get("target_type") or "") == TARGET_DEVICE:
+                    d_id = str(rule.get("target_id") or "")
+                    if d_id:
+                        device_rules[d_id] = str(rule.get("access_level") or "")
+
+            if ent_reg is not None and device_rules:
+                for d_id, access_level in device_rules.items():
+                    try:
+                        dev_entries = ent_reg.entities.get_entries_for_device_id(d_id)
+                    except Exception:
+                        dev_entries = []
+                    for entry in dev_entries:
+                        eid = entry.entity_id
+                        # Explicit entity rule takes precedence
+                        explicit_rule = None
+                        for r in (permission_set.get("entity_rules") or {}).values():
+                            if (
+                                isinstance(r, dict)
+                                and str(r.get("target_type") or "") == TARGET_ENTITY
+                                and str(r.get("target_id") or "") == eid
+                            ):
+                                explicit_rule = str(r.get("access_level") or "")
+                                break
+                        if explicit_rule is not None:
+                            continue
+                        if access_level == ACCESS_LEVEL_CONTROL:
+                            entity_ids[eid] = {"read": True, "control": True}
+                        elif access_level == ACCESS_LEVEL_READ:
+                            entity_ids[eid] = {"read": True, "control": False}
+                        elif access_level == ACCESS_LEVEL_NONE:
+                            entity_ids.pop(eid, None)
+
+            # 2. Resolve view-inherited permissions
+            view_rules = permission_set.get("view_rules") or {}
+            if view_rules:
+                domain_data = getattr(self.hass, "data", {}).get("domolux_roles", {})
+                cached_views: dict[str, set[str]] = dict(
+                    domain_data.get("dashboard_view_entities", {}) if isinstance(domain_data, dict) else {}
+                )
+
+                view_store = domain_data.get("view_store") if isinstance(domain_data, dict) else None
+                if view_store is not None:
+                    try:
+                        for v in view_store.list_views():
+                            v_path = v.view_path.strip().lower()
+                            if v_path not in cached_views:
+                                cached_views[v_path] = set()
+                            for card in getattr(v, "cards", []):
+                                card_dict = card.to_dict() if hasattr(card, "to_dict") else (card if isinstance(card, dict) else {})
+                                cached_views[v_path].update(extract_entities_from_card(card_dict))
+                                for b in getattr(card, "entities", []):
+                                    if hasattr(b, "entity_id") and b.entity_id:
+                                        cached_views[v_path].add(b.entity_id.strip().lower())
+                    except Exception as err:
+                        _LOGGER.debug("Error retrieving view store views for native policy: %s", err)
+
+                for v_path, v_rule in view_rules.items():
+                    if not isinstance(v_rule, dict):
+                        continue
+                    v_effect = str(v_rule.get("effect") or "")
+                    v_level = str(
+                        v_rule.get("access_level")
+                        or (ACCESS_LEVEL_CONTROL if v_effect == EFFECT_ALLOW else ACCESS_LEVEL_NONE)
+                    )
+                    if v_effect != EFFECT_ALLOW and v_level not in (ACCESS_LEVEL_READ, ACCESS_LEVEL_CONTROL):
+                        continue
+
+                    ents_in_view = cached_views.get(v_path.strip().lower(), set())
+                    for eid in ents_in_view:
+                        # Check explicit entity rule
+                        explicit_rule = None
+                        for r in (permission_set.get("entity_rules") or {}).values():
+                            if (
+                                isinstance(r, dict)
+                                and str(r.get("target_type") or "") == TARGET_ENTITY
+                                and str(r.get("target_id") or "") == eid
+                            ):
+                                explicit_rule = str(r.get("access_level") or "")
+                                break
+                        if explicit_rule is not None:
+                            continue
+
+                        # Check explicit device rule
+                        if ent_reg is not None:
+                            e_entry = ent_reg.async_get(eid)
+                            if e_entry and e_entry.device_id in device_rules:
+                                continue
+
+                        if v_level == ACCESS_LEVEL_CONTROL:
+                            entity_ids[eid] = {"read": True, "control": True}
+                        elif v_level == ACCESS_LEVEL_READ and (
+                            eid not in entity_ids or not entity_ids[eid].get("control")
+                        ):
+                            entity_ids[eid] = {"read": True, "control": False}
+
+        entities_dict = dict(base.get("entities", {}))
+        entities_dict["entity_ids"] = entity_ids
+        return {"entities": entities_dict}
+
     async def async_sync_managed_user_permissions(
         self, user_id: str, permission_set: dict[str, Any]
     ) -> Any:
@@ -607,7 +728,7 @@ class DomoluxHAAuthAdapter:
         if group is not None:
             old_policy = dict(getattr(group, "policy", {}) or {})
 
-        new_policy = self._build_native_policy(permission_set)
+        new_policy = self._build_effective_native_policy(permission_set)
 
         # Apply
         try:
@@ -629,7 +750,8 @@ class DomoluxHAAuthAdapter:
         try:
             self._invalidate_user_cache(user)
             self._verify_native_policy(user, permission_set)
-        except Exception:
+        except Exception as err:
+            _LOGGER.exception("Native policy verification failed for user %s: %r", user_id, err)
             # Rollback if verification fails
             if old_policy is not None:
                 try:

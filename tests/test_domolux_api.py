@@ -323,14 +323,12 @@ async def test_async_register_frontend_embed_iframe(patch_panel_custom=None):
     with patch("homeassistant.components.panel_custom.async_register_panel", new_callable=AsyncMock) as mock_register:
         await async_register_frontend(hass)
 
-        assert mock_register.call_count == 4
+        assert mock_register.call_count == 2
         calls = mock_register.call_args_list
         assert calls[0].kwargs.get("frontend_url_path") == "domolux-roles"
-        assert calls[0].kwargs.get("require_admin") is True
-        assert calls[1].kwargs.get("frontend_url_path") == "domolux-family"
+        assert calls[0].kwargs.get("webcomponent_name") == "ha-domolux-family-manager"
+        assert calls[0].kwargs.get("require_admin") is False
+        assert calls[0].kwargs.get("sidebar_title") == "Domolux Roles"
+        assert calls[1].kwargs.get("frontend_url_path") == "domolux-dashboard"
         assert calls[1].kwargs.get("require_admin") is False
-        assert calls[2].kwargs.get("frontend_url_path") == "domolux-dashboard"
-        assert calls[2].kwargs.get("require_admin") is False
-        assert calls[3].kwargs.get("frontend_url_path") == "domolux-manage"
-        assert calls[3].kwargs.get("require_admin") is False
 

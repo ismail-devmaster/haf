@@ -11,6 +11,21 @@ import {
   mdiRefresh,
   mdiClose,
   mdiShieldAccount,
+  mdiChevronDown,
+  mdiChevronUp,
+  mdiViewDashboard,
+  mdiDevices,
+  mdiTune,
+  mdiMagnify,
+  mdiLayersOutline,
+  mdiWindowShutter,
+  mdiLightbulb,
+  mdiToggleSwitch,
+  mdiThermostat,
+  mdiFan,
+  mdiLock,
+  mdiCast,
+  mdiRobotVacuum,
 } from "@mdi/js";
 
 import "../../../components/ha-card";
@@ -21,9 +36,13 @@ import "../../../components/progress/ha-progress-ring";
 import type { HomeAssistant } from "../../../types";
 import {
   getDomoluxRole,
+  fetchHouseholdCatalog,
   type DomoluxRoleInfo,
   type UserPermissionSet,
   type EvaluationResult,
+  type HouseholdDevice,
+  type DeviceChannel,
+  type DashboardSummary,
 } from "../../../data/domolux_roles";
 
 export interface DomoluxFamilyMember {
@@ -87,6 +106,22 @@ export class HaDomoluxFamilyManager extends LitElement {
   @state() private _evalTargetId = "";
 
   @state() private _evalResult: EvaluationResult | null = null;
+
+  @state() private _activePermissionTab: "devices" | "dashboards" | "diagnostics" = "devices";
+
+  @state() private _catalogDevices: HouseholdDevice[] = [];
+
+  @state() private _catalogDashboards: DashboardSummary[] = [];
+
+  @state() private _catalogLoading = false;
+
+  @state() private _deviceSearchQuery = "";
+
+  @state() private _deviceRoomFilter = "all";
+
+  @state() private _expandedDeviceIds: Set<string> = new Set();
+
+  @state() private _expandedDashboardIds: Set<string> = new Set();
 
   // Form Inputs (Passwords cleared immediately after WS call)
   @state() private _createDisplayName = "";
@@ -370,10 +405,18 @@ export class HaDomoluxFamilyManager extends LitElement {
     this._newViewEffect = "deny";
     this._evalTargetType = "entity";
     this._evalTargetId = "";
+    this._activePermissionTab = "devices";
+    this._deviceSearchQuery = "";
+    this._deviceRoomFilter = "all";
+    this._expandedDeviceIds = new Set();
+    this._expandedDashboardIds = new Set();
     this._error = null;
     this._showPermissionDialog = true;
 
-    await this._loadUserPermissions(member.user_id);
+    await Promise.all([
+      this._loadUserPermissions(member.user_id),
+      this._loadCatalog(),
+    ]);
   }
 
   private _closePermissionDialog(): void {
@@ -381,6 +424,340 @@ export class HaDomoluxFamilyManager extends LitElement {
     this._selectedUserForPermissions = null;
     this._userPermissionSet = null;
     this._evalResult = null;
+    this._catalogDevices = [];
+    this._catalogDashboards = [];
+  }
+
+  private async _loadCatalog(): Promise<void> {
+    this._catalogLoading = true;
+    try {
+      const res = await fetchHouseholdCatalog(this.hass);
+      this._catalogDevices = res?.devices || res?.household_devices || [];
+      this._catalogDashboards = res?.dashboards || [];
+    } catch (_err) {
+      this._catalogDevices = [];
+      this._catalogDashboards = [];
+    } finally {
+      this._catalogLoading = false;
+    }
+  }
+
+  private _getDomainIconPath(domain?: string): string {
+    switch (domain) {
+      case "cover":
+        return mdiWindowShutter;
+      case "light":
+        return mdiLightbulb;
+      case "switch":
+        return mdiToggleSwitch;
+      case "climate":
+        return mdiThermostat;
+      case "fan":
+        return mdiFan;
+      case "lock":
+        return mdiLock;
+      case "media_player":
+        return mdiCast;
+      case "vacuum":
+        return mdiRobotVacuum;
+      default:
+        return mdiDevices;
+    }
+  }
+
+  private _getAvailableRooms(): string[] {
+    const rooms = new Set<string>();
+    for (const dev of this._catalogDevices) {
+      if (dev.area_name) {
+        rooms.add(dev.area_name);
+      }
+    }
+    return Array.from(rooms).sort();
+  }
+
+  private _getFilteredDevices(): HouseholdDevice[] {
+    return this._catalogDevices.filter((dev) => {
+      if (this._deviceRoomFilter !== "all" && dev.area_name !== this._deviceRoomFilter) {
+        return false;
+      }
+      if (this._deviceSearchQuery.trim()) {
+        const query = this._deviceSearchQuery.toLowerCase();
+        const matchesName = dev.name.toLowerCase().includes(query);
+        const matchesRoom = (dev.area_name || "").toLowerCase().includes(query);
+        const matchesChannel = dev.channels?.some((ch) => ch.name.toLowerCase().includes(query));
+        if (!matchesName && !matchesRoom && !matchesChannel) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  private _getEffectiveDeviceLevel(
+    dev: HouseholdDevice
+  ): "none" | "read" | "control" {
+    if (!this._userPermissionSet) return "none";
+    const rules = Object.values(this._userPermissionSet.entity_rules || {});
+
+    const targetRule = rules.find(
+      (r) =>
+        (r.target_type === dev.target_type && r.target_id === dev.target_id) ||
+        (r.target_type === "device" && r.target_id === dev.device_id)
+    );
+    if (targetRule) {
+      return targetRule.access_level;
+    }
+
+    if (!dev.is_multi_entity && dev.primary_entity_id) {
+      const entityRule = rules.find(
+        (r) =>
+          r.target_type === "entity" && r.target_id === dev.primary_entity_id
+      );
+      if (entityRule) {
+        return entityRule.access_level;
+      }
+    }
+
+    if (dev.is_multi_entity && dev.channels && dev.channels.length > 0) {
+      const channelLevels = dev.channels.map((ch) =>
+        this._getEffectiveChannelLevel(ch.entity_id)
+      );
+      if (channelLevels.every((lvl) => lvl === "control")) {
+        return "control";
+      }
+      if (channelLevels.every((lvl) => lvl === "read")) {
+        return "read";
+      }
+    }
+
+    return this._userPermissionSet.default_access_level || "none";
+  }
+
+  private _getEffectiveChannelLevel(
+    entityId: string
+  ): "none" | "read" | "control" {
+    if (!this._userPermissionSet) return "none";
+    const rules = Object.values(this._userPermissionSet.entity_rules || {});
+    const rule = rules.find(
+      (r) => r.target_type === "entity" && r.target_id === entityId
+    );
+    if (rule) {
+      return rule.access_level;
+    }
+    return this._userPermissionSet.default_access_level || "none";
+  }
+
+  private async _handleSetDevicePermission(
+    dev: HouseholdDevice,
+    accessLevel: "none" | "read" | "control"
+  ): Promise<void> {
+    if (!this._selectedUserForPermissions) return;
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      const res = (await this.hass.callWS({
+        type: "domolux/permission/set_entity_rule",
+        user_id: this._selectedUserForPermissions.user_id,
+        target_type: dev.target_type,
+        target_id: dev.target_id,
+        access_level: accessLevel,
+      })) as any;
+
+      if (res?.permissions) {
+        this._userPermissionSet = res.permissions;
+      }
+      this._success = "Device permission updated successfully.";
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to update device permission."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private async _handleSetChannelPermission(
+    channel: DeviceChannel,
+    accessLevel: "none" | "read" | "control"
+  ): Promise<void> {
+    if (!this._selectedUserForPermissions) return;
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      const res = (await this.hass.callWS({
+        type: "domolux/permission/set_entity_rule",
+        user_id: this._selectedUserForPermissions.user_id,
+        target_type: "entity",
+        target_id: channel.entity_id,
+        access_level: accessLevel,
+      })) as any;
+
+      if (res?.permissions) {
+        this._userPermissionSet = res.permissions;
+      }
+      this._success = "Channel permission updated successfully.";
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to update channel permission."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private async _handleSelectAllChannels(
+    dev: HouseholdDevice,
+    accessLevel: "none" | "read" | "control"
+  ): Promise<void> {
+    if (!this._selectedUserForPermissions || !dev.channels) return;
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      for (const ch of dev.channels) {
+        const res = (await this.hass.callWS({
+          type: "domolux/permission/set_entity_rule",
+          user_id: this._selectedUserForPermissions.user_id,
+          target_type: "entity",
+          target_id: ch.entity_id,
+          access_level: accessLevel,
+        })) as any;
+        if (res?.permissions) {
+          this._userPermissionSet = res.permissions;
+        }
+      }
+      this._success = `All channels updated to ${accessLevel}.`;
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to update all channels."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private async _handleSetViewRuleDirect(
+    viewPath: string,
+    level: "none" | "read" | "control"
+  ): Promise<void> {
+    if (!this._selectedUserForPermissions) return;
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      const effect = level === "none" ? "deny" : "allow";
+      const res = (await this.hass.callWS({
+        type: "domolux/permission/set_view_rule",
+        user_id: this._selectedUserForPermissions.user_id,
+        view_path: viewPath,
+        effect,
+        access_level: level,
+      })) as any;
+
+      if (res?.permissions) {
+        this._userPermissionSet = res.permissions;
+      }
+      this._success = "View permission updated successfully.";
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to update view permission."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private _getExplicitEntityOverrideLevel(entityId: string): string | null {
+    if (!this._userPermissionSet) return null;
+    const rules = Object.values(this._userPermissionSet.entity_rules || {});
+    const rule = rules.find(
+      (r) => r.target_type === "entity" && r.target_id === entityId
+    );
+    return rule ? rule.access_level : null;
+  }
+
+  private async _handleSetEntityOverride(
+    entityId: string,
+    value: string
+  ): Promise<void> {
+    if (!this._selectedUserForPermissions) return;
+
+    this._submitting = true;
+    this._error = null;
+
+    try {
+      if (value === "inherited") {
+        const rules = Object.values(this._userPermissionSet?.entity_rules || {});
+        const rule = rules.find(
+          (r) => r.target_type === "entity" && r.target_id === entityId
+        );
+        if (rule) {
+          await this._handleRemoveEntityRule(rule.rule_id);
+        }
+        return;
+      }
+
+      const res = (await this.hass.callWS({
+        type: "domolux/permission/set_entity_rule",
+        user_id: this._selectedUserForPermissions.user_id,
+        target_type: "entity",
+        target_id: entityId,
+        access_level: value,
+      })) as any;
+
+      if (res?.permissions) {
+        this._userPermissionSet = res.permissions;
+      }
+      this._success = "Device exception updated successfully.";
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(
+        err,
+        "Failed to update exception."
+      );
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private _lookupDeviceOrEntityName(entityId: string): string {
+    for (const dev of this._catalogDevices) {
+      if (dev.primary_entity_id === entityId) return dev.name;
+      if (dev.channels) {
+        const ch = dev.channels.find((c) => c.entity_id === entityId);
+        if (ch) return `${dev.name} - ${ch.name}`;
+      }
+    }
+    return this.hass?.states?.[entityId]?.attributes?.friendly_name || entityId;
+  }
+
+  private _toggleExpandDevice(deviceId: string): void {
+    const next = new Set(this._expandedDeviceIds);
+    if (next.has(deviceId)) {
+      next.delete(deviceId);
+    } else {
+      next.add(deviceId);
+    }
+    this._expandedDeviceIds = next;
+  }
+
+  private _toggleExpandDashboard(viewPath: string): void {
+    const next = new Set(this._expandedDashboardIds);
+    if (next.has(viewPath)) {
+      next.delete(viewPath);
+    } else {
+      next.add(viewPath);
+    }
+    this._expandedDashboardIds = next;
   }
 
   private async _loadUserPermissions(userId: string): Promise<void> {
@@ -1028,246 +1405,42 @@ export class HaDomoluxFamilyManager extends LitElement {
                     </button>
                   </div>
                   <div class="dialog-body">
-                    <!-- Default Access Level -->
-                    <ha-card>
-                      <div class="card-content">
-                        <h3>Default Access Level / مستوى الوصول الافتراضي</h3>
-                        <div class="form-group">
-                          <select
-                            .value=${this._userPermissionSet
-                              ?.default_access_level || "none"}
-                            @change=${(e: Event) =>
-                              this._handleSetDefaultAccessLevel(
-                                (e.target as HTMLSelectElement)
-                                  .value as "none" | "read" | "control"
-                              )}
-                          >
-                            <option value="none">
-                              None / لا شيء
-                            </option>
-                            <option value="read">
-                              Read / قراءة
-                            </option>
-                            <option value="control">
-                              Control / تحكم
-                            </option>
-                          </select>
-                        </div>
-                      </div>
-                    </ha-card>
+                    <!-- Navigation Tabs -->
+                    <div class="permission-tabs">
+                      <button
+                        class="tab-btn ${this._activePermissionTab === 'devices' ? 'active' : ''}"
+                        @click=${() => {
+                          this._activePermissionTab = "devices";
+                        }}
+                      >
+                        <ha-svg-icon .path=${mdiDevices}></ha-svg-icon>
+                        <span>Household devices</span>
+                      </button>
+                      <button
+                        class="tab-btn ${this._activePermissionTab === 'dashboards' ? 'active' : ''}"
+                        @click=${() => {
+                          this._activePermissionTab = "dashboards";
+                        }}
+                      >
+                        <ha-svg-icon .path=${mdiViewDashboard}></ha-svg-icon>
+                        <span>Dashboards and views</span>
+                      </button>
+                      <button
+                        class="tab-btn ${this._activePermissionTab === 'diagnostics' ? 'active' : ''}"
+                        @click=${() => {
+                          this._activePermissionTab = "diagnostics";
+                        }}
+                      >
+                        <ha-svg-icon .path=${mdiTune}></ha-svg-icon>
+                        <span>Advanced diagnostics</span>
+                      </button>
+                    </div>
 
-                    <!-- Entity Rules -->
-                    <ha-card>
-                      <div class="card-content">
-                        <h3>Entity / Device / Area Rules / القواعد</h3>
-                        <div class="form-row">
-                          <select
-                            .value=${this._newRuleTargetType}
-                            @change=${(e: Event) => {
-                              this._newRuleTargetType = (
-                                e.target as HTMLSelectElement
-                              ).value as "entity" | "device" | "area";
-                            }}
-                          >
-                            <option value="entity">Entity / كيان</option>
-                            <option value="device">Device / جهاز</option>
-                            <option value="area">Area / منطقة</option>
-                          </select>
-                          <input
-                            type="text"
-                            placeholder="Target ID / المعرف"
-                            .value=${this._newRuleTargetId}
-                            @input=${(e: Event) => {
-                              this._newRuleTargetId = (
-                                e.target as HTMLInputElement
-                              ).value;
-                            }}
-                          />
-                          <select
-                            .value=${this._newRuleAccessLevel}
-                            @change=${(e: Event) => {
-                              this._newRuleAccessLevel = (
-                                e.target as HTMLSelectElement
-                              ).value as "none" | "read" | "control";
-                            }}
-                          >
-                            <option value="none">None / لا شيء</option>
-                            <option value="read">Read / قراءة</option>
-                            <option value="control">
-                              Control / تحكم
-                            </option>
-                          </select>
-                          <ha-button
-                            @click=${this._handleAddEntityRule}
-                            .disabled=${this._submitting ||
-                            !this._newRuleTargetId.trim()}
-                          >
-                            Add / إضافة
-                          </ha-button>
-                        </div>
-                        ${this._userPermissionSet &&
-                        Object.keys(this._userPermissionSet.entity_rules)
-                          .length === 0
-                          ? html`<p class="empty-state-text"
-                              >No entity rules / لا توجد قواعد</p
-                            >`
-                          : nothing}
-                        <div class="rules-list">
-                          ${this._userPermissionSet
-                            ? Object.values(
-                                this._userPermissionSet.entity_rules
-                              ).map(
-                                (rule) => html`
-                                  <div class="rule-row">
-                                    <span>
-                                      <strong
-                                        >${rule.target_type}</strong
-                                      >/${rule.target_id} →
-                                      ${rule.access_level}
-                                    </span>
-                                    <ha-button
-                                      size="small"
-                                      class="destructive"
-                                      @click=${() =>
-                                        this._handleRemoveEntityRule(
-                                          rule.rule_id
-                                        )}
-                                      .disabled=${this._submitting}
-                                    >
-                                      Remove / حذف
-                                    </ha-button>
-                                  </div>
-                                `
-                              )
-                            : nothing}
-                        </div>
-                      </div>
-                    </ha-card>
-
-                    <!-- View Rules -->
-                    <ha-card>
-                      <div class="card-content">
-                        <h3>View Rules / قواعد العرض</h3>
-                        <div class="form-row">
-                          <input
-                            type="text"
-                            placeholder="View path / المسار"
-                            .value=${this._newViewPath}
-                            @input=${(e: Event) => {
-                              this._newViewPath = (
-                                e.target as HTMLInputElement
-                              ).value;
-                            }}
-                          />
-                          <select
-                            .value=${this._newViewEffect}
-                            @change=${(e: Event) => {
-                              this._newViewEffect = (
-                                e.target as HTMLSelectElement
-                              ).value as "allow" | "deny";
-                            }}
-                          >
-                            <option value="allow">Allow / سماح</option>
-                            <option value="deny">Deny / منع</option>
-                          </select>
-                          <ha-button
-                            @click=${this._handleAddViewRule}
-                            .disabled=${this._submitting ||
-                            !this._newViewPath.trim()}
-                          >
-                            Add / إضافة
-                          </ha-button>
-                        </div>
-                        <div class="rules-list">
-                          ${this._userPermissionSet
-                            ? Object.values(
-                                this._userPermissionSet.view_rules
-                              ).map(
-                                (rule) => html`
-                                  <div class="rule-row">
-                                    <span>
-                                      <strong>${rule.view_path}</strong>
-                                      → ${rule.effect}
-                                    </span>
-                                    <ha-button
-                                      size="small"
-                                      class="destructive"
-                                      @click=${() =>
-                                        this._handleRemoveViewRule(
-                                          rule.view_path
-                                        )}
-                                      .disabled=${this._submitting}
-                                    >
-                                      Remove / حذف
-                                    </ha-button>
-                                  </div>
-                                `
-                              )
-                            : nothing}
-                        </div>
-                      </div>
-                    </ha-card>
-
-                    <!-- Evaluation Preview -->
-                    <ha-card>
-                      <div class="card-content">
-                        <h3>
-                          Evaluation Preview / معاينة التقييم
-                        </h3>
-                        <div class="form-row">
-                          <select
-                            .value=${this._evalTargetType}
-                            @change=${(e: Event) => {
-                              this._evalTargetType = (
-                                e.target as HTMLSelectElement
-                              ).value as "entity" | "device" | "area" | "view";
-                            }}
-                          >
-                            <option value="entity">Entity</option>
-                            <option value="device">Device</option>
-                            <option value="area">Area</option>
-                            <option value="view">View</option>
-                          </select>
-                          <input
-                            type="text"
-                            placeholder="Target ID / View path"
-                            .value=${this._evalTargetId}
-                            @input=${(e: Event) => {
-                              this._evalTargetId = (
-                                e.target as HTMLInputElement
-                              ).value;
-                            }}
-                          />
-                          <ha-button
-                            @click=${this._handleEvaluatePermission}
-                            .disabled=${this._submitting ||
-                            !this._evalTargetId.trim()}
-                          >
-                            Evaluate / قيّم
-                          </ha-button>
-                        </div>
-                        ${this._evalResult
-                          ? html`
-                              <div class="eval-result">
-                                <p>
-                                  Result / النتيجة:
-                                  <strong
-                                    >${this._evalResult.effect ||
-                                    this._evalResult.access_level ||
-                                    "N/A"}</strong
-                                  >
-                                  ${this._evalResult.matching_rule_type
-                                    ? html` (matched:
-                                        ${this._evalResult.matching_rule_type}
-                                        / rule:
-                                        ${this._evalResult.matching_rule_id})`
-                                    : nothing}
-                                </p>
-                              </div>
-                            `
-                          : nothing}
-                      </div>
-                    </ha-card>
+                    ${this._activePermissionTab === "devices"
+                      ? this._renderHouseholdDevicesTab()
+                      : this._activePermissionTab === "dashboards"
+                      ? this._renderDashboardsTab()
+                      : this._renderDiagnosticsTab()}
                   </div>
                   <div class="dialog-footer">
                     <ha-button
@@ -1289,6 +1462,599 @@ export class HaDomoluxFamilyManager extends LitElement {
             `
           : nothing}
       </div>
+    `;
+  }
+
+  private _renderHouseholdDevicesTab() {
+    if (this._catalogLoading) {
+      return html`
+        <div class="loading-container">
+          <ha-progress-ring active></ha-progress-ring>
+          <span>Loading household devices...</span>
+        </div>
+      `;
+    }
+
+    const availableRooms = this._getAvailableRooms();
+    const filteredDevices = this._getFilteredDevices();
+
+    return html`
+      <div class="filter-toolbar">
+        <div class="search-box">
+          <ha-svg-icon .path=${mdiMagnify}></ha-svg-icon>
+          <input
+            type="text"
+            placeholder="Search devices by name..."
+            .value=${this._deviceSearchQuery}
+            @input=${(e: Event) => {
+              this._deviceSearchQuery = (e.target as HTMLInputElement).value;
+            }}
+          />
+        </div>
+        <div class="room-filter">
+          <select
+            .value=${this._deviceRoomFilter}
+            @change=${(e: Event) => {
+              this._deviceRoomFilter = (e.target as HTMLSelectElement).value;
+            }}
+          >
+            <option value="all">All rooms</option>
+            ${availableRooms.map(
+              (room) => html`<option value=${room}>${room}</option>`
+            )}
+          </select>
+        </div>
+      </div>
+
+      ${filteredDevices.length === 0
+        ? html`
+            <div class="empty-state">
+              <p>No household devices found.</p>
+            </div>
+          `
+        : html`
+            <div class="device-list">
+              ${filteredDevices.map((dev) => {
+                const effectiveLevel = this._getEffectiveDeviceLevel(dev);
+                const isExpanded = this._expandedDeviceIds.has(dev.device_id);
+                return html`
+                  <div class="device-card">
+                    <div class="device-main-row">
+                      <div class="device-icon-container">
+                        <ha-svg-icon
+                          .path=${this._getDomainIconPath(dev.domain)}
+                        ></ha-svg-icon>
+                      </div>
+                      <div class="device-info">
+                        <div class="device-name-row">
+                          <span class="device-name">${dev.name}</span>
+                          ${dev.area_name
+                            ? html`<span class="area-badge"
+                                >${dev.area_name}</span
+                              >`
+                            : nothing}
+                          ${dev.is_multi_entity
+                            ? html`<span class="multi-badge"
+                                >${dev.channels.length} channels</span
+                              >`
+                            : nothing}
+                        </div>
+                        <div class="device-meta">
+                          Capabilities: ${dev.capabilities.join(", ")}
+                        </div>
+                      </div>
+                      <div class="device-permission-controls">
+                        <div class="segmented-control">
+                          <button
+                            class="seg-btn ${effectiveLevel === 'none'
+                              ? 'active-deny'
+                              : ''}"
+                            @click=${() =>
+                              this._handleSetDevicePermission(dev, 'none')}
+                            .disabled=${this._submitting}
+                          >
+                            Deny
+                          </button>
+                          <button
+                            class="seg-btn ${effectiveLevel === 'read'
+                              ? 'active-read'
+                              : ''}"
+                            @click=${() =>
+                              this._handleSetDevicePermission(dev, 'read')}
+                            .disabled=${this._submitting}
+                          >
+                            Read
+                          </button>
+                          <button
+                            class="seg-btn ${effectiveLevel === 'control'
+                              ? 'active-control'
+                              : ''}"
+                            @click=${() =>
+                              this._handleSetDevicePermission(dev, 'control')}
+                            .disabled=${this._submitting}
+                          >
+                            Control
+                          </button>
+                        </div>
+                        ${dev.is_multi_entity
+                          ? html`
+                              <button
+                                class="icon-button expand-btn"
+                                @click=${() =>
+                                  this._toggleExpandDevice(dev.device_id)}
+                                title="Expand channels"
+                              >
+                                <ha-svg-icon
+                                  .path=${isExpanded
+                                    ? mdiChevronUp
+                                    : mdiChevronDown}
+                                ></ha-svg-icon>
+                              </button>
+                            `
+                          : nothing}
+                      </div>
+                    </div>
+                    ${dev.is_multi_entity && isExpanded
+                      ? html`
+                          <div class="channels-expansion">
+                            <div class="channels-header">
+                              <span>Individual channels</span>
+                              <div class="channels-actions">
+                                <ha-button
+                                  size="small"
+                                  @click=${() =>
+                                    this._handleSelectAllChannels(
+                                      dev,
+                                      'control'
+                                    )}
+                                  .disabled=${this._submitting}
+                                >
+                                  Select all control
+                                </ha-button>
+                                <ha-button
+                                  size="small"
+                                  @click=${() =>
+                                    this._handleSelectAllChannels(dev, 'none')}
+                                  .disabled=${this._submitting}
+                                >
+                                  Select all deny
+                                </ha-button>
+                              </div>
+                            </div>
+                            <div class="channels-list">
+                              ${dev.channels.map((ch) => {
+                                const chLevel = this._getEffectiveChannelLevel(
+                                  ch.entity_id
+                                );
+                                return html`
+                                  <div class="channel-row">
+                                    <div class="channel-info">
+                                      <ha-svg-icon
+                                        .path=${this._getDomainIconPath(
+                                          ch.domain
+                                        )}
+                                      ></ha-svg-icon>
+                                      <span class="channel-name"
+                                        >${ch.name}</span
+                                      >
+                                    </div>
+                                    <div class="segmented-control small">
+                                      <button
+                                        class="seg-btn ${chLevel === 'none'
+                                          ? 'active-deny'
+                                          : ''}"
+                                        @click=${() =>
+                                          this._handleSetChannelPermission(
+                                            ch,
+                                            'none'
+                                          )}
+                                        .disabled=${this._submitting}
+                                      >
+                                        Deny
+                                      </button>
+                                      <button
+                                        class="seg-btn ${chLevel === 'read'
+                                          ? 'active-read'
+                                          : ''}"
+                                        @click=${() =>
+                                          this._handleSetChannelPermission(
+                                            ch,
+                                            'read'
+                                          )}
+                                        .disabled=${this._submitting}
+                                      >
+                                        Read
+                                      </button>
+                                      <button
+                                        class="seg-btn ${chLevel === 'control'
+                                          ? 'active-control'
+                                          : ''}"
+                                        @click=${() =>
+                                          this._handleSetChannelPermission(
+                                            ch,
+                                            'control'
+                                          )}
+                                        .disabled=${this._submitting}
+                                      >
+                                        Control
+                                      </button>
+                                    </div>
+                                  </div>
+                                `;
+                              })}
+                            </div>
+                          </div>
+                        `
+                      : nothing}
+                  </div>
+                `;
+              })}
+            </div>
+          `}
+    `;
+  }
+
+  private _renderDashboardsTab() {
+    if (this._catalogLoading) {
+      return html`
+        <div class="loading-container">
+          <ha-progress-ring active></ha-progress-ring>
+          <span>Loading dashboards and views...</span>
+        </div>
+      `;
+    }
+
+    if (this._catalogDashboards.length === 0) {
+      return html`
+        <div class="empty-state">
+          <p>No dashboards found.</p>
+        </div>
+      `;
+    }
+
+    return html`
+      <div class="dashboards-list">
+        ${this._catalogDashboards.map(
+          (dash) => html`
+            <div class="dashboard-block">
+              <div class="dashboard-title">
+                <ha-svg-icon .path=${mdiLayersOutline}></ha-svg-icon>
+                <h3>${dash.title}</h3>
+              </div>
+              <div class="views-grid">
+                ${dash.views.map((v) => {
+                  const vRule = this._userPermissionSet?.view_rules[v.view_path];
+                  const vEffect =
+                    vRule?.access_level ||
+                    (vRule?.effect === "allow" ? "control" : "none");
+                  const isExpanded = this._expandedDashboardIds.has(v.view_path);
+                  return html`
+                    <div class="view-card">
+                      <div class="view-card-header">
+                        <div class="view-title-row">
+                          <ha-svg-icon .path=${mdiViewDashboard}></ha-svg-icon>
+                          <span class="view-title">${v.title}</span>
+                        </div>
+                        <div class="segmented-control">
+                          <button
+                            class="seg-btn ${vEffect === 'none'
+                              ? 'active-deny'
+                              : ''}"
+                            @click=${() =>
+                              this._handleSetViewRuleDirect(v.view_path, 'none')}
+                            .disabled=${this._submitting}
+                          >
+                            Deny
+                          </button>
+                          <button
+                            class="seg-btn ${vEffect === 'read'
+                              ? 'active-read'
+                              : ''}"
+                            @click=${() =>
+                              this._handleSetViewRuleDirect(v.view_path, 'read')}
+                            .disabled=${this._submitting}
+                          >
+                            Read
+                          </button>
+                          <button
+                            class="seg-btn ${vEffect === 'control'
+                              ? 'active-control'
+                              : ''}"
+                            @click=${() =>
+                              this._handleSetViewRuleDirect(v.view_path, 'control')}
+                            .disabled=${this._submitting}
+                          >
+                            Control
+                          </button>
+                        </div>
+                      </div>
+                      ${v.entities.length > 0
+                        ? html`
+                            <div class="view-entities-section">
+                              <button
+                                class="expand-entities-toggle"
+                                @click=${() =>
+                                  this._toggleExpandDashboard(v.view_path)}
+                              >
+                                <span>${v.entities.length} referenced devices/entities</span>
+                                <ha-svg-icon
+                                  .path=${isExpanded
+                                    ? mdiChevronUp
+                                    : mdiChevronDown}
+                                ></ha-svg-icon>
+                              </button>
+                              ${isExpanded
+                                ? html`
+                                    <div class="view-entities-list">
+                                      ${v.entities.map((eid) => {
+                                        const overrideLevel = this._getExplicitEntityOverrideLevel(
+                                          eid
+                                        );
+                                        return html`
+                                          <div class="view-entity-item">
+                                            <span class="view-entity-name"
+                                              >${this._lookupDeviceOrEntityName(
+                                                eid
+                                              )}</span
+                                            >
+                                            <div class="override-selector">
+                                              <select
+                                                .value=${overrideLevel || 'inherited'}
+                                                @change=${(e: Event) =>
+                                                  this._handleSetEntityOverride(
+                                                    eid,
+                                                    (e.target as HTMLSelectElement)
+                                                      .value
+                                                  )}
+                                                .disabled=${this._submitting}
+                                              >
+                                                <option value="inherited">
+                                                  Inherited (${vEffect})
+                                                </option>
+                                                <option value="none">
+                                                  Explicit deny
+                                                </option>
+                                                <option value="read">
+                                                  Explicit read
+                                                </option>
+                                                <option value="control">
+                                                  Explicit control
+                                                </option>
+                                              </select>
+                                            </div>
+                                          </div>
+                                        `;
+                                      })}
+                                    </div>
+                                  `
+                                : nothing}
+                            </div>
+                          `
+                        : nothing}
+                    </div>
+                  `;
+                })}
+              </div>
+            </div>
+          `
+        )}
+      </div>
+    `;
+  }
+
+  private _renderDiagnosticsTab() {
+    return html`
+      <!-- Default Access Level -->
+      <ha-card>
+        <div class="card-content">
+          <h3>Default Access Level / مستوى الوصول الافتراضي</h3>
+          <div class="form-group">
+            <select
+              .value=${this._userPermissionSet?.default_access_level || "none"}
+              @change=${(e: Event) =>
+                this._handleSetDefaultAccessLevel(
+                  (e.target as HTMLSelectElement)
+                    .value as "none" | "read" | "control"
+                )}
+            >
+              <option value="none">None / لا شيء</option>
+              <option value="read">Read / قراءة</option>
+              <option value="control">Control / تحكم</option>
+            </select>
+          </div>
+        </div>
+      </ha-card>
+
+      <!-- Entity Rules -->
+      <ha-card>
+        <div class="card-content">
+          <h3>Entity / Device / Area Rules / القواعد</h3>
+          <div class="form-row">
+            <select
+              .value=${this._newRuleTargetType}
+              @change=${(e: Event) => {
+                this._newRuleTargetType = (
+                  e.target as HTMLSelectElement
+                ).value as "entity" | "device" | "area";
+              }}
+            >
+              <option value="entity">Entity / كيان</option>
+              <option value="device">Device / جهاز</option>
+              <option value="area">Area / منطقة</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Target ID / المعرف"
+              .value=${this._newRuleTargetId}
+              @input=${(e: Event) => {
+                this._newRuleTargetId = (
+                  e.target as HTMLInputElement
+                ).value;
+              }}
+            />
+            <select
+              .value=${this._newRuleAccessLevel}
+              @change=${(e: Event) => {
+                this._newRuleAccessLevel = (
+                  e.target as HTMLSelectElement
+                ).value as "none" | "read" | "control";
+              }}
+            >
+              <option value="none">None / لا شيء</option>
+              <option value="read">Read / قراءة</option>
+              <option value="control">Control / تحكم</option>
+            </select>
+            <ha-button
+              @click=${this._handleAddEntityRule}
+              .disabled=${this._submitting || !this._newRuleTargetId.trim()}
+            >
+              Add / إضافة
+            </ha-button>
+          </div>
+          ${this._userPermissionSet &&
+          Object.keys(this._userPermissionSet.entity_rules).length === 0
+            ? html`<p class="empty-state-text"
+                >No entity rules / لا توجد قواعد</p
+              >`
+            : nothing}
+          <div class="rules-list">
+            ${this._userPermissionSet
+              ? Object.values(this._userPermissionSet.entity_rules).map(
+                  (rule) => html`
+                    <div class="rule-row">
+                      <span>
+                        <strong>${rule.target_type}</strong>/${rule.target_id} →
+                        ${rule.access_level}
+                      </span>
+                      <ha-button
+                        size="small"
+                        class="destructive"
+                        @click=${() =>
+                          this._handleRemoveEntityRule(rule.rule_id)}
+                        .disabled=${this._submitting}
+                      >
+                        Remove / حذف
+                      </ha-button>
+                    </div>
+                  `
+                )
+              : nothing}
+          </div>
+        </div>
+      </ha-card>
+
+      <!-- View Rules -->
+      <ha-card>
+        <div class="card-content">
+          <h3>View Rules / قواعد العرض</h3>
+          <div class="form-row">
+            <input
+              type="text"
+              placeholder="View path / المسار"
+              .value=${this._newViewPath}
+              @input=${(e: Event) => {
+                this._newViewPath = (e.target as HTMLInputElement).value;
+              }}
+            />
+            <select
+              .value=${this._newViewEffect}
+              @change=${(e: Event) => {
+                this._newViewEffect = (
+                  e.target as HTMLSelectElement
+                ).value as "allow" | "deny";
+              }}
+            >
+              <option value="allow">Allow / سماح</option>
+              <option value="deny">Deny / منع</option>
+            </select>
+            <ha-button
+              @click=${this._handleAddViewRule}
+              .disabled=${this._submitting || !this._newViewPath.trim()}
+            >
+              Add / إضافة
+            </ha-button>
+          </div>
+          <div class="rules-list">
+            ${this._userPermissionSet
+              ? Object.values(this._userPermissionSet.view_rules).map(
+                  (rule) => html`
+                    <div class="rule-row">
+                      <span>
+                        <strong>${rule.view_path}</strong>
+                        → ${rule.effect}
+                      </span>
+                      <ha-button
+                        size="small"
+                        class="destructive"
+                        @click=${() =>
+                          this._handleRemoveViewRule(rule.view_path)}
+                        .disabled=${this._submitting}
+                      >
+                        Remove / حذف
+                      </ha-button>
+                    </div>
+                  `
+                )
+              : nothing}
+          </div>
+        </div>
+      </ha-card>
+
+      <!-- Evaluation Preview -->
+      <ha-card>
+        <div class="card-content">
+          <h3>Evaluation Preview / معاينة التقييم</h3>
+          <div class="form-row">
+            <select
+              .value=${this._evalTargetType}
+              @change=${(e: Event) => {
+                this._evalTargetType = (
+                  e.target as HTMLSelectElement
+                ).value as "entity" | "device" | "area" | "view";
+              }}
+            >
+              <option value="entity">Entity</option>
+              <option value="device">Device</option>
+              <option value="area">Area</option>
+              <option value="view">View</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Target ID / View path"
+              .value=${this._evalTargetId}
+              @input=${(e: Event) => {
+                this._evalTargetId = (e.target as HTMLInputElement).value;
+              }}
+            />
+            <ha-button
+              @click=${this._handleEvaluatePermission}
+              .disabled=${this._submitting || !this._evalTargetId.trim()}
+            >
+              Evaluate / قيّم
+            </ha-button>
+          </div>
+          ${this._evalResult
+            ? html`
+                <div class="eval-result">
+                  <p>
+                    Result / النتيجة:
+                    <strong
+                      >${this._evalResult.effect ||
+                      this._evalResult.access_level ||
+                      "N/A"}</strong
+                    >
+                    ${this._evalResult.matching_rule_type
+                      ? html` (matched:
+                          ${this._evalResult.matching_rule_type}
+                          / rule:
+                          ${this._evalResult.matching_rule_id})`
+                      : nothing}
+                  </p>
+                </div>
+              `
+            : nothing}
+        </div>
+      </ha-card>
     `;
   }
 
@@ -1532,6 +2298,373 @@ export class HaDomoluxFamilyManager extends LitElement {
     .helper-text {
       font-size: 0.8rem;
       color: var(--secondary-text-color);
+    }
+
+    /* Permission Tabs */
+    .permission-tabs {
+      display: flex;
+      gap: var(--ha-space-2, 8px);
+      border-bottom: 1px solid var(--divider-color, #e0e0e0);
+      padding-bottom: var(--ha-space-2, 8px);
+      margin-bottom: var(--ha-space-3, 12px);
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--ha-space-2, 8px);
+      padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px);
+      background: none;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--secondary-text-color);
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      background-color: var(--secondary-background-color, #f5f5f5);
+    }
+
+    .tab-btn.active {
+      color: var(--primary-color);
+      background-color: var(--primary-color-subtle, rgba(3, 169, 244, 0.12));
+      border-color: var(--primary-color);
+    }
+
+    /* Filter Toolbar */
+    .filter-toolbar {
+      display: flex;
+      gap: var(--ha-space-2, 8px);
+      margin-bottom: var(--ha-space-4, 16px);
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 200px;
+      display: flex;
+      align-items: center;
+      gap: var(--ha-space-2, 8px);
+      padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px);
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 8px;
+      background: var(--card-background-color, #fff);
+    }
+
+    .search-box input {
+      border: none;
+      outline: none;
+      background: transparent;
+      width: 100%;
+      color: var(--primary-text-color);
+      font-size: 0.95rem;
+    }
+
+    .room-filter select {
+      padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px);
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 8px;
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color);
+      font-size: 0.95rem;
+      height: 100%;
+    }
+
+    /* Device List & Card */
+    .device-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--ha-space-3, 12px);
+    }
+
+    .device-card {
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 10px;
+      background: var(--card-background-color, #fff);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .device-main-row {
+      display: flex;
+      align-items: center;
+      gap: var(--ha-space-3, 12px);
+      padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px);
+      flex-wrap: wrap;
+    }
+
+    .device-icon-container {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background-color: var(--secondary-background-color, #f0f0f0);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary-color);
+      flex-shrink: 0;
+    }
+
+    .device-info {
+      flex: 1;
+      min-width: 180px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .device-name-row {
+      display: flex;
+      align-items: center;
+      gap: var(--ha-space-2, 8px);
+      flex-wrap: wrap;
+    }
+
+    .device-name {
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .area-badge {
+      background: var(--primary-color-subtle, rgba(3, 169, 244, 0.12));
+      color: var(--primary-color);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .multi-badge {
+      background: var(--secondary-background-color, #e0e0e0);
+      color: var(--secondary-text-color);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .device-meta {
+      font-size: 0.8rem;
+      color: var(--secondary-text-color);
+    }
+
+    .device-permission-controls {
+      display: flex;
+      align-items: center;
+      gap: var(--ha-space-2, 8px);
+    }
+
+    /* Segmented Control */
+    .segmented-control {
+      display: inline-flex;
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--secondary-background-color, #f9f9f9);
+    }
+
+    .segmented-control.small {
+      border-radius: 6px;
+    }
+
+    .seg-btn {
+      background: none;
+      border: none;
+      padding: 6px 14px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      color: var(--primary-text-color);
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    .segmented-control.small .seg-btn {
+      padding: 4px 10px;
+      font-size: 0.75rem;
+    }
+
+    .seg-btn:not(:last-child) {
+      border-right: 1px solid var(--divider-color, #ccc);
+    }
+
+    .seg-btn.active-deny {
+      background-color: var(--error-color, #db4437);
+      color: #fff;
+    }
+
+    .seg-btn.active-read {
+      background-color: var(--primary-color, #03a9f4);
+      color: #fff;
+    }
+
+    .seg-btn.active-control {
+      background-color: var(--success-color, #4caf50);
+      color: #fff;
+    }
+
+    /* Channels Expansion */
+    .channels-expansion {
+      background-color: var(--secondary-background-color, #fbfbfb);
+      border-top: 1px solid var(--divider-color, #e0e0e0);
+      padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px);
+      display: flex;
+      flex-direction: column;
+      gap: var(--ha-space-2, 8px);
+    }
+
+    .channels-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--secondary-text-color);
+    }
+
+    .channels-actions {
+      display: flex;
+      gap: var(--ha-space-2, 8px);
+    }
+
+    .channels-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--ha-space-2, 8px);
+    }
+
+    .channel-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #eee);
+    }
+
+    .channel-info {
+      display: flex;
+      align-items: center;
+      gap: var(--ha-space-2, 8px);
+    }
+
+    .channel-name {
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    /* Dashboards Tab */
+    .dashboards-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--ha-space-4, 16px);
+    }
+
+    .dashboard-block {
+      display: flex;
+      flex-direction: column;
+      gap: var(--ha-space-3, 12px);
+    }
+
+    .dashboard-title {
+      display: flex;
+      align-items: center;
+      gap: var(--ha-space-2, 8px);
+      color: var(--primary-color);
+    }
+
+    .dashboard-title h3 {
+      margin: 0;
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+
+    .views-grid {
+      display: flex;
+      flex-direction: column;
+      gap: var(--ha-space-3, 12px);
+    }
+
+    .view-card {
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 10px;
+      background: var(--card-background-color, #fff);
+      padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px);
+      display: flex;
+      flex-direction: column;
+      gap: var(--ha-space-2, 8px);
+    }
+
+    .view-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--ha-space-2, 8px);
+    }
+
+    .view-title-row {
+      display: flex;
+      align-items: center;
+      gap: var(--ha-space-2, 8px);
+    }
+
+    .view-title {
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .view-entities-section {
+      border-top: 1px dashed var(--divider-color, #e0e0e0);
+      padding-top: var(--ha-space-2, 8px);
+      margin-top: 4px;
+    }
+
+    .expand-entities-toggle {
+      display: flex;
+      align-items: center;
+      gap: var(--ha-space-1, 4px);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--secondary-text-color);
+      font-size: 0.85rem;
+      padding: 0;
+    }
+
+    .view-entities-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--ha-space-2, 8px);
+      margin-top: var(--ha-space-2, 8px);
+      padding-left: var(--ha-space-2, 8px);
+    }
+
+    .view-entity-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: var(--secondary-background-color, #fbfbfb);
+    }
+
+    .view-entity-name {
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .override-selector select {
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--divider-color, #ccc);
+      background: var(--card-background-color, #fff);
+      font-size: 0.8rem;
     }
 
     .dialog-footer {

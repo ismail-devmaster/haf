@@ -14,6 +14,7 @@ from .const import (
     ACCESS_LEVEL_NONE,
     ACCESS_LEVEL_READ,
 )
+from .dependency_discovery import extract_entities_from_card
 from .models import UserPermissionSet
 from .resolver import (
     EvaluationResult,
@@ -79,12 +80,54 @@ class DomoluxPermissionEvaluator:
             _LOGGER.debug("Error resolving HA registries for entity %s: %s", entity_id, err)
         return device_id, area_id
 
+    def _get_view_entity_map(self) -> dict[str, set[str]]:
+        """Return view_path -> set of referenced entity IDs mapping."""
+        mapping: dict[str, set[str]] = {}
+        try:
+            domain_data = getattr(self.hass, "data", {}).get("domolux_roles", {})
+            # 1. From DomoluxViewStore if loaded
+            view_store = None
+            if isinstance(domain_data, dict):
+                if "view_store" in domain_data:
+                    view_store = domain_data["view_store"]
+                else:
+                    for val in domain_data.values():
+                        if isinstance(val, dict) and "view_store" in val:
+                            view_store = val["view_store"]
+                            break
+            if view_store is not None:
+                for v in view_store.list_views():
+                    entities = set()
+                    for card in getattr(v, "cards", []):
+                        card_dict = card.to_dict() if hasattr(card, "to_dict") else (card if isinstance(card, dict) else {})
+                        entities.update(extract_entities_from_card(card_dict))
+                        for b in getattr(card, "entities", []):
+                            if hasattr(b, "entity_id") and b.entity_id:
+                                entities.add(b.entity_id.strip().lower())
+                    if entities:
+                        mapping[v.view_path.strip().lower()] = entities
+
+            # 2. From cached dashboard view entities
+            if isinstance(domain_data, dict):
+                cached = domain_data.get("dashboard_view_entities")
+                if isinstance(cached, dict):
+                    for path, ents in cached.items():
+                        norm_p = str(path).strip().lower()
+                        if norm_p not in mapping:
+                            mapping[norm_p] = set(ents)
+                        else:
+                            mapping[norm_p].update(ents)
+        except Exception as err:
+            _LOGGER.debug("Error loading view entities for evaluator: %s", err)
+        return mapping
+
     async def evaluate_entity_access(self, user_id, entity_id, required_level=ACCESS_LEVEL_READ):
         is_father = self._is_father(user_id)
         is_admin = await self._is_admin_or_owner(user_id)
         grants = self.store.get_user_permissions(user_id)
         device_id, area_id = self._get_entity_device_and_area(entity_id)
         registry_snapshot = {entity_id: (device_id, area_id)}
+        view_entity_map = self._get_view_entity_map()
         return resolve_entity_access(
             grants,
             registry_snapshot,
@@ -93,6 +136,7 @@ class DomoluxPermissionEvaluator:
             required_level,
             is_father=is_father,
             is_admin=is_admin,
+            view_entity_map=view_entity_map,
         )
 
     async def evaluate_view_access(self, user_id, view_path):

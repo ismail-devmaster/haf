@@ -1,22 +1,27 @@
 RESULT {"check": "setup.onboard_admin", "ok": true, "status": 200}
 RESULT {"check": "setup.onboarding_complete", "ok": true, "pending": []}
 RESULT {"check": "setup.install_integration", "ok": true, "status": 200, "result": "create_entry", "error": null}
-RESULT {"check": "setup.create_father_user", "ok": true, "user_id": "140ca00a1c6f47adbbf713f86bc30c44"}
+RESULT {"check": "setup.create_father_user", "ok": true, "user_id": "4452ddd6839949f1b227d9d35985c7f2"}
 RESULT {"check": "setup.set_father_credentials", "ok": true, "error": null}
 RESULT {"check": "setup.set_father_role", "ok": true, "error": null}
-RESULT {"check": "setup.father_sees_father_role", "ok": true, "response": {"user_id": "140ca00a1c6f47adbbf713f86bc30c44", "role": "father", "is_father": true, "father_assigned": true}}
-RESULT {"check": "setup.create_children", "ok": true, "child_a": "14ec2b169bc84b159574f7167b566707", "child_b": "5d45608638764561884e0cc8f374b316", "error_a": null, "error_b": null}
+RESULT {"check": "setup.father_sees_father_role", "ok": true, "response": {"user_id": "4452ddd6839949f1b227d9d35985c7f2", "role": "father", "is_father": true, "father_assigned": true}}
+RESULT {"check": "setup.create_children", "ok": true, "child_a": "b951217f174547b2a2ab14bfe1bc4cf9", "child_b": "5cd66a7a038f485181faa87cc1bed9e4", "error_a": null, "error_b": null}
 RESULT {"check": "setup.demo_lights_found", "ok": true, "lights": ["light.bed_light", "light.ceiling_lights", "light.entrance_color_white_lights", "light.kitchen_lights", "light.living_room_rgbww_lights", "light.office_rgbw_lights"]}
-RESULT {"check": "setup.grant_child_a_control", "ok": true, "rule_id": "rule_entity_bcb58bdd", "error": null}
-RESULT {"check": "setup.grant_child_b_read", "ok": true, "rule_id": "rule_entity_e82cc6d3", "error": null}
+RESULT {"check": "setup.create_custom_dashboard_user", "ok": true, "response": {"id": 1, "type": "result", "success": true, "result": {"id": "dashboard_user", "url_path": "dashboard-user", "title": "User Dashboard", "icon": "mdi:view-dashboard", "show_in_sidebar": true, "require_admin": false, "mode": "storage"}}}
+RESULT {"check": "setup.save_custom_dashboard_user_views", "ok": true, "response": {"id": 2, "type": "result", "success": true, "result": null}}
+RESULT {"check": "setup.grant_child_a_control", "ok": true, "rule_id": "rule_entity_92258373", "error": null}
+RESULT {"check": "setup.grant_child_b_read", "ok": true, "rule_id": "rule_entity_fd72ffad", "error": null}
 RESULT {"check": "setup.child_logins", "ok": true}
+RESULT {"check": "setup.father_discovers_household_devices", "ok": true, "device_count": 87, "first_device": {"device_id": "b3bc7b1e55a28613da1c4312b1b8243f", "target_id": "b3bc7b1e55a28613da1c4312b1b8243f", "target_type": "device", "name": "AC", "area_id": null, "area_name": null, "domain": "switch", "icon": "mdi:toggle-switch", "entity_count": 1, "is_multi_entity": false, "capabilities": ["read", "control"], "channels": [{"entity_id": "switch.ac", "name": "AC", "domain": "switch", "icon": "mdi:toggle-switch", "capabilities": ["read", "control"]}], "primary_entity_id": "switch.ac", "entities": ["switch.ac"]}}
+RESULT {"check": "setup.father_discovers_all_dashboards_and_views", "ok": true, "dashboard_ids": ["lovelace", "map", "dashboard-user"], "user_db_views": ["overview", "kids-room"]}
+RESULT {"check": "setup.child_catalog_access_denied", "ok": true, "response": {"id": 1, "type": "result", "success": false, "error": {"code": "access_denied", "message": "Catalog access requires father role."}}}
 RESULT {"check": "setup.baseline_states", "ok": true, "permitted": "off", "forbidden": "on"}
-SUMMARY phase=setup checks=13 failures=0
-RESULT {"check": "enforce.native_ws_allowed_entity", "ok": true, "response": {"id": 1, "type": "result", "success": true, "result": {"context": {"id": "01M7JKH9Z44SPD5CNWNRT4BT93", "parent_id": null, "user_id": "14ec2b169bc84b159574f7167b566707"}}}}
+SUMMARY phase=setup checks=18 failures=0
+RESULT {"check": "enforce.native_ws_allowed_entity", "ok": true, "response": {"id": 1, "type": "result", "success": true, "result": {"context": {"id": "01M7MKM9EEVBEK137W93W8EFC4", "parent_id": null, "user_id": "b951217f174547b2a2ab14bfe1bc4cf9"}}}}
 RESULT {"check": "enforce.native_ws_denied_entity", "ok": true, "response": {"id": 2, "type": "result", "success": false, "error": {"code": "home_assistant_error", "message": "Unauthorized"}}}
 RESULT {"check": "enforce.native_ws_wildcard_denied", "ok": true, "response": {"id": 3, "type": "result", "success": false, "error": {"code": "home_assistant_error", "message": "Unauthorized"}}}
 RESULT {"check": "enforce.native_ws_script_denied", "ok": true, "response": {"id": 4, "type": "result", "success": false, "error": {"code": "home_assistant_error", "message": "Unauthorized"}}}
-RESULT {"check": "enforce.mediated_allowed_entity", "ok": true, "response": {"id": 5, "type": "result", "success": true, "result": {"success": true, "executed_by": "14ec2b169bc84b159574f7167b566707", "reason": "entity_control_granted", "mediated_by": "domolux_service_auth", "service_result": null}}}
+RESULT {"check": "enforce.mediated_allowed_entity", "ok": true, "response": {"id": 5, "type": "result", "success": true, "result": {"success": true, "executed_by": "b951217f174547b2a2ab14bfe1bc4cf9", "reason": "entity_control_granted", "mediated_by": "domolux_service_auth", "service_result": null}}}
 RESULT {"check": "enforce.mediated_denied_entity", "ok": true, "response": {"id": 6, "type": "result", "success": false, "error": {"code": "service_denied", "message": "Control authorization denied."}}}
 RESULT {"check": "enforce.mediated_target_smuggling_denied", "ok": true, "response": {"id": 7, "type": "result", "success": false, "error": {"code": "target_invalid", "message": "Target smuggling via service_data (area_id) is not permitted."}}}
 RESULT {"check": "enforce.read_visibility_of_forbidden_entity", "ok": true, "visible_lights": ["light.bed_light"], "total_states": 1, "error": null}
@@ -30,12 +35,12 @@ RESULT {"check": "enforce.rest_denied_entity", "ok": true, "status": 401, "body"
 RESULT {"check": "enforce.forbidden_entity_not_changed", "ok": true, "before": "on", "after": "on"}
 RESULT {"check": "enforce.permitted_entity_turned_on", "ok": true, "before": "off", "after": "on"}
 SUMMARY phase=enforce checks=17 failures=0
-RESULT {"check": "revoke.father_removes_rule", "ok": true, "response": {"id": 1, "type": "result", "success": true, "result": {"success": true, "permissions": {"user_id": "14ec2b169bc84b159574f7167b566707", "default_access_level": "none", "entity_rules": {}, "view_rules": {}, "updated_at": "2026-11-16T16:37:36.101990+00:00"}}}}
+RESULT {"check": "revoke.father_removes_rule", "ok": true, "response": {"id": 1, "type": "result", "success": true, "result": {"success": true, "permissions": {"user_id": "b951217f174547b2a2ab14bfe1bc4cf9", "default_access_level": "none", "entity_rules": {}, "view_rules": {}, "updated_at": "2026-11-17T11:17:42.603405+00:00"}}}}
 RESULT {"check": "revoke.native_ws_denied_after_revoke", "ok": true, "response": {"id": 1, "type": "result", "success": false, "error": {"code": "home_assistant_error", "message": "Unauthorized"}}}
 RESULT {"check": "revoke.mediated_denied_after_revoke", "ok": true, "response": {"id": 2, "type": "result", "success": false, "error": {"code": "service_denied", "message": "Control authorization denied."}}}
 SUMMARY phase=revoke checks=3 failures=0
 RESULT {"check": "persist.father_can_log_in_after_restart", "ok": true}
-RESULT {"check": "persist.father_role_survived", "ok": true, "response": {"user_id": "140ca00a1c6f47adbbf713f86bc30c44", "role": "father", "is_father": true, "father_assigned": true}}
+RESULT {"check": "persist.father_role_survived", "ok": true, "response": {"user_id": "4452ddd6839949f1b227d9d35985c7f2", "role": "father", "is_father": true, "father_assigned": true}}
 RESULT {"check": "persist.children_survived", "ok": true, "count": 2, "error": null}
 RESULT {"check": "persist.child_can_log_in_after_restart", "ok": true}
 RESULT {"check": "persist.mediated_still_denied_after_restart", "ok": true, "response": {"id": 1, "type": "result", "success": false, "error": {"code": "service_denied", "message": "Control authorization denied."}}}

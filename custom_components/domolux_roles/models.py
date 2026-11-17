@@ -121,6 +121,7 @@ class ViewPermissionRule:
 
     view_path: str
     effect: str
+    access_level: Optional[str] = None
     created_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -128,10 +129,19 @@ class ViewPermissionRule:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
 
+    def __post_init__(self) -> None:
+        if self.access_level is None:
+            self.access_level = (
+                ACCESS_LEVEL_CONTROL
+                if self.effect == EFFECT_ALLOW
+                else ACCESS_LEVEL_NONE
+            )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "view_path": self.view_path,
             "effect": self.effect,
+            "access_level": self.access_level,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -144,9 +154,11 @@ class ViewPermissionRule:
         effect = data.get("effect")
         if not view_path or not effect:
             return None
+        access_level = data.get("access_level")
         return cls(
             view_path=str(view_path),
             effect=str(effect),
+            access_level=str(access_level) if access_level else None,
             created_at=str(data.get("created_at", datetime.now(timezone.utc).isoformat())),
             updated_at=str(data.get("updated_at", datetime.now(timezone.utc).isoformat())),
         )

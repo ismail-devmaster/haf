@@ -69,6 +69,7 @@ def resolve_entity_access(
     *,
     is_father: bool = False,
     is_admin: bool = False,
+    view_entity_map: Optional[Mapping[str, Any]] = None,
 ) -> EvaluationResult:
     """Pure entity-access decision."""
     if is_father:
@@ -90,7 +91,7 @@ def resolve_entity_access(
 
     device_id, area_id = _entity_device_area(registry_snapshot, entity_id)
 
-    # Entity explicit rule
+    # 1. Entity explicit rule (highest precedence - explicit DENY halts immediately)
     for rule in grants.entity_rules.values():
         if rule.target_type == TARGET_ENTITY and rule.target_id == entity_id:
             granted = ACCESS_LEVEL_ORDER.get(rule.access_level, 0) >= ACCESS_LEVEL_ORDER.get(
@@ -105,7 +106,7 @@ def resolve_entity_access(
                 matching_rule_id=rule.rule_id,
             )
 
-    # Device explicit rule
+    # 2. Device explicit rule (explicit device DENY/READ/CONTROL)
     if device_id:
         for rule in grants.entity_rules.values():
             if rule.target_type == TARGET_DEVICE and rule.target_id == device_id:
@@ -121,7 +122,7 @@ def resolve_entity_access(
                     matching_rule_id=rule.rule_id,
                 )
 
-    # Area explicit rule
+    # 3. Area explicit rule
     if area_id:
         for rule in grants.entity_rules.values():
             if rule.target_type == TARGET_AREA and rule.target_id == area_id:
@@ -136,6 +137,45 @@ def resolve_entity_access(
                     matching_rule_type=TARGET_AREA,
                     matching_rule_id=rule.rule_id,
                 )
+
+    # 4. View inherited rule (inherited from permitted dashboard views)
+    if view_entity_map:
+        matching_view_paths = []
+        for v_path, v_ents in view_entity_map.items():
+            if isinstance(v_ents, (set, list, tuple)) and entity_id in v_ents:
+                matching_view_paths.append(v_path)
+            elif v_path == entity_id and isinstance(v_ents, (set, list, tuple)):
+                matching_view_paths.extend(v_ents)
+
+        highest_inherited = None
+        matching_v_rule_id = None
+        for v_path in matching_view_paths:
+            v_rule = grants.view_rules.get(v_path)
+            if v_rule and (
+                v_rule.effect == EFFECT_ALLOW
+                or getattr(v_rule, "access_level", "") in (ACCESS_LEVEL_READ, ACCESS_LEVEL_CONTROL)
+            ):
+                v_level = getattr(v_rule, "access_level", None) or (
+                    ACCESS_LEVEL_CONTROL if v_rule.effect == EFFECT_ALLOW else ACCESS_LEVEL_NONE
+                )
+                if highest_inherited is None or ACCESS_LEVEL_ORDER.get(
+                    v_level, 0
+                ) > ACCESS_LEVEL_ORDER.get(highest_inherited, 0):
+                    highest_inherited = v_level
+                    matching_v_rule_id = v_path
+
+        if highest_inherited is not None and highest_inherited != ACCESS_LEVEL_NONE:
+            granted = ACCESS_LEVEL_ORDER.get(highest_inherited, 0) >= ACCESS_LEVEL_ORDER.get(
+                required_level, 1
+            )
+            return EvaluationResult(
+                user_id=user_id,
+                target_id=entity_id,
+                access_level=highest_inherited,
+                granted=granted,
+                matching_rule_type="view_inherited",
+                matching_rule_id=matching_v_rule_id,
+            )
 
     default_level = grants.default_access_level
     granted = ACCESS_LEVEL_ORDER.get(default_level, 0) >= ACCESS_LEVEL_ORDER.get(required_level, 1)
@@ -205,6 +245,7 @@ def resolve(
     *,
     is_father: bool = False,
     is_admin: bool = False,
+    view_entity_map: Optional[Mapping[str, Any]] = None,
 ) -> Any:
     """Generic entry point used by callers and tests.
 
@@ -221,4 +262,5 @@ def resolve(
         required_level=str(action) if action else ACCESS_LEVEL_READ,
         is_father=is_father,
         is_admin=is_admin,
+        view_entity_map=view_entity_map,
     )

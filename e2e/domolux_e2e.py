@@ -384,6 +384,60 @@ async def phase_setup(session: aiohttp.ClientSession) -> dict[str, Any]:
     state["permitted_entity"] = permitted
     state["forbidden_entity"] = forbidden
 
+    # 6b. Create custom dashboard: dashboard-user with actual views -----------
+    async with WSClient(session, admin_token) as admin:
+        dash_create = await admin.call(
+            {
+                "type": "lovelace/dashboards/create",
+                "url_path": "dashboard-user",
+                "title": "User Dashboard",
+                "icon": "mdi:view-dashboard",
+                "show_in_sidebar": True,
+                "require_admin": False,
+            }
+        )
+        record(
+            "setup.create_custom_dashboard_user",
+            dash_create.get("success") is True,
+            response=dash_create,
+        )
+
+        dash_save = await admin.call(
+            {
+                "type": "lovelace/config/save",
+                "url_path": "dashboard-user",
+                "config": {
+                    "views": [
+                        {
+                            "title": "Overview",
+                            "path": "overview",
+                            "cards": [
+                                {
+                                    "type": "entities",
+                                    "entities": [permitted, forbidden],
+                                }
+                            ],
+                        },
+                        {
+                            "title": "Kids Room",
+                            "path": "kids-room",
+                            "cards": [
+                                {
+                                    "type": "light",
+                                    "entity": permitted,
+                                }
+                            ],
+                        },
+                    ]
+                },
+            }
+        )
+        record(
+            "setup.save_custom_dashboard_user_views",
+            dash_save.get("success") is True,
+            response=dash_save,
+        )
+
     # 7. Permissions ----------------------------------------------------------
     async with WSClient(session, father_token) as father_ws:
         grant_a = await father_ws.call(
@@ -422,6 +476,41 @@ async def phase_setup(session: aiohttp.ClientSession) -> dict[str, Any]:
     state["child_a_token"] = await login(session, CHILD_A_USER, CHILD_A_PASSWORD)
     state["child_b_token"] = await login(session, CHILD_B_USER, CHILD_B_PASSWORD)
     record("setup.child_logins", True)
+
+    # 7b. Father resource discovery verification (Backend) --------------------
+    async with WSClient(session, father_token) as father_ws:
+        cat_resp = await father_ws.call({"type": "domolux/catalog"})
+        cat_data = (cat_resp.get("result") or {}).get("catalog", {})
+        devices = cat_data.get("devices", [])
+        dashboards = cat_data.get("dashboards", [])
+
+        record(
+            "setup.father_discovers_household_devices",
+            cat_resp.get("success") is True and len(devices) > 0,
+            device_count=len(devices),
+            first_device=devices[0] if devices else None,
+        )
+
+        db_ids = [d.get("dashboard_id") for d in dashboards]
+        user_db = next((d for d in dashboards if d.get("dashboard_id") == "dashboard-user"), None)
+        views = user_db.get("views", []) if user_db else []
+        view_paths = [v.get("view_path") for v in views]
+
+        record(
+            "setup.father_discovers_all_dashboards_and_views",
+            "lovelace" in db_ids and "dashboard-user" in db_ids and "overview" in view_paths and "kids-room" in view_paths,
+            dashboard_ids=db_ids,
+            user_db_views=view_paths,
+        )
+
+    # 7c. Child cannot discover catalog (Security invariant) ------------------
+    async with WSClient(session, state["child_a_token"]) as child_ws:
+        child_cat = await child_ws.call({"type": "domolux/catalog"})
+        record(
+            "setup.child_catalog_access_denied",
+            child_cat.get("success") is False and child_cat.get("error", {}).get("code") == "access_denied",
+            response=child_cat,
+        )
 
     # Baseline states so the enforcement phase can prove "no side effect".
     for key, entity_id in (("permitted", permitted), ("forbidden", forbidden)):

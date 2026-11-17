@@ -21,6 +21,7 @@ SECURITY INVARIANTS & POLICIES:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -576,6 +577,122 @@ async def async_register_view_api_commands(hass: HomeAssistant) -> None:
 # ----------------------------------------------------------------------
 
 from homeassistant.helpers import device_registry as dr, entity_registry as er, area_registry as ar
+from .dependency_discovery import extract_entities_from_card, extract_entities_from_view
+
+NON_HOUSEHOLD_NAME_KEYWORDS = (
+    "samba",
+    "tailscale",
+    "openwakeword",
+    "piper",
+    "whisper",
+    "kiosk mode",
+    "smartir",
+    "check button card",
+    "mini-graph-card",
+    "silent remotes card",
+    "hacs",
+    "supervisor",
+    "home assistant frontend",
+    "home assistant operating system",
+)
+
+HOUSEHOLD_DOMAINS = {
+    "light",
+    "switch",
+    "cover",
+    "climate",
+    "fan",
+    "lock",
+    "media_player",
+    "vacuum",
+    "valve",
+    "humidifier",
+    "water_heater",
+    "camera",
+    "sensor",
+    "binary_sensor",
+    "alarm_control_panel",
+    "remote",
+    "siren",
+}
+
+CONTROLLABLE_DOMAINS = {
+    "light",
+    "switch",
+    "cover",
+    "climate",
+    "fan",
+    "lock",
+    "media_player",
+    "vacuum",
+    "valve",
+    "humidifier",
+    "water_heater",
+    "button",
+    "input_boolean",
+    "input_button",
+    "input_number",
+    "input_select",
+    "input_text",
+    "number",
+    "select",
+}
+
+DOMAIN_ICONS = {
+    "cover": "mdi:window-shutter",
+    "light": "mdi:lightbulb",
+    "switch": "mdi:toggle-switch",
+    "climate": "mdi:thermostat",
+    "fan": "mdi:fan",
+    "lock": "mdi:lock",
+    "media_player": "mdi:cast",
+    "vacuum": "mdi:robot-vacuum",
+    "valve": "mdi:pipe-valve",
+    "humidifier": "mdi:air-humidifier",
+    "water_heater": "mdi:water-boiler",
+    "camera": "mdi:camera",
+    "sensor": "mdi:eye",
+    "binary_sensor": "mdi:radiobox-marked",
+    "alarm_control_panel": "mdi:shield-home",
+    "remote": "mdi:remote",
+    "siren": "mdi:bullhorn",
+}
+
+
+def _get_device_icon(domain: str | None) -> str:
+    """Return appropriate MDI icon for a domain."""
+    if not domain:
+        return "mdi:devices"
+    return DOMAIN_ICONS.get(domain, "mdi:devices")
+
+
+def _is_non_household_name(name: Any) -> bool:
+    """Check if name matches non-household keywords."""
+    if not isinstance(name, str):
+        return False
+    lower = name.lower()
+    return any(kw in lower for kw in NON_HOUSEHOLD_NAME_KEYWORDS)
+
+
+def _extract_entity_name(entry: Any) -> str | None:
+    """Safely extract user-defined or original name from an entity registry entry or mock."""
+    for attr in ("name", "name_by_user"):
+        val = getattr(entry, attr, None)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    orig = getattr(entry, "original_name", None)
+    if isinstance(orig, str) and orig.strip():
+        return orig.strip()
+    return None
+
+
+def _extract_device_name(dev: Any) -> str:
+    """Safely extract device name from a device registry entry or mock."""
+    for attr in ("name_by_user", "name"):
+        val = getattr(dev, attr, None)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return "Unnamed device"
 
 
 @websocket_api.websocket_command(
@@ -609,40 +726,139 @@ async def ws_catalog(
     devices_result: list[dict] = []
     entities_result: list[dict] = []
     seen_entity_ids: set[str] = set()
+    seen_device_ids: set[str] = set()
+
+    # Pre-collect entity registry entries (handles real HA EntityRegistryItems Mapping, dict, or list)
+    entity_entries = (
+        list(entity_reg.entities.values())
+        if hasattr(entity_reg.entities, "values")
+        else list(entity_reg.entities)
+    )
+
+    device_entities_map: dict[str, list[Any]] = {}
+    for e in entity_entries:
+        dev_id = getattr(e, "device_id", None)
+        if dev_id:
+            device_entities_map.setdefault(dev_id, []).append(e)
 
     # Devices from registry
     for dev in device_reg.devices.values():
-        device_id = dev.id
-        name = dev.name_by_user or dev.name or "Unnamed device"
-        area_id = dev.area_id
-        area_name = area_reg.async_get_area(dev.area_id).name if dev.area_id and area_reg.async_get_area(dev.area_id) else None
-        device_entities = [e.entity_id for e in entity_reg.entities.get_entries_for_device_id(device_id)]
+        device_id = getattr(dev, "id", None)
+        if not device_id or not isinstance(device_id, str):
+            continue
+        name = _extract_device_name(dev)
+        area_id = getattr(dev, "area_id", None)
+        area_name = area_reg.async_get_area(area_id).name if area_id and hasattr(area_reg, "async_get_area") and area_reg.async_get_area(area_id) else None
+        
+        # Check service entry type and non-household names
+        is_service = getattr(dev, "entry_type", None) == "service"
+        if is_service or _is_non_household_name(name):
+            continue
+
+        raw_entries = device_entities_map.get(device_id, [])
+        if not raw_entries and hasattr(er, "async_entries_for_device") and not isinstance(er.async_entries_for_device, MagicMock):
+            try:
+                raw_entries = er.async_entries_for_device(entity_reg, device_id, include_disabled_entities=True)
+            except Exception:
+                raw_entries = []
+        
+        # Filter to household / controllable entities
+        hh_entries = [
+            e for e in raw_entries 
+            if getattr(e, "domain", None) in HOUSEHOLD_DOMAINS or getattr(e, "domain", None) in CONTROLLABLE_DOMAINS
+        ]
+        # If device has entities but none are household, skip it (e.g. update-only devices)
+        if raw_entries and not hh_entries:
+            continue
+
+        ctrl_entries = [e for e in hh_entries if getattr(e, "domain", None) in CONTROLLABLE_DOMAINS]
+        is_multi_entity = len(ctrl_entries) > 1
+        primary_domain = ctrl_entries[0].domain if ctrl_entries else (hh_entries[0].domain if hh_entries else None)
+
+        channels = []
+        target_entries = ctrl_entries if ctrl_entries else hh_entries
+        for e in target_entries:
+            state_obj = hass.states.get(e.entity_id)
+            friendly_name = (
+                state_obj.attributes.get("friendly_name")
+                if state_obj and hasattr(state_obj, "attributes") and isinstance(state_obj.attributes, dict)
+                else None
+            )
+            if not isinstance(friendly_name, str):
+                friendly_name = None
+            entry_name = _extract_entity_name(e)
+            channel_name = entry_name or friendly_name or getattr(e, "entity_id", None) or "Unknown entity"
+            channels.append({
+                "entity_id": e.entity_id,
+                "name": channel_name,
+                "domain": getattr(e, "domain", "unknown"),
+                "icon": _get_device_icon(getattr(e, "domain", None)),
+                "capabilities": ["read", "control"] if getattr(e, "domain", None) in CONTROLLABLE_DOMAINS else ["read"],
+            })
+
+        if name == "Unnamed device" and channels:
+            name = channels[0]["name"]
+
+        seen_device_ids.add(device_id)
         devices_result.append({
             "device_id": device_id,
+            "target_id": device_id,
+            "target_type": "device",
             "name": name,
             "area_id": area_id,
             "area_name": area_name,
-            "entity_count": len(device_entities),
+            "domain": primary_domain or "device",
+            "icon": _get_device_icon(primary_domain),
+            "entity_count": len(raw_entries),
+            "is_multi_entity": is_multi_entity,
+            "capabilities": ["read", "control"] if ctrl_entries else ["read"],
+            "channels": channels,
+            "primary_entity_id": ctrl_entries[0].entity_id if ctrl_entries else (hh_entries[0].entity_id if hh_entries else None),
+            "entities": [e.entity_id for e in raw_entries],
         })
 
     # Entities from registry + state-machine merge
-    for entry in entity_reg.entities:
-        entity_id = entry.entity_id
+    entity_entries = (
+        list(entity_reg.entities.values())
+        if hasattr(entity_reg.entities, "values")
+        else list(entity_reg.entities)
+    )
+
+    for entry in entity_entries:
+        entity_id = getattr(entry, "entity_id", None)
+        if not entity_id or not isinstance(entity_id, str):
+            continue
         if entity_id in seen_entity_ids:
             continue
         seen_entity_ids.add(entity_id)
-        name = entry.name_by_user or entry.original_name or entity_id
-        domain = entry.domain
-        device_id = entry.device_id
+
+        state_obj = hass.states.get(entity_id)
+        friendly_name = (
+            state_obj.attributes.get("friendly_name")
+            if state_obj and hasattr(state_obj, "attributes") and isinstance(state_obj.attributes, dict)
+            else None
+        )
+        if not isinstance(friendly_name, str):
+            friendly_name = None
+        entry_name = _extract_entity_name(entry)
+        name = entry_name or friendly_name or entity_id
+        domain = getattr(entry, "domain", entity_id.split(".")[0])
+        device_id = getattr(entry, "device_id", None)
         device_name = None
         if device_id:
-            d = device_reg.async_get(device_id)
-            device_name = d.name_by_user or d.name if d else None
-        area_id = entry.area_id
-        area_name = area_reg.async_get_area(area_id).name if area_id and area_reg.async_get_area(area_id) else None
-        disabled = entry.disabled_by is not None
+            d = device_reg.async_get(device_id) if hasattr(device_reg, "async_get") else device_reg.devices.get(device_id)
+            if d:
+                d_name = _extract_device_name(d)
+                if d_name != "Unnamed device":
+                    device_name = d_name
+        area_id = getattr(entry, "area_id", None)
+        area_name = (
+            area_reg.async_get_area(area_id).name
+            if area_id and hasattr(area_reg, "async_get_area") and area_reg.async_get_area(area_id)
+            else None
+        )
+        disabled = getattr(entry, "disabled_by", None) is not None
         # State presence indicator (safe: only available/unavailable, never value)
-        state_obj = hass.states.get(entity_id)
         state_available = state_obj.state if state_obj else None
         is_unavailable = state_obj is not None and state_obj.state == "unavailable"
         entities_result.append({
@@ -659,18 +875,78 @@ async def ws_catalog(
             "unavailable": is_unavailable,
         })
 
+        # Standalone household entity (not belonging to an existing registered device)
+        if (
+            (not device_id or device_id not in seen_device_ids)
+            and (domain in HOUSEHOLD_DOMAINS or domain in CONTROLLABLE_DOMAINS)
+            and not _is_non_household_name(name)
+        ):
+            seen_device_ids.add(f"entity:{entity_id}")
+            devices_result.append({
+                "device_id": f"entity:{entity_id}",
+                "target_id": entity_id,
+                "target_type": "entity",
+                "name": name,
+                "area_id": area_id,
+                "area_name": area_name,
+                "domain": domain,
+                "icon": _get_device_icon(domain),
+                "entity_count": 1,
+                "is_multi_entity": False,
+                "capabilities": ["read", "control"] if domain in CONTROLLABLE_DOMAINS else ["read"],
+                "channels": [{
+                    "entity_id": entity_id,
+                    "name": name,
+                    "domain": domain,
+                    "icon": _get_device_icon(domain),
+                    "capabilities": ["read", "control"] if domain in CONTROLLABLE_DOMAINS else ["read"],
+                }],
+                "primary_entity_id": entity_id,
+                "entities": [entity_id],
+            })
+
     # Include state-machine-only entities (not in registry) — minimal safe metadata
-    for entity_id in hass.states.entity_ids:
+    raw_state_ids: list[str] = []
+    try:
+        if hasattr(hass.states, "async_entity_ids"):
+            res = hass.states.async_entity_ids()
+            if isinstance(res, (list, tuple, set)):
+                raw_state_ids = list(res)
+        if not raw_state_ids and hasattr(hass.states, "entity_ids"):
+            e_func = getattr(hass.states, "entity_ids")
+            if callable(e_func):
+                res = e_func()
+                if isinstance(res, (list, tuple, set)):
+                    raw_state_ids = list(res)
+            elif isinstance(e_func, (list, tuple, set)):
+                raw_state_ids = list(e_func)
+        if not raw_state_ids and hasattr(hass.states, "async_all"):
+            res = hass.states.async_all()
+            if isinstance(res, (list, tuple, set)):
+                raw_state_ids = [getattr(s, "entity_id", None) for s in res if getattr(s, "entity_id", None)]
+    except Exception:
+        raw_state_ids = []
+
+    for entity_id in raw_state_ids:
+        if not entity_id or not isinstance(entity_id, str):
+            continue
         if entity_id in seen_entity_ids:
             continue
         state_obj = hass.states.get(entity_id)
         if not state_obj:
             continue
         seen_entity_ids.add(entity_id)
+        domain = getattr(state_obj, "domain", entity_id.split(".")[0])
+        friendly_name = (
+            state_obj.attributes.get("friendly_name")
+            if hasattr(state_obj, "attributes") and isinstance(state_obj.attributes, dict)
+            else None
+        )
+        name = friendly_name or entity_id
         entities_result.append({
             "entity_id": entity_id,
-            "name": entity_id,
-            "domain": state_obj.domain,
+            "name": name,
+            "domain": domain,
             "device_id": None,
             "device_name": None,
             "area_id": None,
@@ -681,14 +957,233 @@ async def ws_catalog(
             "unavailable": state_obj.state == "unavailable",
         })
 
+        # Standalone state entity for household domain
+        if (domain in HOUSEHOLD_DOMAINS or domain in CONTROLLABLE_DOMAINS) and not _is_non_household_name(name):
+            seen_device_ids.add(f"entity:{entity_id}")
+            devices_result.append({
+                "device_id": f"entity:{entity_id}",
+                "target_id": entity_id,
+                "target_type": "entity",
+                "name": name,
+                "area_id": None,
+                "area_name": None,
+                "domain": domain,
+                "icon": _get_device_icon(domain),
+                "entity_count": 1,
+                "is_multi_entity": False,
+                "capabilities": ["read", "control"] if domain in CONTROLLABLE_DOMAINS else ["read"],
+                "channels": [{
+                    "entity_id": entity_id,
+                    "name": name,
+                    "domain": domain,
+                    "icon": _get_device_icon(domain),
+                    "capabilities": ["read", "control"] if domain in CONTROLLABLE_DOMAINS else ["read"],
+                }],
+                "primary_entity_id": entity_id,
+                "entities": [entity_id],
+            })
+
+    # Discover Dashboards and Views
+    dashboards_result: list[dict] = []
+    dashboard_view_entities: dict[str, set[str]] = {}
+    seen_dashboard_ids: set[str] = set()
+
+    # 1. Domolux Views
+    try:
+        view_store = _get_view_store(hass)
+        domolux_views = []
+        for view in view_store.views.values():
+            card_list = [
+                c.to_dict() if hasattr(c, "to_dict") else (c if isinstance(c, dict) else {})
+                for c in getattr(view, "cards", [])
+            ]
+            discovered = set(extract_entities_from_view({"cards": card_list}))
+            v_path = view.view_path.strip().lower()
+            dashboard_view_entities[v_path] = discovered
+            dashboard_view_entities[f"domolux/{v_path}"] = discovered
+            domolux_views.append({
+                "view_id": view.view_id,
+                "view_path": view.view_path,
+                "title": view.title,
+                "icon": getattr(view, "icon", "mdi:view-dashboard"),
+                "entities": sorted(list(discovered)),
+            })
+        if domolux_views:
+            domolux_views.sort(key=lambda v: (v["title"] or "", v["view_path"]))
+            seen_dashboard_ids.add("domolux_views")
+            dashboards_result.append({
+                "dashboard_id": "domolux_views",
+                "title": "Domolux Dashboards",
+                "url_path": "domolux",
+                "views": domolux_views,
+            })
+    except Exception as err:
+        _LOGGER.debug("Domolux views discovery skipped: %s", err)
+
+    # 2. Lovelace Dashboards from Home Assistant
+    try:
+        domain_data = getattr(hass, "data", {})
+        lovelace_data = None
+        if isinstance(domain_data, dict):
+            lovelace_data = domain_data.get("lovelace")
+        else:
+            try:
+                lovelace_data = domain_data.get("lovelace")
+            except Exception:
+                pass
+            if lovelace_data is None:
+                try:
+                    lovelace_data = domain_data["lovelace"]
+                except Exception:
+                    pass
+
+        dashboards_map: dict[Any, Any] = {}
+
+        if lovelace_data is not None:
+            if hasattr(lovelace_data, "dashboards") and isinstance(lovelace_data.dashboards, dict):
+                dashboards_map.update(lovelace_data.dashboards)
+            elif isinstance(lovelace_data, dict) and "dashboards" in lovelace_data and isinstance(lovelace_data["dashboards"], dict):
+                dashboards_map.update(lovelace_data["dashboards"])
+
+            # Legacy or mock direct config on lovelace_data
+            direct_config = getattr(lovelace_data, "config", None)
+            if isinstance(direct_config, dict) and "views" in direct_config:
+                if None not in dashboards_map and "lovelace" not in dashboards_map:
+                    dashboards_map[None] = direct_config
+
+        # Check frontend panels for any additional lovelace dashboards (e.g. dashboard-user)
+        panels = domain_data.get("frontend_panels", {}) if hasattr(domain_data, "get") else {}
+        if isinstance(panels, dict):
+            for p_key, p_obj in panels.items():
+                comp = getattr(p_obj, "component_name", None) or (p_obj.get("component_name") if isinstance(p_obj, dict) else None)
+                if comp == "lovelace":
+                    url_p = getattr(p_obj, "frontend_url_path", None) or (p_obj.get("frontend_url_path") if isinstance(p_obj, dict) else p_key)
+                    if url_p and url_p not in dashboards_map and url_p != "lovelace":
+                        dashboards_map[url_p] = getattr(p_obj, "config", None) or p_obj
+
+        for url_path, dash_obj in dashboards_map.items():
+            is_default = url_path is None or url_path == "lovelace"
+            dash_id = "lovelace" if is_default else str(url_path)
+            dash_url = "lovelace" if is_default else str(url_path)
+
+            if dash_id in seen_dashboard_ids:
+                continue
+
+            # Load dashboard metadata and config
+            dash_config: dict[str, Any] | None = None
+            dash_meta: dict[str, Any] = {}
+
+            if hasattr(dash_obj, "config") and isinstance(dash_obj.config, dict):
+                dash_meta = dash_obj.config
+            elif isinstance(dash_obj, dict):
+                dash_meta = dash_obj
+
+            if isinstance(dash_obj, dict):
+                if "views" in dash_obj:
+                    dash_config = dash_obj
+                elif "config" in dash_obj and isinstance(dash_obj["config"], dict):
+                    dash_config = dash_obj["config"]
+
+            if dash_config is None and hasattr(dash_obj, "async_load"):
+                try:
+                    loaded = dash_obj.async_load(force=False)
+                    if asyncio.iscoroutine(loaded) or hasattr(loaded, "__await__"):
+                        loaded = await loaded
+                    if isinstance(loaded, dict):
+                        dash_config = loaded
+                except Exception as err:
+                    _LOGGER.debug("Could not async_load dashboard %s: %s", url_path, err)
+
+            if dash_config is None:
+                data = getattr(dash_obj, "_data", None)
+                if isinstance(data, dict) and isinstance(data.get("config"), dict):
+                    dash_config = data["config"]
+                elif hasattr(dash_obj, "config") and isinstance(dash_obj.config, dict):
+                    if "views" in dash_obj.config:
+                        dash_config = dash_obj.config
+
+            # Extract title
+            dash_title = None
+            if dash_meta and isinstance(dash_meta, dict):
+                dash_title = dash_meta.get("title")
+            if not dash_title and isinstance(dash_config, dict):
+                dash_title = dash_config.get("title")
+            if not dash_title:
+                dash_title = "Home Assistant Overview" if is_default else dash_url.replace("-", " ").replace("_", " ").title()
+
+            views_list: list[dict] = []
+            views_raw = dash_config.get("views", []) if isinstance(dash_config, dict) else []
+
+            for idx, v in enumerate(views_raw):
+                if not isinstance(v, dict):
+                    continue
+                v_raw_path = v.get("path")
+                if v_raw_path is None or str(v_raw_path).strip() == "":
+                    v_path = str(idx)
+                else:
+                    v_path = str(v_raw_path).strip().lower()
+
+                v_title = v.get("title") or (
+                    v_path.replace("-", " ").replace("_", " ").title() if v_path != str(idx) else f"View {idx + 1}"
+                )
+                v_icon = v.get("icon") or "mdi:view-dashboard"
+                discovered = set(extract_entities_from_view(v))
+
+                dashboard_view_entities[v_path] = discovered
+                if dash_url != "lovelace":
+                    dashboard_view_entities[f"{dash_url}/{v_path}"] = discovered
+
+                views_list.append({
+                    "view_id": v_path,
+                    "view_path": v_path,
+                    "title": v_title,
+                    "icon": v_icon,
+                    "entities": sorted(list(discovered)),
+                })
+
+            # If dashboard has no views config (e.g. auto-gen storage mode default dashboard)
+            if not views_list and is_default:
+                auto_entities = sorted(list(seen_entity_ids))
+                views_list.append({
+                    "view_id": "default_view",
+                    "view_path": "default_view",
+                    "title": "Overview",
+                    "icon": "mdi:view-dashboard",
+                    "entities": auto_entities,
+                })
+                dashboard_view_entities["default_view"] = set(auto_entities)
+                dashboard_view_entities["overview"] = set(auto_entities)
+
+            if views_list or is_default or dash_config is not None:
+                seen_dashboard_ids.add(dash_id)
+                dashboards_result.append({
+                    "dashboard_id": dash_id,
+                    "title": dash_title,
+                    "url_path": dash_url,
+                    "views": views_list,
+                })
+    except Exception as err:
+        _LOGGER.debug("Lovelace dashboards discovery skipped: %s", err)
+
+    # Cache discovered entities for evaluator and auth adapter
+    if dashboard_view_entities:
+        d_data = hass.data.setdefault(DOMAIN, {})
+        if isinstance(d_data, dict):
+            cached = d_data.setdefault("dashboard_view_entities", {})
+            if isinstance(cached, dict):
+                cached.update(dashboard_view_entities)
+
     # Deterministic sorting
-    devices_result.sort(key=lambda d: (d["name"] or "", d["device_id"]))
-    entities_result.sort(key=lambda e: (e["name"] or "", e["entity_id"]))
+    devices_result.sort(key=lambda d: (str(d.get("name") or ""), str(d.get("device_id") or "")))
+    entities_result.sort(key=lambda e: (str(e.get("name") or ""), str(e.get("entity_id") or "")))
+    dashboards_result.sort(key=lambda d: (0 if d.get("dashboard_id") == "lovelace" else 1, str(d.get("title") or "").lower()))
 
     connection.send_result(msg["id"], {
         "catalog": {
             "devices": devices_result,
+            "household_devices": devices_result,
             "entities": entities_result,
+            "dashboards": dashboards_result,
         }
     })
 

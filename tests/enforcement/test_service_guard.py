@@ -341,7 +341,7 @@ async def test_domain_outside_allowlist_is_denied():
         child_rules={"r1": ("light.lamp", ACCESS_LEVEL_CONTROL)}
     )
     decision = await _authorize(
-        hass, domain="vacuum", service="start", service_data={"entity_id": "vacuum.x"}
+        hass, domain="counter", service="increment", service_data={"entity_id": "counter.x"}
     )
     assert decision.allowed is False
     assert decision.reason == REASON_DOMAIN_NOT_ALLOWED
@@ -707,3 +707,50 @@ async def test_guard_is_inert_for_other_households(monkeypatch):
         "light", "turn_on", {"entity_id": "cover.curtain"}, context=_context(CHILD)
     )
     assert result == "executed"
+
+
+async def test_roller_shade_cover_services_authorized_for_control():
+    """Test A: Hallway Roller Shade (cover.zm108m) supports all controls under CONTROL."""
+    hass, _store, _evaluator = _build_hass(
+        child_rules={"r1": ("cover.zm108m", ACCESS_LEVEL_CONTROL)}
+    )
+    for service in ("open_cover", "close_cover", "stop_cover", "set_cover_position", "set_cover_tilt_position"):
+        decision = await _authorize(
+            hass,
+            domain="cover",
+            service=service,
+            service_data={"entity_id": "cover.zm108m", "position": 45},
+        )
+        assert decision.allowed is True, f"Failed for service {service}"
+        assert decision.reason == REASON_ALLOWED
+
+
+async def test_roller_shade_cover_services_denied_for_read_only():
+    """Test C: Read-only cover cannot execute state-changing operations like set_cover_position."""
+    hass, _store, _evaluator = _build_hass(
+        child_rules={"r1": ("cover.zm108m", ACCESS_LEVEL_READ)}
+    )
+    for service in ("open_cover", "close_cover", "stop_cover", "set_cover_position"):
+        decision = await _authorize(
+            hass,
+            domain="cover",
+            service=service,
+            service_data={"entity_id": "cover.zm108m", "position": 50},
+        )
+        assert decision.allowed is False, f"Service {service} should be denied for READ"
+        assert decision.reason == REASON_ENTITY_NOT_GRANTED
+
+
+async def test_unrelated_cover_denied_when_only_specific_cover_granted():
+    """Unrelated covers remain completely denied when CONTROL is granted to cover.zm108m."""
+    hass, _store, _evaluator = _build_hass(
+        child_rules={"r1": ("cover.zm108m", ACCESS_LEVEL_CONTROL)}
+    )
+    decision = await _authorize(
+        hass,
+        domain="cover",
+        service="set_cover_position",
+        service_data={"entity_id": "cover.unrelated_cover", "position": 30},
+    )
+    assert decision.allowed is False
+    assert decision.reason == REASON_ENTITY_NOT_GRANTED
