@@ -39,41 +39,49 @@ class HuiScriptEntityRow extends LitElement implements LovelaceRow {
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this._config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this.hass.localize, this.hass.config)}
         </hui-warning>
       `;
     }
 
     return html`
       <hui-generic-entity-row .hass=${this.hass} .config=${this._config}>
-        ${stateObj.state === "on"
-          ? html`<ha-button
-              appearance="plain"
-              size="small"
-              variant="danger"
-              @click=${this._cancelScript}
-            >
-              ${stateObj.attributes.mode !== "single" &&
-              stateObj.attributes.current &&
-              stateObj.attributes.current > 0
-                ? this.hass.localize("ui.card.script.cancel_multiple", {
-                    number: stateObj.attributes.current,
-                  })
-                : this.hass.localize("ui.card.script.cancel")}
-            </ha-button>`
-          : nothing}
-        ${stateObj.state === "off" || stateObj.attributes.max
-          ? html`<ha-button
-              appearance="plain"
-              size="small"
-              @click=${this._runScript}
-              .disabled=${stateObj.state === UNAVAILABLE || !canRun(stateObj)}
-            >
-              ${this._config.action_name ||
-              this.hass!.localize("ui.card.script.run")}
-            </ha-button>`
-          : nothing}
+        ${
+          stateObj.state === "on"
+            ? html`<ha-button
+                appearance="plain"
+                size="s"
+                variant="danger"
+                @click=${this._cancelScript}
+              >
+                ${
+                  stateObj.attributes.mode !== "single" &&
+                  stateObj.attributes.current &&
+                  stateObj.attributes.current > 0
+                    ? this.hass.localize("ui.card.script.cancel_multiple", {
+                        number: stateObj.attributes.current,
+                      })
+                    : this.hass.localize("ui.card.script.cancel")
+                }
+              </ha-button>`
+            : nothing
+        }
+        ${
+          stateObj.state === "off" || stateObj.attributes.max
+            ? html`<ha-button
+                appearance="plain"
+                size="s"
+                @click=${this._runScript}
+                .disabled=${stateObj.state === UNAVAILABLE || !canRun(stateObj)}
+              >
+                ${
+                  this._config.action_name ||
+                  this.hass!.localize("ui.card.script.run")
+                }
+              </ha-button>`
+            : nothing
+        }
       </hui-generic-entity-row>
     `;
   }
@@ -94,7 +102,7 @@ class HuiScriptEntityRow extends LitElement implements LovelaceRow {
   private async _runScript(ev): Promise<void> {
     ev.stopPropagation();
 
-    if (hasScriptFields(this.hass!, this._config!.entity)) {
+    if (hasScriptFields(this.hass!.services, this._config!.entity)) {
       showMoreInfoDialog(this, { entityId: this._config!.entity });
     } else if (
       !this._config?.confirmation ||

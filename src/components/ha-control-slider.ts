@@ -5,10 +5,12 @@ import { customElement, property, query, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
 import { ifDefined } from "lit/directives/if-defined";
 import { styleMap } from "lit/directives/style-map";
+import { consumeLocalize } from "../common/decorators/consume-context-entry";
 import { fireEvent } from "../common/dom/fire_event";
 import { mainWindow } from "../common/dom/get_main_window";
 import { formatNumber } from "../common/number/format_number";
 import { blankBeforeUnit } from "../common/translations/blank_before_unit";
+import type { LocalizeFunc } from "../common/translations/localize";
 import type { FrontendLocaleData } from "../data/translation";
 
 declare global {
@@ -36,7 +38,14 @@ type SliderMode = "start" | "end" | "cursor";
 
 @customElement("ha-control-slider")
 export class HaControlSlider extends LitElement {
+  static shadowRootOptions: ShadowRootInit = {
+    ...LitElement.shadowRootOptions,
+    delegatesFocus: true,
+  };
+
   @property({ attribute: false }) public locale?: FrontendLocaleData;
+
+  @state() @consumeLocalize() private _localize?: LocalizeFunc;
 
   @property({ type: Boolean, reflect: true })
   public disabled = false;
@@ -71,6 +80,17 @@ export class HaControlSlider extends LitElement {
   @property({ type: Number })
   public step = 1;
 
+  /**
+   * Round the value shown in the tooltip and announced to assistive
+   * technologies to the nearest integer. The handle still snaps to `step`, so
+   * the number of steps is unchanged. Useful when `step` is fractional but the
+   * value is conceptually a whole number — e.g. a fan whose `percentage_step`
+   * is 100 / speed_count (like ~1.0989 for 91 speeds), which would otherwise
+   * display fractional percentages such as "28.57%".
+   */
+  @property({ type: Boolean, attribute: "round-value" })
+  public roundValue = false;
+
   @property({ type: Number })
   public min = 0;
 
@@ -104,7 +124,14 @@ export class HaControlSlider extends LitElement {
   }
 
   steppedValue(value: number) {
-    return Math.round(value / this.step) * this.step;
+    // Clamp after snapping: when the step does not divide the range evenly,
+    // snapping alone rounds past the bounds (min 1, max 99, step 10 → 0 / 100).
+    return this.boundedValue(Math.round(value / this.step) * this.step);
+  }
+
+  private _displayedValue(value: number) {
+    const stepped = this.steppedValue(value);
+    return this.roundValue ? Math.round(stepped) : stepped;
   }
 
   boundedValue(value: number) {
@@ -116,12 +143,28 @@ export class HaControlSlider extends LitElement {
     this.setupListeners();
   }
 
-  protected updated(changedProps: PropertyValues<this>) {
+  protected updated(changedProps: PropertyValues) {
     super.updated(changedProps);
-    if (changedProps.has("value")) {
-      const valuenow = this.steppedValue(this.value ?? 0);
-      this.setAttribute("aria-valuenow", valuenow.toString());
-      this.setAttribute("aria-valuetext", this._formatValue(valuenow));
+    if (
+      changedProps.has("value") ||
+      changedProps.has("roundValue") ||
+      changedProps.has("_localize")
+    ) {
+      // An unknown value must not be announced as the minimum.
+      if (this.value == null) {
+        this.removeAttribute("aria-valuenow");
+      } else {
+        this.setAttribute(
+          "aria-valuenow",
+          this._displayedValue(this.value).toString()
+        );
+      }
+      const valuetext = this._ariaValueText();
+      if (valuetext) {
+        this.setAttribute("aria-valuetext", valuetext);
+      } else {
+        this.removeAttribute("aria-valuetext");
+      }
     }
     if (changedProps.has("min")) {
       this.setAttribute("aria-valuemin", this.min.toString());
@@ -176,6 +219,7 @@ export class HaControlSlider extends LitElement {
         this.pressed = false;
         this._hideTooltip();
         this.value = savedValue;
+        fireEvent(this, "slider-moved", { value: undefined });
       });
       this._mc.on("panmove", (e) => {
         if (this.disabled) return;
@@ -238,13 +282,9 @@ export class HaControlSlider extends LitElement {
     } else if (e.code === "End") {
       this.value = this.max;
     } else if (e.code === "PageUp") {
-      this.value = this.steppedValue(
-        this.boundedValue((this.value ?? 0) + this._tenPercentStep)
-      );
+      this.value = this.steppedValue((this.value ?? 0) + this._tenPercentStep);
     } else if (e.code === "PageDown") {
-      this.value = this.steppedValue(
-        this.boundedValue((this.value ?? 0) - this._tenPercentStep)
-      );
+      this.value = this.steppedValue((this.value ?? 0) - this._tenPercentStep);
     } else {
       const isRtl = mainWindow.document.dir === "rtl";
       let multiplier = 1;
@@ -293,6 +333,13 @@ export class HaControlSlider extends LitElement {
     return Math.max(Math.min(1, (x - offset) / total), 0);
   };
 
+  private _ariaValueText() {
+    if (this.value == null) {
+      return this._localize?.("state.default.unknown");
+    }
+    return this._formatValue(this._displayedValue(this.value));
+  }
+
   private _formatValue(value: number) {
     const formattedValue = formatNumber(value, this.locale);
 
@@ -312,7 +359,7 @@ export class HaControlSlider extends LitElement {
       this.tooltipMode === "always" ||
       (this.tooltipVisible && this.tooltipMode === "interaction");
 
-    const value = this.steppedValue(this.value ?? 0);
+    const value = this._displayedValue(this.value ?? 0);
 
     return html`
       <span
@@ -330,7 +377,8 @@ export class HaControlSlider extends LitElement {
   }
 
   protected render(): TemplateResult {
-    const valuenow = this.steppedValue(this.value ?? 0);
+    const valuenow =
+      this.value != null ? this._displayedValue(this.value) : undefined;
     return html`
       <div
         class="container${classMap({
@@ -346,8 +394,8 @@ export class HaControlSlider extends LitElement {
           role="slider"
           tabindex="0"
           aria-label=${ifDefined(this.label)}
-          aria-valuenow=${valuenow.toString()}
-          aria-valuetext=${this._formatValue(valuenow)}
+          aria-valuenow=${ifDefined(valuenow?.toString())}
+          aria-valuetext=${ifDefined(this._ariaValueText() || undefined)}
           aria-valuemin=${ifDefined(
             this.min != null ? this.min.toString() : undefined
           )}
@@ -360,25 +408,27 @@ export class HaControlSlider extends LitElement {
         >
           <div class="slider-track-background"></div>
           <slot name="background"></slot>
-          ${this.mode === "cursor"
-            ? this.value != null
-              ? html`
+          ${
+            this.mode === "cursor"
+              ? this.value != null
+                ? html`
+                    <div
+                      class=${classMap({
+                        "slider-track-cursor": true,
+                      })}
+                    ></div>
+                  `
+                : null
+              : html`
                   <div
                     class=${classMap({
-                      "slider-track-cursor": true,
+                      "slider-track-bar": true,
+                      [this.mode ?? "start"]: true,
+                      "show-handle": this.showHandle && this.value != null,
                     })}
                   ></div>
                 `
-              : null
-            : html`
-                <div
-                  class=${classMap({
-                    "slider-track-bar": true,
-                    [this.mode ?? "start"]: true,
-                    "show-handle": this.showHandle,
-                  })}
-                ></div>
-              `}
+          }
         </div>
         ${this._renderTooltip()}
       </div>
@@ -388,7 +438,10 @@ export class HaControlSlider extends LitElement {
   private _isVisuallyInverted() {
     let inverted = this.inverted;
 
-    if (mainWindow.document.dir === "rtl") {
+    // RTL only mirrors the horizontal axis. A vertical slider always fills
+    // bottom-to-top regardless of text direction, so it must not be flipped,
+    // otherwise its value mapping ends up upside down in RTL languages.
+    if (!this.vertical && mainWindow.document.dir === "rtl") {
       inverted = !inverted;
     }
 
@@ -403,6 +456,7 @@ export class HaControlSlider extends LitElement {
       --control-slider-background-opacity: 0.2;
       --control-slider-thickness: 40px;
       --control-slider-border-radius: var(--ha-border-radius-md);
+      --control-slider-inset-shadow: none;
       --control-slider-tooltip-font-size: var(--ha-font-size-m);
       height: var(--control-slider-thickness);
       width: 100%;
@@ -513,6 +567,14 @@ export class HaControlSlider extends LitElement {
     .slider * {
       pointer-events: none;
     }
+    .slider::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: var(--control-slider-inset-shadow);
+      pointer-events: none;
+    }
     .slider .slider-track-background {
       position: absolute;
       top: 0;
@@ -539,6 +601,7 @@ export class HaControlSlider extends LitElement {
       transition:
         transform 180ms ease-in-out,
         background-color 180ms ease-in-out;
+      will-change: transform;
     }
     .slider .slider-track-bar.show-handle {
       --slider-size: calc(100% - 2 * var(--handle-margin) - var(--handle-size));

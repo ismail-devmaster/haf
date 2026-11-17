@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
@@ -10,7 +10,12 @@ export default defineConfig({
   },
   plugins: [tsconfigPaths()],
   test: {
+<<<<<<< HEAD
     environment: "jsdom",
+=======
+    exclude: [...configDefaults.exclude, "test/e2e/**"],
+    environment: "jsdom", // to run in browser-like environment
+>>>>>>> dev
     env: {
       TZ: "Etc/UTC",
       IS_TEST: "true",

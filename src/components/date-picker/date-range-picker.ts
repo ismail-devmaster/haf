@@ -1,20 +1,25 @@
 import { TZDate } from "@date-fns/tz";
-import { consume, type ContextType } from "@lit/context";
-import type { ActionDetail } from "@material/mwc-list";
+import type { ContextType } from "@lit/context";
 import { mdiCalendarToday } from "@mdi/js";
 import "cally";
 import type { HassConfig } from "home-assistant-js-websocket/dist/types";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, queryAll, state } from "lit/decorators";
+import { consume } from "../../common/decorators/consume";
 import { firstWeekdayIndex } from "../../common/datetime/first_weekday";
 import {
   formatCallyDateRange,
-  formatDateMonth,
-  formatDateYear,
+  formatCallyMonthYear,
+  formatDateMonthYear,
   formatISODateOnly,
 } from "../../common/datetime/format_date";
 import { transform } from "../../common/decorators/transform";
 import { fireEvent } from "../../common/dom/fire_event";
+import type {
+  HASSDomCurrentTargetEvent,
+  HASSDomEvent,
+  HASSDomTargetEvent,
+} from "../../common/dom/fire_event";
 import { configContext, internationalizationContext } from "../../data/context";
 import { TimeZone } from "../../data/translation";
 import { MobileAwareMixin } from "../../mixins/mobile-aware-mixin";
@@ -27,12 +32,34 @@ import type { HaBaseTimeInput } from "../ha-base-time-input";
 import "../ha-icon-button";
 import "../ha-icon-button-next";
 import "../ha-icon-button-prev";
-import "../ha-list";
-import "../ha-list-item";
+import "../item/ha-list-item-button";
+import "../list/ha-list-base";
 import "../ha-time-input";
 import type { HaTimeInput } from "../ha-time-input";
 import type { DateRangePickerRanges } from "./ha-date-range-picker";
 import { datePickerStyles, dateRangePickerStyles } from "./styles";
+
+// Without a time zone, or where TZDate is invalid because Intl lacks
+// "longOffset" (Chrome < 95, Safari < 15.4), both use the browser time zone.
+const zonedDate = (
+  day: string,
+  timeZone: string | undefined,
+  { hours, minutes }: { hours: number; minutes: number },
+  addDays = 0
+): Date => {
+  const [year, month, date] = day.split("-").map(Number);
+  const zoned =
+    timeZone &&
+    new TZDate(year, month - 1, date + addDays, hours, minutes, timeZone);
+  return zoned && !isNaN(zoned.getTime())
+    ? zoned
+    : new Date(year, month - 1, date + addDays, hours, minutes);
+};
+
+const inTimeZone = (date: Date, timeZone: string | undefined): Date => {
+  const zoned = timeZone && new TZDate(date, timeZone);
+  return zoned && !isNaN(zoned.getTime()) ? zoned : date;
+};
 
 @customElement("date-range-picker")
 export class DateRangePicker extends MobileAwareMixin(LitElement) {
@@ -56,16 +83,21 @@ export class DateRangePicker extends MobileAwareMixin(LitElement) {
   })
   private _hassConfig!: HassConfig;
 
-  /** used to show month in calendar-range header */
-  @state() private _pickerMonth?: string;
+  /** used to show month and year in calendar-range header */
+  @state() private _pickerMonthYear?: string;
 
-  /** used to show year in calendar-date header */
-  @state() private _pickerYear?: string;
-
-  /** used for today to navigate focus in calendar-range  */
+  /**
+   * used for today to navigate focus in calendar-range
+   *
+   * Always mirrors the day calendar-range has focused, never cleared: once this
+   * has held a date, rendering `undefined` over it makes cally fall back to the
+   * selected range and page the calendar away from where the user is.
+   */
   @state() private _focusDate?: string;
 
   @state() private _dateValue?: string;
+
+  @state() private _rangeIncomplete = false;
 
   @state() private _timeValue = {
     from: { hours: 0, minutes: 0 },
@@ -88,29 +120,32 @@ export class DateRangePicker extends MobileAwareMixin(LitElement) {
             this._hassConfig
           )
         : undefined;
-    this._pickerMonth = formatDateMonth(
-      date,
-      this._i18n.locale,
-      this._hassConfig
-    );
-    this._pickerYear = formatDateYear(
+    this._pickerMonthYear = formatDateMonthYear(
       date,
       this._i18n.locale,
       this._hassConfig
     );
 
     if (this.timePicker && this.startDate && this.endDate) {
+      const startDate = inTimeZone(this.startDate, this._serverTimeZone);
+      const endDate = inTimeZone(this.endDate, this._serverTimeZone);
       this._timeValue = {
         from: {
-          hours: this.startDate.getHours(),
-          minutes: this.startDate.getMinutes(),
+          hours: startDate.getHours(),
+          minutes: startDate.getMinutes(),
         },
         to: {
-          hours: this.endDate.getHours(),
-          minutes: this.endDate.getMinutes(),
+          hours: endDate.getHours(),
+          minutes: endDate.getMinutes(),
         },
       };
     }
+  }
+
+  private get _serverTimeZone() {
+    return this._i18n.locale.time_zone === TimeZone.server
+      ? this._hassConfig.time_zone
+      : undefined;
   }
 
   private _renderRanges() {
@@ -133,25 +168,36 @@ export class DateRangePicker extends MobileAwareMixin(LitElement) {
     }
 
     return html`
-      <ha-list @action=${this._setDateRange} activatable>
-        ${Object.keys(this.ranges!).map(
-          (name) => html`<ha-list-item>${name}</ha-list-item>`
+      <ha-list-base>
+        ${Object.entries(this.ranges!).map(
+          ([name, range], index) => html`
+            <ha-list-item-button
+              .range=${range}
+              .index=${index}
+              @click=${this._setDateRange}
+            >
+              <span slot="headline">${name}</span>
+            </ha-list-item-button>
+          `
         )}
-      </ha-list>
+      </ha-list-base>
     `;
   }
 
   render() {
     return html`<div class="picker">
-        ${this.ranges !== false && this.ranges
-          ? html`<div class="date-range-ranges">${this._renderRanges()}</div>`
-          : nothing}
+        ${
+          this.ranges !== false && this.ranges
+            ? html`<div class="date-range-ranges">${this._renderRanges()}</div>`
+            : nothing
+        }
         <div class="range">
           <calendar-range
             .value=${this._dateValue}
             .locale=${this._i18n.locale.language}
             .focusedDate=${this._focusDate}
             @focusday=${this._focusChanged}
+            @rangestart=${this._handleRangeStart}
             @change=${this._handleChange}
             show-outside-days
             .firstDayOfWeek=${firstWeekdayIndex(this._i18n.locale)}
@@ -161,9 +207,7 @@ export class DateRangePicker extends MobileAwareMixin(LitElement) {
               slot="previous"
             ></ha-icon-button-prev>
             <div class="heading" slot="heading">
-              <span class="month-year"
-                >${this._pickerMonth} ${this._pickerYear}</span
-              >
+              <span class="month-year">${this._pickerMonthYear}</span>
               <ha-icon-button
                 @click=${this._focusToday}
                 .path=${mdiCalendarToday}
@@ -174,43 +218,47 @@ export class DateRangePicker extends MobileAwareMixin(LitElement) {
               tabindex="-1"
               slot="next"
             ></ha-icon-button-next>
-            <calendar-month></calendar-month>
+            <calendar-month dir=${this.dir}></calendar-month>
           </calendar-range>
-          ${this.timePicker
-            ? html`
-                <div class="times">
-                  <ha-time-input
-                    .value=${`${this._timeValue.from.hours}:${this._timeValue.from.minutes}`}
-                    .locale=${this._i18n.locale}
-                    @value-changed=${this._handleChangeTime}
-                    .label=${this._i18n.localize(
-                      "ui.components.date-range-picker.time_from"
-                    )}
-                    id="from"
-                    placeholder-labels
-                    auto-validate
-                  ></ha-time-input>
-                  <ha-time-input
-                    .value=${`${this._timeValue.to.hours}:${this._timeValue.to.minutes}`}
-                    .locale=${this._i18n.locale}
-                    @value-changed=${this._handleChangeTime}
-                    .label=${this._i18n.localize(
-                      "ui.components.date-range-picker.time_to"
-                    )}
-                    id="to"
-                    placeholder-labels
-                    auto-validate
-                  ></ha-time-input>
-                </div>
-              `
-            : nothing}
+          ${
+            this.timePicker
+              ? html`
+                  <div class="times">
+                    <ha-time-input
+                      .value=${`${this._timeValue.from.hours}:${this._timeValue.from.minutes}`}
+                      .locale=${this._i18n.locale}
+                      @value-changed=${this._handleChangeTime}
+                      .label=${this._i18n.localize(
+                        "ui.components.date-range-picker.time_from"
+                      )}
+                      id="from"
+                      placeholder-labels
+                      auto-validate
+                    ></ha-time-input>
+                    <ha-time-input
+                      .value=${`${this._timeValue.to.hours}:${this._timeValue.to.minutes}`}
+                      .locale=${this._i18n.locale}
+                      @value-changed=${this._handleChangeTime}
+                      .label=${this._i18n.localize(
+                        "ui.components.date-range-picker.time_to"
+                      )}
+                      id="to"
+                      placeholder-labels
+                      auto-validate
+                    ></ha-time-input>
+                  </div>
+                `
+              : nothing
+          }
         </div>
       </div>
       <div class="footer">
         <ha-button appearance="plain" @click=${this._cancel}
           >${this._i18n.localize("ui.common.cancel")}</ha-button
         >
-        <ha-button .disabled=${!this._dateValue} @click=${this._save}
+        <ha-button
+          .disabled=${!this._dateValue || this._rangeIncomplete}
+          @click=${this._save}
           >${this._i18n.localize(
             "ui.components.date-range-picker.select"
           )}</ha-button
@@ -225,12 +273,7 @@ export class DateRangePicker extends MobileAwareMixin(LitElement) {
       this._i18n.locale,
       this._hassConfig
     );
-    this._pickerMonth = formatDateMonth(
-      date,
-      this._i18n.locale,
-      this._hassConfig
-    );
-    this._pickerYear = formatDateYear(
+    this._pickerMonthYear = formatDateMonthYear(
       date,
       this._i18n.locale,
       this._hassConfig
@@ -242,13 +285,9 @@ export class DateRangePicker extends MobileAwareMixin(LitElement) {
   }
 
   private _save() {
-    if (!this._dateValue) {
+    if (!this._dateValue || this._rangeIncomplete) {
       return;
     }
-
-    const dates = this._dateValue.split("/");
-    let startDate = new Date(`${dates[0]}T00:00:00`);
-    let endDate = new Date(`${dates[1]}T23:59:00`);
 
     if (this.timePicker) {
       const timeInputs = this._timeInputs;
@@ -259,28 +298,14 @@ export class DateRangePicker extends MobileAwareMixin(LitElement) {
         // If we have time inputs, and they don't all report valid, don't save
         return;
       }
-      startDate.setHours(this._timeValue.from.hours);
-      startDate.setMinutes(this._timeValue.from.minutes);
-      endDate.setHours(this._timeValue.to.hours);
-      endDate.setMinutes(this._timeValue.to.minutes);
-
-      startDate.setSeconds(0);
-      startDate.setMilliseconds(0);
-      endDate.setSeconds(0);
-      endDate.setMilliseconds(0);
-
-      if (endDate <= startDate) {
-        endDate.setDate(startDate.getDate() + 1);
-      }
     }
 
-    if (this._i18n.locale.time_zone === TimeZone.server) {
-      startDate = new Date(
-        new TZDate(startDate, this._hassConfig.time_zone).getTime()
-      );
-      endDate = new Date(
-        new TZDate(endDate, this._hassConfig.time_zone).getTime()
-      );
+    const [startDay, endDay] = this._dateValue.split("/");
+    const { from, to } = this._timeValue;
+    const startDate = zonedDate(startDay, this._serverTimeZone, from);
+    let endDate = zonedDate(endDay, this._serverTimeZone, to);
+    if (endDate <= startDate) {
+      endDate = zonedDate(endDay, this._serverTimeZone, to, 1);
     }
 
     if (
@@ -297,34 +322,45 @@ export class DateRangePicker extends MobileAwareMixin(LitElement) {
 
     fireEvent(this, "value-changed", {
       value: {
-        startDate,
-        endDate,
+        startDate: new Date(startDate.getTime()),
+        endDate: new Date(endDate.getTime()),
       },
     });
   }
 
-  private _focusChanged(ev: CustomEvent<Date>) {
-    const date = ev.detail;
-    this._pickerMonth = formatDateMonth(
-      date,
-      this._i18n.locale,
-      this._hassConfig
-    );
-    this._pickerYear = formatDateYear(
-      date,
-      this._i18n.locale,
-      this._hassConfig
-    );
-    this._focusDate = undefined;
+  private _focusChanged(
+    ev: HASSDomEvent<Date> &
+      HASSDomTargetEvent<HTMLElementTagNameMap["calendar-range"]>
+  ) {
+    this._pickerMonthYear = formatCallyMonthYear(ev.detail, this._i18n.locale);
+    this._focusDate = ev.target.focusedDate;
   }
 
-  private _handleChange(ev: CustomEvent) {
+  private _handleRangeStart(
+    ev: HASSDomTargetEvent<HTMLElementTagNameMap["calendar-range"]>
+  ) {
+    this._rangeIncomplete = matchMedia("(hover: hover)").matches;
+    if (this._rangeIncomplete) {
+      return;
+    }
+    const day = ev.target.tentative;
+    this._dateValue = `${day}/${day}`;
+  }
+
+  private _handleChange(
+    ev: HASSDomTargetEvent<HTMLElementTagNameMap["calendar-range"]>
+  ) {
+    this._rangeIncomplete = false;
     const dateElement = ev.target as HTMLElementTagNameMap["calendar-range"];
     this._dateValue = dateElement.value;
-    this._focusDate = undefined;
+    this._focusDate = dateElement.focusedDate;
   }
 
-  private _clickDateRangeChip(ev: Event) {
+  private _clickDateRangeChip(
+    ev: HASSDomTargetEvent<
+      HaFilterChip & { index: number; range: [Date, Date] }
+    >
+  ) {
     const chip = ev.target as HaFilterChip & {
       index: number;
       range: [Date, Date];
@@ -332,11 +368,12 @@ export class DateRangePicker extends MobileAwareMixin(LitElement) {
     this._saveDateRangePreset(chip.range, chip.index);
   }
 
-  private _setDateRange(ev: CustomEvent<ActionDetail>) {
-    const dateRange: [Date, Date] = Object.values(this.ranges!)[
-      ev.detail.index
-    ];
-    this._saveDateRangePreset(dateRange, ev.detail.index);
+  private _setDateRange(
+    ev: HASSDomCurrentTargetEvent<
+      HTMLElement & { range: [Date, Date]; index: number }
+    >
+  ) {
+    this._saveDateRangePreset(ev.currentTarget.range, ev.currentTarget.index);
   }
 
   private _saveDateRangePreset(range: [Date, Date], index: number) {
@@ -351,7 +388,9 @@ export class DateRangePicker extends MobileAwareMixin(LitElement) {
     });
   }
 
-  private _handleChangeTime(ev: ValueChangedEvent<string>) {
+  private _handleChangeTime(
+    ev: ValueChangedEvent<string> & HASSDomTargetEvent<HaBaseTimeInput>
+  ) {
     ev.stopPropagation();
     const time = ev.detail.value;
     const target = ev.target as HaBaseTimeInput;

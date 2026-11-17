@@ -1,30 +1,21 @@
 import { mdiDragHorizontalVariant, mdiPlus } from "@mdi/js";
 import deepClone from "deep-clone-simple";
-import type {
-  HassServiceTarget,
-  UnsubscribeFunc,
-} from "home-assistant-js-websocket";
+import type { HassServiceTarget } from "home-assistant-js-websocket";
 import type { PropertyValues } from "lit";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, queryAll, state } from "lit/decorators";
 import { repeat } from "lit/directives/repeat";
+import { consume } from "../../../../common/decorators/consume";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import { stopPropagation } from "../../../../common/dom/stop_propagation";
 import "../../../../components/ha-button";
 import "../../../../components/ha-sortable";
 import "../../../../components/ha-svg-icon";
-import {
-  getValueFromDynamic,
-  isDynamic,
-  type Condition,
-} from "../../../../data/automation";
+import type { Condition } from "../../../../data/automation";
 import type { ConditionDescriptions } from "../../../../data/condition";
-import {
-  CONDITION_BUILDING_BLOCKS,
-  subscribeConditions,
-} from "../../../../data/condition";
-import { subscribeLabFeature } from "../../../../data/labs";
-import { SubscribeMixin } from "../../../../mixins/subscribe-mixin";
+import { CONDITION_BUILDING_BLOCKS } from "../../../../data/condition";
+import { conditionDescriptionsContext } from "../../../../data/context";
+import { createCondition } from "../automation-element-config";
 import { EDITOR_SAVE_FAB_TOAST_BOTTOM_OFFSET } from "../editor-toast";
 import {
   getAddAutomationElementTargetFromQuery,
@@ -38,7 +29,7 @@ import type HaAutomationConditionRow from "./ha-automation-condition-row";
 
 @customElement("ha-automation-condition")
 export default class HaAutomationCondition extends AutomationSortableListMixin<Condition>(
-  SubscribeMixin(LitElement)
+  LitElement
 ) {
   @property({ attribute: false }) public conditions!: Condition[];
 
@@ -48,15 +39,12 @@ export default class HaAutomationCondition extends AutomationSortableListMixin<C
 
   @property({ type: Boolean, attribute: false }) public editorDirty = false;
 
-  @state() private _conditionDescriptions: ConditionDescriptions = {};
+  @state()
+  @consume({ context: conditionDescriptionsContext, subscribe: true })
+  private _conditionDescriptions: ConditionDescriptions = {};
 
   @queryAll("ha-automation-condition-row")
   private _conditionRowElements?: HaAutomationConditionRow[];
-
-  // @ts-ignore
-  @state() private _newTriggersAndConditions = false;
-
-  private _unsub?: Promise<UnsubscribeFunc>;
 
   private _openedAddDialogFromQuery = false;
 
@@ -72,49 +60,6 @@ export default class HaAutomationCondition extends AutomationSortableListMixin<C
     this.highlightedConditions = items;
   }
 
-  public disconnectedCallback() {
-    super.disconnectedCallback();
-    this._unsubscribe();
-  }
-
-  protected hassSubscribe() {
-    return [
-      subscribeLabFeature(
-        this.hass!.connection,
-        "automation",
-        "new_triggers_conditions",
-        (feature) => {
-          this._newTriggersAndConditions = feature.enabled;
-        }
-      ),
-    ];
-  }
-
-  private _subscribeDescriptions() {
-    this._unsubscribe();
-    this._conditionDescriptions = {};
-    this._unsub = subscribeConditions(this.hass, (descriptions) => {
-      this._conditionDescriptions = {
-        ...this._conditionDescriptions,
-        ...descriptions,
-      };
-    });
-  }
-
-  private _unsubscribe() {
-    if (this._unsub) {
-      this._unsub.then((unsub) => unsub());
-      this._unsub = undefined;
-    }
-  }
-
-  protected willUpdate(changedProperties: PropertyValues): void {
-    super.willUpdate(changedProperties);
-    if (changedProperties.has("_newTriggersAndConditions")) {
-      this._subscribeDescriptions();
-    }
-  }
-
   protected firstUpdated(changedProps: PropertyValues<this>) {
     super.firstUpdated(changedProps);
     this.hass.loadBackendTranslation("conditions");
@@ -128,6 +73,7 @@ export default class HaAutomationCondition extends AutomationSortableListMixin<C
     const addConditionTargetFromQuery = getAddAutomationElementTargetFromQuery(
       this.hass.states,
       this.hass.devices,
+      this.hass.areas,
       "condition"
     );
 
@@ -192,12 +138,6 @@ export default class HaAutomationCondition extends AutomationSortableListMixin<C
             mode === "moved")
         ) {
           row.openSidebar();
-          if (this.narrow) {
-            row.scrollIntoView({
-              block: "start",
-              behavior: "smooth",
-            });
-          }
         }
 
         if (mode === "new") {
@@ -258,6 +198,7 @@ export default class HaAutomationCondition extends AutomationSortableListMixin<C
                 @duplicate=${this.duplicateItem}
                 @paste=${this.pasteItem}
                 @insert-after=${this.insertAfter}
+                @replace-item=${this.replaceItem}
                 @move-down=${this.moveDown}
                 @move-up=${this.moveUp}
                 @value-changed=${this.itemChanged}
@@ -267,24 +208,26 @@ export default class HaAutomationCondition extends AutomationSortableListMixin<C
                 .sortSelected=${this.rowSortSelected === idx}
                 @stop-sort-selection=${this.stopSortSelection}
               >
-                ${!this.disabled
-                  ? html`
-                      <div
-                        tabindex="0"
-                        class="handle ${this.rowSortSelected === idx
-                          ? "active"
-                          : ""}"
-                        slot="icons"
-                        @keydown=${this.handleDragKeydown}
-                        @click=${stopPropagation}
-                        .index=${idx}
-                      >
-                        <ha-svg-icon
-                          .path=${mdiDragHorizontalVariant}
-                        ></ha-svg-icon>
-                      </div>
-                    `
-                  : nothing}
+                ${
+                  !this.disabled
+                    ? html`
+                        <div
+                          tabindex="0"
+                          class="handle ${
+                            this.rowSortSelected === idx ? "active" : ""
+                          }"
+                          slot="icons"
+                          @keydown=${this.handleDragKeydown}
+                          @click=${stopPropagation}
+                          .index=${idx}
+                        >
+                          <ha-svg-icon
+                            .path=${mdiDragHorizontalVariant}
+                          ></ha-svg-icon>
+                        </div>
+                      `
+                    : nothing
+                }
               </ha-automation-condition-row>
             `
           )}
@@ -293,7 +236,7 @@ export default class HaAutomationCondition extends AutomationSortableListMixin<C
               .disabled=${this.disabled}
               @click=${this._addConditionDialog}
               .appearance=${this.root ? "accent" : "filled"}
-              .size=${this.root ? "medium" : "small"}
+              .size=${this.root ? "m" : "s"}
             >
               <ha-svg-icon .path=${mdiPlus} slot="start"></ha-svg-icon>
               ${this.hass.localize(
@@ -321,30 +264,14 @@ export default class HaAutomationCondition extends AutomationSortableListMixin<C
   }
 
   private _addCondition = (value: string, target?: HassServiceTarget) => {
-    let conditions: Condition[];
-    if (value === PASTE_VALUE) {
-      conditions = this.conditions.concat(
-        deepClone(this._clipboard!.condition!)
-      );
-    } else if (isDynamic(value)) {
-      conditions = this.conditions.concat({
-        condition: getValueFromDynamic(value),
-        target,
-      });
-    } else {
-      const condition = value as Condition["condition"];
-      const elClass = customElements.get(
-        `ha-automation-condition-${condition}`
-      ) as CustomElementConstructor & {
-        defaultConfig: Condition;
-      };
-      conditions = this.conditions.concat({
-        ...elClass.defaultConfig,
-        ...(target?.entity_id ? { entity_id: target.entity_id } : {}),
-      });
-    }
+    const condition =
+      value === PASTE_VALUE
+        ? deepClone(this._clipboard!.condition!)
+        : createCondition(value, target);
     this.focusLastItemOnChange = true;
-    fireEvent(this, "value-changed", { value: conditions });
+    fireEvent(this, "value-changed", {
+      value: this.conditions.concat(condition),
+    });
   };
 
   static styles = automationRowsStyles;

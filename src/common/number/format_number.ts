@@ -5,6 +5,7 @@ import type {
 import type { EntityRegistryDisplayEntry } from "../../data/entity/entity_registry";
 import type { FrontendLocaleData } from "../../data/translation";
 import { NumberFormat } from "../../data/translation";
+import { blankBeforeUnit } from "../translations/blank_before_unit";
 
 /**
  * Returns true if the entity is considered numeric based on the attributes it has
@@ -14,12 +15,8 @@ export const isNumericState = (stateObj: HassEntity): boolean =>
   isNumericFromAttributes(stateObj.attributes);
 
 export const isNumericFromAttributes = (
-  attributes: HassEntityAttributeBase,
-  numericDeviceClasses?: string[]
-): boolean =>
-  !!attributes.unit_of_measurement ||
-  !!attributes.state_class ||
-  (numericDeviceClasses || []).includes(attributes.device_class || "");
+  attributes: HassEntityAttributeBase
+): boolean => !!attributes.unit_of_measurement || !!attributes.state_class;
 
 export const numberFormatToLocale = (
   localeOptions: FrontendLocaleData
@@ -40,6 +37,25 @@ export const numberFormatToLocale = (
   }
 };
 
+// Constructing an Intl.NumberFormat is comparatively expensive, and these
+// formatters are created on every numeric state render. The number of distinct
+// (locale, options) combinations is small and bounded in practice, so cache the
+// instances instead of rebuilding them on every call.
+const numberFormatCache = new Map<string, Intl.NumberFormat>();
+
+const getNumberFormatter = (
+  locale: string | string[] | undefined,
+  options: Intl.NumberFormatOptions
+): Intl.NumberFormat => {
+  const key = JSON.stringify([locale, options]);
+  let formatter = numberFormatCache.get(key);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, options);
+    numberFormatCache.set(key, formatter);
+  }
+  return formatter;
+};
+
 /**
  * Formats a number based on the user's preference with thousands separator(s) and decimal character for better legibility.
  *
@@ -55,6 +71,27 @@ export const formatNumber = (
   formatNumberToParts(num, localeOptions, options)
     .map((part) => part.value)
     .join("");
+
+/**
+ * Formats a number like `formatNumber` and appends the unit, separated by the spacing the unit and locale expect.
+ *
+ * @param num The number to format
+ * @param unit The unit to append, nothing is appended when empty
+ * @param localeOptions The user-selected language and formatting, from `hass.locale`
+ * @param options Intl.NumberFormatOptions to use
+ */
+export const formatNumberWithUnit = (
+  num: string | number,
+  unit: string | null | undefined,
+  localeOptions?: FrontendLocaleData,
+  options?: Intl.NumberFormatOptions
+): string => {
+  const formatted = formatNumber(num, localeOptions, options);
+  if (!unit) {
+    return formatted;
+  }
+  return `${formatted}${blankBeforeUnit(unit, localeOptions)}${unit}`;
+};
 
 /**
  * Returns an array of objects containing the formatted number in parts
@@ -75,7 +112,7 @@ export const formatNumberToParts = (
     localeOptions?.number_format !== NumberFormat.none &&
     !Number.isNaN(Number(num))
   ) {
-    return new Intl.NumberFormat(
+    return getNumberFormatter(
       locale,
       getDefaultFormatOptions(num, options)
     ).formatToParts(Number(num));
@@ -87,7 +124,7 @@ export const formatNumberToParts = (
     localeOptions?.number_format === NumberFormat.none
   ) {
     // If NumberFormat is none, use en-US format without grouping.
-    return new Intl.NumberFormat(
+    return getNumberFormatter(
       "en-US",
       getDefaultFormatOptions(num, {
         ...options,
@@ -124,6 +161,9 @@ export const getNumberFormatOptions = (
   return undefined;
 };
 
+// Intl.NumberFormat throws a RangeError for more fraction digits than this.
+const MAX_FRACTION_DIGITS = 100;
+
 /**
  * Generates default options for Intl.NumberFormat
  * @param num The number to be formatted
@@ -148,7 +188,10 @@ export const getDefaultFormatOptions = (
     (options.minimumFractionDigits === undefined &&
       options.maximumFractionDigits === undefined)
   ) {
-    const digits = num.indexOf(".") > -1 ? num.split(".")[1].length : 0;
+    const digits = Math.min(
+      num.indexOf(".") > -1 ? num.split(".")[1].length : 0,
+      MAX_FRACTION_DIGITS
+    );
     defaultOptions.minimumFractionDigits = digits;
     defaultOptions.maximumFractionDigits = digits;
   }

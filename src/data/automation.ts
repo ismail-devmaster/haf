@@ -1,12 +1,13 @@
-import { createContext } from "@lit/context";
 import type {
   Connection,
   HassEntityAttributeBase,
   HassEntityBase,
-  HassServiceTarget,
 } from "home-assistant-js-websocket";
 import { ensureArray } from "../common/array/ensure-array";
+import { createDurationData } from "../common/datetime/create_duration_data";
+import { applyDurationSign } from "../common/datetime/normalize_duration";
 import type { WeekdayShort } from "../common/datetime/weekday";
+import { computeDomain } from "../common/entity/compute_domain";
 import { navigate } from "../common/navigate";
 import type { LocalizeKeys } from "../common/translations/localize";
 import { createSearchParam } from "../common/url/search-params";
@@ -18,7 +19,8 @@ import type {
   DeviceCondition,
   DeviceTrigger,
 } from "./device/device_automation";
-import type { Action, Field, MODES } from "./script";
+import type { Action, Field, MODES, Option } from "./script";
+import type { HassServiceTargetWithExclude } from "./target";
 import { migrateAutomationAction } from "./script";
 import type { TriggerDescription } from "./trigger";
 
@@ -41,8 +43,7 @@ export interface AutomationEntity extends HassEntityBase {
 }
 
 export type AutomationConfig =
-  | ManualAutomationConfig
-  | BlueprintAutomationConfig;
+  ManualAutomationConfig | BlueprintAutomationConfig;
 
 export interface ManualAutomationConfig {
   id?: string;
@@ -96,7 +97,7 @@ export interface TriggerList {
 
 export interface BaseTrigger {
   alias?: string;
-  comment?: string;
+  note?: string;
   /** @deprecated Use `trigger` instead */
   platform?: string;
   trigger: string;
@@ -108,7 +109,7 @@ export interface BaseTrigger {
 
 export interface PlatformTrigger extends BaseTrigger {
   trigger: Exclude<string, LegacyTrigger["trigger"]>;
-  target?: HassServiceTarget;
+  target?: HassServiceTargetWithExclude;
 }
 
 export interface StateTrigger extends BaseTrigger {
@@ -116,7 +117,9 @@ export interface StateTrigger extends BaseTrigger {
   entity_id: string | string[];
   attribute?: string;
   from?: string | string[];
+  not_from?: string | string[];
   to?: string | string[];
+  not_to?: string | string[];
   for?: string | number | ForDict;
 }
 
@@ -155,7 +158,7 @@ export interface ConversationTrigger extends BaseTrigger {
 
 export interface SunTrigger extends BaseTrigger {
   trigger: "sun";
-  offset: number;
+  offset?: string | number | ForDict;
   event: "sunrise" | "sunset";
 }
 
@@ -181,7 +184,7 @@ export interface PersistentNotificationTrigger extends BaseTrigger {
 
 export interface ZoneTrigger extends BaseTrigger {
   trigger: "zone";
-  entity_id: string;
+  entity_id: string | string[];
   zone: string;
   event: "enter" | "leave";
 }
@@ -192,9 +195,11 @@ export interface TagTrigger extends BaseTrigger {
   device_id?: string;
 }
 
+export type TimeTriggerAt = string | { entity_id: string; offset?: string };
+
 export interface TimeTrigger extends BaseTrigger {
   trigger: "time";
-  at: string | { entity_id: string; offset?: string };
+  at: TimeTriggerAt | TimeTriggerAt[];
   weekday?: string | string[];
 }
 
@@ -213,9 +218,9 @@ export interface EventTrigger extends BaseTrigger {
 
 export interface CalendarTrigger extends BaseTrigger {
   trigger: "calendar";
-  event: "start" | "end";
+  event?: "start" | "end";
   entity_id: string;
-  offset: string;
+  offset?: string | number | ForDict;
 }
 
 export type LegacyTrigger =
@@ -242,14 +247,14 @@ export type Trigger = LegacyTrigger | TriggerList | PlatformTrigger;
 interface BaseCondition {
   condition: string;
   alias?: string;
-  comment?: string;
+  note?: string;
   enabled?: boolean;
   options?: Record<string, unknown>;
 }
 
 export interface PlatformCondition extends BaseCondition {
   condition: Exclude<string, LegacyCondition["condition"]>;
-  target?: HassServiceTarget;
+  target?: HassServiceTargetWithExclude;
 }
 
 export interface LogicalCondition extends BaseCondition {
@@ -303,7 +308,7 @@ export interface TemplateCondition extends BaseCondition {
 
 export interface TriggerCondition extends BaseCondition {
   condition: "trigger";
-  id: string;
+  id: string | string[];
 }
 
 type ShorthandBaseCondition = Omit<BaseCondition, "condition">;
@@ -332,7 +337,14 @@ export interface AutomationElementGroupCollection {
 
 export type AutomationElementGroup = Record<
   string,
-  { icon?: string; members?: AutomationElementGroup }
+  {
+    icon?: string;
+    members?: AutomationElementGroup;
+    // Backend element domains (e.g. "calendar", "sun") whose triggers/conditions
+    // are bundled into this group instead of appearing as their own dynamic
+    // domain group.
+    domains?: string[];
+  }
 >;
 
 export type LegacyCondition =
@@ -353,11 +365,17 @@ export type ConditionWithShorthand =
   | ShorthandAndConditionList
   | ShorthandAndCondition
   | ShorthandOrCondition
-  | ShorthandNotCondition;
+  | ShorthandNotCondition
+  | string;
 
 export const expandConditionWithShorthand = (
   cond: ConditionWithShorthand
 ): Condition => {
+  // A bare template string is shorthand for a template condition
+  if (typeof cond === "string") {
+    return { condition: "template", value_template: cond };
+  }
+
   if ("condition" in cond && Array.isArray(cond.condition)) {
     return {
       condition: "and",
@@ -378,7 +396,7 @@ export const expandConditionWithShorthand = (
 };
 
 export const triggerAutomationActions = (
-  hass: HomeAssistant,
+  hass: Pick<HomeAssistant, "callService">,
   entityId: string
 ) => {
   hass.callService("automation", "trigger", {
@@ -410,12 +428,22 @@ export const saveAutomationConfig = (
   config: AutomationConfig
 ) => hass.callApi<undefined>("POST", `config/automation/config/${id}`, config);
 
+/**
+ * Accumulates whether a deprecated config option was migrated while
+ * normalizing an automation or script config. Used to surface an alert
+ * offering to save the migrated configuration.
+ */
+export interface AutomationMigrationReport {
+  deprecated: boolean;
+}
+
 export const normalizeAutomationConfig = <
   T extends Partial<AutomationConfig> | AutomationConfig,
 >(
-  config: T
+  config: T,
+  report?: AutomationMigrationReport
 ): T => {
-  config = migrateAutomationConfig(config);
+  config = migrateAutomationConfig(config, report);
 
   // Normalize data: ensure triggers, actions and conditions are lists
   // Happens when people copy paste their automations into the config
@@ -432,7 +460,8 @@ export const normalizeAutomationConfig = <
 export const migrateAutomationConfig = <
   T extends Partial<AutomationConfig> | AutomationConfig,
 >(
-  config: T
+  config: T,
+  report?: AutomationMigrationReport
 ) => {
   if ("trigger" in config) {
     if (!("triggers" in config)) {
@@ -454,29 +483,87 @@ export const migrateAutomationConfig = <
   }
 
   if (config.triggers) {
-    config.triggers = migrateAutomationTrigger(config.triggers);
+    config.triggers = migrateAutomationTrigger(config.triggers, report);
   }
 
   if (config.actions) {
-    config.actions = migrateAutomationAction(config.actions);
+    config.actions = migrateAutomationAction(config.actions, report);
   }
 
   return config;
 };
 
+// The fields of the row holding a trigger, condition or action, as opposed to
+// the configuration of its type. The UI editors of some types build their value
+// from scratch, so these have to be carried over explicitly.
+export const TRIGGER_ROW_CONFIG_KEYS = [
+  "alias",
+  "note",
+  "id",
+  "enabled",
+  "variables",
+] as const;
+
+export const CONDITION_ROW_CONFIG_KEYS = ["alias", "note", "enabled"] as const;
+
+export const ACTION_ROW_CONFIG_KEYS = [
+  "alias",
+  "note",
+  "enabled",
+  "continue_on_error",
+] as const;
+
+export const pickRowConfig = <T extends object>(
+  row: T,
+  keys: readonly string[]
+): Partial<T> => {
+  const source = row as Record<string, unknown>;
+  const config: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (key in source) {
+      config[key] = source[key];
+    }
+  }
+  return config as Partial<T>;
+};
+
+// Older sun and calendar triggers set a positive offset with an offset type,
+// which the backend folds into the sign of the offset.
+const OFFSET_TYPE_TRIGGER_DOMAINS = ["sun", "calendar"];
+
+const foldOffsetType = (
+  options: Record<string, unknown>
+): Record<string, unknown> => {
+  const { offset_type: offsetType, ...folded } = options;
+  const offset = createDurationData(
+    folded.offset as string | number | ForDict | undefined
+  );
+  if (offset && !Object.values(offset).every(Number.isFinite)) {
+    return options;
+  }
+  if (offsetType === "before" && offset) {
+    folded.offset = applyDurationSign(offset, true);
+  }
+  return folded;
+};
+
+export const getRowNote = (note: unknown): string | undefined =>
+  typeof note === "string" ? note.trim() || undefined : undefined;
+
 export const migrateAutomationTrigger = (
-  trigger: Trigger | Trigger[]
+  trigger: Trigger | Trigger[],
+  report?: AutomationMigrationReport
 ): Trigger | Trigger[] => {
-  if (!trigger) {
+  if (!trigger || typeof trigger !== "object") {
     return trigger;
   }
 
   if (Array.isArray(trigger)) {
-    return trigger.map(migrateAutomationTrigger) as Trigger[];
+    return trigger.map((t) => migrateAutomationTrigger(t, report)) as Trigger[];
   }
 
   if ("triggers" in trigger && trigger.triggers) {
-    trigger.triggers = migrateAutomationTrigger(trigger.triggers);
+    trigger.triggers = migrateAutomationTrigger(trigger.triggers, report);
   }
 
   if ("platform" in trigger) {
@@ -486,19 +573,52 @@ export const migrateAutomationTrigger = (
     }
     delete trigger.platform;
   }
+
+  if (
+    "options" in trigger &&
+    typeof trigger.options === "object" &&
+    trigger.options !== null
+  ) {
+    if ("behavior" in trigger.options) {
+      // Deprecated behavior values renamed in 2026; the backend raises a repair
+      // when they are still used, so flag the migration to offer saving.
+      if (trigger.options.behavior === "any") {
+        trigger.options.behavior = "each";
+        if (report) {
+          report.deprecated = true;
+        }
+      } else if (trigger.options.behavior === "last") {
+        trigger.options.behavior = "all";
+        if (report) {
+          report.deprecated = true;
+        }
+      }
+    }
+    if (
+      "offset_type" in trigger.options &&
+      OFFSET_TYPE_TRIGGER_DOMAINS.includes(computeDomain(trigger.trigger))
+    ) {
+      trigger.options = foldOffsetType(trigger.options);
+    }
+  }
+
   return trigger;
 };
 
 export const flattenTriggers = (
   triggers: undefined | Trigger | Trigger[]
-): Exclude<Trigger, TriggerList>[] => {
+): Trigger[] => {
   if (!triggers) {
     return [];
   }
 
-  const flatTriggers: Exclude<Trigger, TriggerList>[] = [];
+  const flatTriggers: Trigger[] = [];
 
   ensureArray(triggers).forEach((t) => {
+    // Incomplete YAML can leave null entries in the trigger list
+    if (!t || typeof t !== "object") {
+      return;
+    }
     if ("triggers" in t) {
       if (t.triggers) {
         flatTriggers.push(...flattenTriggers(t.triggers));
@@ -582,7 +702,7 @@ export const testCondition = (
   condition: Condition | Condition[],
   variables?: Record<string, unknown>
 ) =>
-  hass.callWS<{ result: boolean }>({
+  hass.callWS<{ result: boolean; template_errors?: string[] }>({
     type: "test_condition",
     condition,
     variables,
@@ -593,6 +713,8 @@ export const subscribeCondition = (
   onChange: (result: {
     result?: boolean;
     error?: string | { code: string; message: string };
+    /** Template errors while still producing a result. */
+    template_errors?: string[];
   }) => void,
   condition: Condition
 ) =>
@@ -610,18 +732,20 @@ export interface AutomationClipboard {
 export interface BaseSidebarConfig {
   delete: () => void;
   close: (focus?: boolean) => void;
-  editComment: () => void;
+  editNote: () => void;
 }
 
 export interface TriggerSidebarConfig extends BaseSidebarConfig {
   save: (value: Trigger) => void;
+  replace?: () => void;
   rename: () => void;
+  editId: () => void;
   disable: () => void;
   duplicate: () => void;
   cut: () => void;
   copy: () => void;
   insertAfter: (value: Trigger | Trigger[]) => boolean;
-  toggleYamlMode: () => void;
+  toggleYamlMode: (yamlMode?: boolean) => void;
   config: Trigger;
   description?: TriggerDescription;
   yamlMode: boolean;
@@ -632,6 +756,7 @@ export interface TriggerSidebarConfig extends BaseSidebarConfig {
 
 export interface ConditionSidebarConfig extends BaseSidebarConfig {
   save: (value: Condition) => void;
+  replace?: () => void;
   rename: () => void;
   disable: () => void;
   test: () => void;
@@ -639,7 +764,7 @@ export interface ConditionSidebarConfig extends BaseSidebarConfig {
   cut: () => void;
   copy: () => void;
   insertAfter: (value: Condition | Condition[]) => boolean;
-  toggleYamlMode: () => void;
+  toggleYamlMode: (yamlMode?: boolean) => void;
   config: Condition;
   description?: ConditionDescription;
   yamlMode: boolean;
@@ -650,6 +775,7 @@ export interface ConditionSidebarConfig extends BaseSidebarConfig {
 
 export interface ActionSidebarConfig extends BaseSidebarConfig {
   save: (value: Action) => void;
+  replace?: () => void;
   rename: () => void;
   disable: () => void;
   continueOnError: () => void;
@@ -658,7 +784,7 @@ export interface ActionSidebarConfig extends BaseSidebarConfig {
   copy: () => void;
   insertAfter: (value: Action | Action[]) => boolean;
   run: () => void;
-  toggleYamlMode: () => void;
+  toggleYamlMode: (yamlMode?: boolean) => void;
   config: {
     action: Action;
   };
@@ -669,10 +795,16 @@ export interface ActionSidebarConfig extends BaseSidebarConfig {
 }
 
 export interface OptionSidebarConfig extends BaseSidebarConfig {
+  save: (value: unknown) => void;
   rename: () => void;
   duplicate: () => void;
+  toggleYamlMode: (yamlMode?: boolean) => void;
+  yamlMode?: boolean;
+  config: {
+    option?: Option;
+  };
   defaultOption?: boolean;
-  comment?: string;
+  note?: string;
 }
 
 export interface ScriptFieldSidebarConfig extends BaseSidebarConfig {
@@ -698,7 +830,3 @@ export interface ShowAutomationEditorParams {
   data?: Partial<AutomationConfig>;
   expanded?: boolean;
 }
-
-export const automationConfigContext = createContext<
-  AutomationConfig | undefined
->("automationConfig");

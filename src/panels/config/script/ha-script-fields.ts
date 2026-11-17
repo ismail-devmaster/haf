@@ -29,27 +29,29 @@ export default class HaScriptFields extends LitElement {
 
   protected render() {
     return html`
-      ${this.fields
-        ? html`<div class="fields">
-            ${Object.entries(this.fields).map(
-              ([key, field]) => html`
-                <ha-script-field-row
-                  .key=${key}
-                  .excludeKeys=${Object.keys(this.fields).filter(
-                    (k) => k !== key
-                  )}
-                  .field=${field}
-                  .disabled=${this.disabled}
-                  @value-changed=${this._fieldChanged}
-                  .hass=${this.hass}
-                  .highlight=${this.highlightedFields?.[key] !== undefined}
-                  .narrow=${this.narrow}
-                >
-                </ha-script-field-row>
-              `
-            )}
-          </div> `
-        : nothing}
+      ${
+        this.fields
+          ? html`<div class="fields">
+              ${Object.entries(this.fields).map(
+                ([key, field]) => html`
+                  <ha-script-field-row
+                    .key=${key}
+                    .excludeKeys=${Object.keys(this.fields).filter(
+                      (k) => k !== key
+                    )}
+                    .field=${field}
+                    .disabled=${this.disabled}
+                    @value-changed=${this._fieldChanged}
+                    .hass=${this.hass}
+                    .highlight=${this.highlightedFields?.[key] !== undefined}
+                    .narrow=${this.narrow}
+                  >
+                  </ha-script-field-row>
+                `
+              )}
+            </div> `
+          : nothing
+      }
       <ha-button @click=${this._addField} .disabled=${this.disabled}>
         <ha-svg-icon .path=${mdiPlus} slot="start"></ha-svg-icon>
         ${this.hass.localize("ui.panel.config.script.editor.field.add_field")}
@@ -73,15 +75,6 @@ export default class HaScriptFields extends LitElement {
     row.updateComplete.then(() => {
       row.openSidebar();
       row.focus();
-
-      if (this.narrow) {
-        window.setTimeout(() => {
-          row.scrollIntoView({
-            block: "start",
-            behavior: "smooth",
-          });
-        }, 180); // duration of transition of added padding for bottom sheet
-      }
     });
   }
 
@@ -160,6 +153,7 @@ export default class HaScriptFields extends LitElement {
       display: block;
       margin-bottom: 16px;
       scroll-margin-top: 48px;
+      scroll-margin-bottom: var(--automation-bottom-sheet-height, 0px);
     }
     ha-svg-icon {
       height: 20px;

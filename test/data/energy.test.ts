@@ -1,5 +1,8 @@
-import { assert, describe, it } from "vitest";
+import { addDays, endOfDay, startOfDay } from "date-fns";
+import type { HassConfig } from "home-assistant-js-websocket";
+import { afterEach, assert, describe, it, vi } from "vitest";
 
+import { calcDate } from "../../src/common/datetime/calc_date";
 import {
   type FrontendLocaleData,
   NumberFormat,
@@ -10,11 +13,33 @@ import {
 } from "../../src/data/translation";
 import {
   computeConsumptionSingle,
+  computeEnergyLabel,
+  computeEnergyDeviceLabels,
   formatConsumptionShort,
   calculateSolarConsumedGauge,
   formatPowerShort,
+  getNextEnergyPeriodStart,
+  getEnergyDefaultPeriodStorageKey,
+  getEnergyFirstStatisticAt,
+  getEnergyLiveDayPeriod,
+  shouldFallbackEnergyPeriodToYesterday,
+  getEnergyDataCollection,
+  saveEnergyPreferences,
+  EMPTY_PREFERENCES,
+  CompareMode,
+  computeConsumptionData,
 } from "../../src/data/energy";
-import type { HomeAssistant } from "../../src/types";
+import type {
+  EnergyData,
+  EnergyPreferences,
+  EnergySource,
+  EnergySumData,
+} from "../../src/data/energy";
+import type { DeviceRegistryEntry } from "../../src/data/device/device_registry";
+import type { EntityRegistryDisplayEntry } from "../../src/data/entity/entity_registry";
+import { StatisticMeanType } from "../../src/data/recorder";
+import type { StatisticsMetaData } from "../../src/data/recorder";
+import { createMockEntityState, createMockHass } from "../fixtures/hass";
 
 const checkConsumptionResult = (
   input: {
@@ -24,7 +49,8 @@ const checkConsumptionResult = (
     to_battery: number | undefined;
     from_battery: number | undefined;
   },
-  exact = true
+  exact = true,
+  options?: Parameters<typeof computeConsumptionSingle>[1]
 ): {
   grid_to_battery: number;
   battery_to_grid: number;
@@ -35,8 +61,9 @@ const checkConsumptionResult = (
   used_battery: number;
   used_total: number;
 } => {
-  const result = computeConsumptionSingle(input);
+  const result = computeConsumptionSingle(input, options);
   if (exact) {
+    const measured = options?.measured;
     assert.equal(
       result.used_total,
       result.used_solar + result.used_battery + result.used_grid
@@ -46,12 +73,24 @@ const checkConsumptionResult = (
       result.solar_to_grid + result.battery_to_grid
     );
     assert.equal(
-      input.to_battery || 0,
+      (input.to_battery || 0) +
+        (measured?.grid_to_battery || 0) +
+        (measured?.solar_to_battery || 0),
       result.grid_to_battery + result.solar_to_battery
     );
     assert.equal(
       input.solar || 0,
       result.solar_to_battery + result.solar_to_grid + result.used_solar
+    );
+    assert.equal(
+      input.from_grid || 0,
+      result.used_grid + result.grid_to_battery
+    );
+    assert.equal(
+      (input.from_battery || 0) +
+        (measured?.battery_to_home || 0) +
+        (measured?.battery_to_grid || 0),
+      result.used_battery + result.battery_to_grid
     );
   }
   return result;
@@ -68,120 +107,152 @@ describe("Energy Short Format Test", () => {
     first_weekday: FirstWeekday.language,
   };
 
-  const hass = { locale: defaultLocale } as HomeAssistant;
   it("No Unit conversion", () => {
-    assert.strictEqual(formatConsumptionShort(hass, 0, "Wh"), "0 Wh");
-    assert.strictEqual(formatConsumptionShort(hass, 0, "kWh"), "0 Wh");
-    assert.strictEqual(formatConsumptionShort(hass, 0, "kWh", "kWh"), "0 kWh");
-    assert.strictEqual(formatConsumptionShort(hass, 0, "GWh"), "0 Wh");
-    assert.strictEqual(formatConsumptionShort(hass, 0, "GWh", "GWh"), "0 GWh");
-    assert.strictEqual(formatConsumptionShort(hass, 0, "gal"), "0 gal");
-
     assert.strictEqual(
-      formatConsumptionShort(hass, 10000.12345, "gal"),
-      "10,000 gal"
-    );
-
-    assert.strictEqual(formatConsumptionShort(hass, 1.2345, "kWh"), "1.23 kWh");
-    assert.strictEqual(
-      formatConsumptionShort(hass, 10.12345, "kWh"),
-      "10.1 kWh"
+      formatConsumptionShort(defaultLocale, 0, "Wh"),
+      "0\u00A0Wh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 500.12345, "kWh"),
-      "500 kWh"
+      formatConsumptionShort(defaultLocale, 0, "kWh"),
+      "0\u00A0Wh"
+    );
+    assert.strictEqual(
+      formatConsumptionShort(defaultLocale, 0, "kWh", "kWh"),
+      "0\u00A0kWh"
+    );
+    assert.strictEqual(
+      formatConsumptionShort(defaultLocale, 0, "GWh"),
+      "0\u00A0Wh"
+    );
+    assert.strictEqual(
+      formatConsumptionShort(defaultLocale, 0, "GWh", "GWh"),
+      "0\u00A0GWh"
+    );
+    assert.strictEqual(
+      formatConsumptionShort(defaultLocale, 0, "gal"),
+      "0\u00A0gal"
     );
 
-    assert.strictEqual(formatConsumptionShort(hass, 10.01, "kWh"), "10 kWh");
+    assert.strictEqual(
+      formatConsumptionShort(defaultLocale, 10000.12345, "gal"),
+      "10,000\u00A0gal"
+    );
+
+    assert.strictEqual(
+      formatConsumptionShort(defaultLocale, 1.2345, "kWh"),
+      "1.23\u00A0kWh"
+    );
+    assert.strictEqual(
+      formatConsumptionShort(defaultLocale, 10.12345, "kWh"),
+      "10.1\u00A0kWh"
+    );
+    assert.strictEqual(
+      formatConsumptionShort(defaultLocale, 500.12345, "kWh"),
+      "500\u00A0kWh"
+    );
+
+    assert.strictEqual(
+      formatConsumptionShort(defaultLocale, 10.01, "kWh"),
+      "10\u00A0kWh"
+    );
   });
   it("Upward Unit conversion", () => {
     assert.strictEqual(
-      formatConsumptionShort(hass, 1512.34567, "kWh"),
-      "1.51 MWh"
+      formatConsumptionShort(defaultLocale, 1512.34567, "kWh"),
+      "1.51\u00A0MWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 15123.4567, "kWh"),
-      "15.1 MWh"
+      formatConsumptionShort(defaultLocale, 15123.4567, "kWh"),
+      "15.1\u00A0MWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 151234.5678, "kWh"),
-      "151 MWh"
+      formatConsumptionShort(defaultLocale, 151234.5678, "kWh"),
+      "151\u00A0MWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 1512345.6789, "kWh"),
-      "1.51 GWh"
+      formatConsumptionShort(defaultLocale, 1512345.6789, "kWh"),
+      "1.51\u00A0GWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 15123456789.9, "kWh"),
-      "15.1 TWh"
+      formatConsumptionShort(defaultLocale, 15123456789.9, "kWh"),
+      "15.1\u00A0TWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 15123456789000.9, "kWh"),
-      "15,123 TWh"
+      formatConsumptionShort(defaultLocale, 15123456789000.9, "kWh"),
+      "15,123\u00A0TWh"
     );
   });
   it("Downward Unit conversion", () => {
-    assert.strictEqual(formatConsumptionShort(hass, 0.00012, "kWh"), "0.12 Wh");
-    assert.strictEqual(formatConsumptionShort(hass, 0.12345, "kWh"), "123 Wh");
     assert.strictEqual(
-      formatConsumptionShort(hass, 0.00001234, "TWh"),
-      "12.3 MWh"
+      formatConsumptionShort(defaultLocale, 0.00012, "kWh"),
+      "0.12\u00A0Wh"
+    );
+    assert.strictEqual(
+      formatConsumptionShort(defaultLocale, 0.12345, "kWh"),
+      "123\u00A0Wh"
+    );
+    assert.strictEqual(
+      formatConsumptionShort(defaultLocale, 0.00001234, "TWh"),
+      "12.3\u00A0MWh"
     );
   });
   it("Negativ Consumption", () => {
     assert.strictEqual(
-      formatConsumptionShort(hass, -500.123, "kWh"),
-      "-500 kWh"
+      formatConsumptionShort(defaultLocale, -500.123, "kWh"),
+      "-500\u00A0kWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, -1234.56, "kWh"),
-      "-1.23 MWh"
+      formatConsumptionShort(defaultLocale, -1234.56, "kWh"),
+      "-1.23\u00A0MWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, -0.001234, "kWh"),
-      "-1.23 Wh"
+      formatConsumptionShort(defaultLocale, -0.001234, "kWh"),
+      "-1.23\u00A0Wh"
     );
   });
   it("Conversion with target unit", () => {
     assert.strictEqual(
-      formatConsumptionShort(hass, 0.00012, "kWh", "Wh"),
-      "0.12 Wh"
+      formatConsumptionShort(defaultLocale, 0.00012, "kWh", "Wh"),
+      "0.12\u00A0Wh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 0.00012, "kWh", "kWh"),
-      "0 kWh"
+      formatConsumptionShort(defaultLocale, 0.00012, "kWh", "kWh"),
+      "0\u00A0kWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 0.01012, "kWh", "kWh"),
-      "0.01 kWh"
+      formatConsumptionShort(defaultLocale, 0.01012, "kWh", "kWh"),
+      "0.01\u00A0kWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 0.00012, "kWh", "MWh"),
-      "0 MWh"
+      formatConsumptionShort(defaultLocale, 0.00012, "kWh", "MWh"),
+      "0\u00A0MWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 10.12345, "kWh", "kWh"),
-      "10.1 kWh"
+      formatConsumptionShort(defaultLocale, 10.12345, "kWh", "kWh"),
+      "10.1\u00A0kWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 10.12345, "kWh", "ZZZZZWh"),
-      "10.1 kWh"
+      formatConsumptionShort(defaultLocale, 10.12345, "kWh", "ZZZZZWh"),
+      "10.1\u00A0kWh"
     );
     assert.strictEqual(
-      formatConsumptionShort(hass, 151234.5678, "kWh", "MWh"),
-      "151 MWh"
+      formatConsumptionShort(defaultLocale, 151234.5678, "kWh", "MWh"),
+      "151\u00A0MWh"
     );
   });
   it("Power Short Format", () => {
-    assert.strictEqual(formatPowerShort(hass, 0), "0 W");
-    assert.strictEqual(formatPowerShort(hass, 10), "10 W");
-    assert.strictEqual(formatPowerShort(hass, 12.2), "12 W");
-    assert.strictEqual(formatPowerShort(hass, 999), "999 W");
-    assert.strictEqual(formatPowerShort(hass, 1000), "1 kW");
-    assert.strictEqual(formatPowerShort(hass, 1234), "1.234 kW");
-    assert.strictEqual(formatPowerShort(hass, 10_500), "10.5 kW");
-    assert.strictEqual(formatPowerShort(hass, 1_500_000), "1.5 MW");
-    assert.strictEqual(formatPowerShort(hass, -1500), "-1.5 kW");
+    assert.strictEqual(formatPowerShort(defaultLocale, 0), "0\u00A0W");
+    assert.strictEqual(formatPowerShort(defaultLocale, 10), "10\u00A0W");
+    assert.strictEqual(formatPowerShort(defaultLocale, 12.2), "12\u00A0W");
+    assert.strictEqual(formatPowerShort(defaultLocale, 999), "999\u00A0W");
+    assert.strictEqual(formatPowerShort(defaultLocale, 1000), "1\u00A0kW");
+    assert.strictEqual(formatPowerShort(defaultLocale, 1234), "1.234\u00A0kW");
+    assert.strictEqual(formatPowerShort(defaultLocale, 10_500), "10.5\u00A0kW");
+    assert.strictEqual(
+      formatPowerShort(defaultLocale, 1_500_000),
+      "1.5\u00A0MW"
+    );
+    assert.strictEqual(formatPowerShort(defaultLocale, -1500), "-1.5\u00A0kW");
   });
 });
 
@@ -592,6 +663,294 @@ describe("Energy Usage Calculation Tests", () => {
   });
 });
 
+describe("Measured battery flows", () => {
+  const noTotals = { to_battery: undefined, from_battery: undefined };
+
+  it("keeps grid charging that an estimate would call solar charging", () => {
+    assert.deepEqual(
+      checkConsumptionResult(
+        { from_grid: 6, to_grid: 3, solar: 8, ...noTotals },
+        true,
+        {
+          measured: {
+            grid_to_battery: 2,
+            solar_to_battery: 3,
+            battery_to_home: 4,
+            battery_to_grid: 1,
+          },
+        }
+      ),
+      {
+        grid_to_battery: 2,
+        battery_to_grid: 1,
+        solar_to_battery: 3,
+        solar_to_grid: 2,
+        used_solar: 3,
+        used_grid: 4,
+        used_battery: 4,
+        used_total: 11,
+      }
+    );
+  });
+
+  it("estimates only the batteries configured with totals", () => {
+    assert.deepEqual(
+      checkConsumptionResult(
+        { from_grid: 5, to_grid: 1, solar: 4, to_battery: 1, from_battery: 2 },
+        true,
+        {
+          measured: {
+            grid_to_battery: 2,
+            solar_to_battery: 0,
+            battery_to_home: 1,
+            battery_to_grid: 0,
+          },
+        }
+      ),
+      {
+        grid_to_battery: 2,
+        battery_to_grid: 0,
+        solar_to_battery: 1,
+        solar_to_grid: 1,
+        used_solar: 2,
+        used_grid: 3,
+        used_battery: 3,
+        used_total: 8,
+      }
+    );
+  });
+
+  it("takes the home reading as the total and leaves out battery to home", () => {
+    assert.deepEqual(
+      computeConsumptionSingle(
+        { from_grid: 6, to_grid: 3, solar: 8, ...noTotals },
+        {
+          measured: {
+            grid_to_battery: 2,
+            solar_to_battery: 3,
+            battery_to_home: 4,
+            battery_to_grid: 1,
+          },
+          used_total: 10,
+        }
+      ),
+      {
+        grid_to_battery: 2,
+        battery_to_grid: 1,
+        solar_to_battery: 3,
+        solar_to_grid: 2,
+        used_solar: 3,
+        used_grid: 3,
+        used_battery: 4,
+        used_total: 10,
+      }
+    );
+  });
+
+  it("keeps solar charging without a solar source out of the home load", () => {
+    assert.deepEqual(
+      computeConsumptionSingle(
+        { from_grid: 5, to_grid: 0, solar: undefined, ...noTotals },
+        {
+          measured: {
+            grid_to_battery: 0,
+            solar_to_battery: 2,
+            battery_to_home: 1,
+            battery_to_grid: 0,
+          },
+        }
+      ),
+      {
+        grid_to_battery: 0,
+        battery_to_grid: 0,
+        solar_to_battery: 2,
+        solar_to_grid: 0,
+        used_solar: 0,
+        used_grid: 5,
+        used_battery: 1,
+        used_total: 6,
+      }
+    );
+  });
+
+  it("keeps grid charging out of the home load without a grid import meter", () => {
+    const { consumption } = computeConsumptionData(
+      {
+        solar: { 1: 3 },
+        grid_to_battery: { 1: 2 },
+        solar_to_battery: { 1: 0 },
+        battery_to_home: { 1: 1 },
+        battery_to_grid: { 1: 0 },
+        to_battery_totals: {},
+        from_battery_totals: {},
+        total: {},
+        timestamps: [1],
+      },
+      undefined
+    );
+    assert.equal(consumption.used_total[1], 4);
+    assert.equal(consumption.used_solar[1], 3);
+    assert.equal(consumption.grid_to_battery[1], 2);
+  });
+
+  it("keeps battery to grid without an export meter out of the home load", () => {
+    assert.deepEqual(
+      computeConsumptionSingle(
+        { from_grid: 3, to_grid: undefined, solar: 0, ...noTotals },
+        {
+          measured: {
+            grid_to_battery: 0,
+            solar_to_battery: 0,
+            battery_to_home: 0,
+            battery_to_grid: 1,
+          },
+        }
+      ),
+      {
+        grid_to_battery: 0,
+        battery_to_grid: 1,
+        solar_to_battery: 0,
+        solar_to_grid: 0,
+        used_solar: 0,
+        used_grid: 3,
+        used_battery: 0,
+        used_total: 3,
+      }
+    );
+  });
+
+  it("keeps one battery charging another as battery to home", () => {
+    assert.deepEqual(
+      checkConsumptionResult(
+        { from_grid: 3, to_grid: 0, solar: 0, to_battery: 2, from_battery: 0 },
+        true,
+        {
+          measured: {
+            grid_to_battery: 0,
+            solar_to_battery: 0,
+            battery_to_home: 2,
+            battery_to_grid: 0,
+          },
+        }
+      ),
+      {
+        grid_to_battery: 2,
+        battery_to_grid: 0,
+        solar_to_battery: 0,
+        solar_to_grid: 0,
+        used_solar: 0,
+        used_grid: 1,
+        used_battery: 2,
+        used_total: 3,
+      }
+    );
+  });
+
+  it("never lowers grid charging above the grid import", () => {
+    assert.deepEqual(
+      computeConsumptionSingle(
+        { from_grid: 2, to_grid: 0, solar: 4, ...noTotals },
+        {
+          measured: {
+            grid_to_battery: 3,
+            solar_to_battery: 0,
+            battery_to_home: 0,
+            battery_to_grid: 0,
+          },
+        }
+      ),
+      {
+        grid_to_battery: 3,
+        battery_to_grid: 0,
+        solar_to_battery: 0,
+        solar_to_grid: 0,
+        used_solar: 3,
+        used_grid: 0,
+        used_battery: 0,
+        used_total: 3,
+      }
+    );
+  });
+});
+
+describe("computeConsumptionSingle on live power", () => {
+  // The power Sankey card's own copy of the estimate, before it called
+  // computeConsumptionSingle
+  const legacyPowerFlows = (
+    { solar, from_grid, to_grid, from_battery, to_battery },
+    homePower: number | undefined
+  ) => {
+    const used_total =
+      homePower ?? from_grid + solar + from_battery - to_grid - to_battery;
+    let solar_remaining = solar;
+    let grid_remaining = from_grid;
+    let battery_remaining = from_battery;
+    let to_battery_remaining = to_battery;
+    let to_grid_remaining = to_grid;
+    let used_total_remaining = Math.max(used_total, 0);
+    let grid_to_battery = 0;
+    const excess = Math.max(
+      0,
+      Math.min(to_battery_remaining, grid_remaining - used_total_remaining)
+    );
+    grid_to_battery += excess;
+    to_battery_remaining -= excess;
+    grid_remaining -= excess;
+    const solar_to_battery = Math.min(solar_remaining, to_battery_remaining);
+    to_battery_remaining -= solar_to_battery;
+    solar_remaining -= solar_to_battery;
+    const solar_to_grid = Math.min(solar_remaining, to_grid_remaining);
+    to_grid_remaining -= solar_to_grid;
+    solar_remaining -= solar_to_grid;
+    const battery_to_grid = Math.min(battery_remaining, to_grid_remaining);
+    battery_remaining -= battery_to_grid;
+    const grid_to_battery_2 = Math.min(grid_remaining, to_battery_remaining);
+    grid_to_battery += grid_to_battery_2;
+    grid_remaining -= grid_to_battery_2;
+    const used_solar = Math.min(used_total_remaining, solar_remaining);
+    used_total_remaining -= used_solar;
+    const used_battery = Math.min(battery_remaining, used_total_remaining);
+    used_total_remaining -= used_battery;
+    const used_grid = Math.min(used_total_remaining, grid_remaining);
+    return {
+      grid_to_battery,
+      battery_to_grid,
+      solar_to_battery,
+      solar_to_grid,
+      used_solar,
+      used_grid,
+      used_battery,
+      used_total: Math.max(0, used_total),
+    };
+  };
+
+  it("matches the card's former estimate, with and without a home sensor", () => {
+    const watts = [0, 150, 1234.5, 4000];
+    for (const solar of watts) {
+      for (const grid of [-2500, -150, ...watts]) {
+        for (const battery of [-3000, -200, ...watts]) {
+          for (const homePower of [undefined, 0, 900, 5000]) {
+            const input = {
+              solar,
+              from_grid: Math.max(grid, 0),
+              to_grid: Math.max(-grid, 0),
+              from_battery: Math.max(battery, 0),
+              to_battery: Math.max(-battery, 0),
+            };
+            const flows = computeConsumptionSingle(input, {
+              used_total: homePower,
+            });
+            assert.deepEqual(
+              { ...flows, used_total: Math.max(0, flows.used_total) },
+              legacyPowerFlows(input, homePower)
+            );
+          }
+        }
+      }
+    }
+  });
+});
+
 describe("Self-consumed solar gauge tests", () => {
   it("no battery", () => {
     const hasBattery = false;
@@ -852,5 +1211,1660 @@ describe("Self-consumed solar gauge tests", () => {
       Math.round(value!),
       Math.round((expectedNumerator / expectedDenominator) * 100)
     );
+  });
+});
+
+// Pin the time zone (via TimeZone.server) so energy period tests do not
+// depend on the machine's local zone.
+const energyPeriodLocale: FrontendLocaleData = {
+  language: "en",
+  number_format: NumberFormat.language,
+  time_format: TimeFormat.language,
+  date_format: DateFormat.language,
+  time_zone: TimeZone.server,
+  first_weekday: FirstWeekday.language,
+};
+const energyPeriodConfig = { time_zone: "America/New_York" } as HassConfig;
+const energyPeriodDay = (now: Date, offset = 0) => {
+  const day = calcDate(
+    now,
+    addDays,
+    energyPeriodLocale,
+    energyPeriodConfig,
+    offset
+  );
+  return {
+    start: calcDate(day, startOfDay, energyPeriodLocale, energyPeriodConfig),
+    end: calcDate(day, endOfDay, energyPeriodLocale, energyPeriodConfig),
+  };
+};
+
+describe("getNextEnergyPeriodStart", () => {
+  const isMidnight = (date: Date) =>
+    calcDate(
+      date,
+      startOfDay,
+      energyPeriodLocale,
+      energyPeriodConfig
+    ).getTime() === date.getTime();
+
+  it("rolls the real-time view over at midnight, statistics an hour later", () => {
+    const now = new Date("2026-06-19T15:30:00-04:00");
+
+    const realTime = getNextEnergyPeriodStart(
+      true,
+      now,
+      energyPeriodLocale,
+      energyPeriodConfig
+    );
+    const statistics = getNextEnergyPeriodStart(
+      false,
+      now,
+      energyPeriodLocale,
+      energyPeriodConfig
+    );
+
+    // Real-time rolls over exactly at the next midnight.
+    assert.isTrue(isMidnight(realTime));
+    assert.equal(
+      realTime.getTime(),
+      new Date("2026-06-20T00:00:00-04:00").getTime()
+    );
+
+    // Statistics roll over an hour after midnight, on the same day boundary.
+    assert.equal(statistics.getTime() - realTime.getTime(), 60 * 60 * 1000);
+    assert.equal(
+      calcDate(
+        statistics,
+        startOfDay,
+        energyPeriodLocale,
+        energyPeriodConfig
+      ).getTime(),
+      realTime.getTime()
+    );
+  });
+
+  it("advances the real-time view to the next midnight when called after midnight", () => {
+    const now = new Date("2026-06-20T00:30:00-04:00");
+
+    const realTime = getNextEnergyPeriodStart(
+      true,
+      now,
+      energyPeriodLocale,
+      energyPeriodConfig
+    );
+
+    assert.isTrue(isMidnight(realTime));
+    // Next midnight is June 21, not the already-passed June 20 midnight.
+    assert.equal(
+      realTime.getTime(),
+      new Date("2026-06-21T00:00:00-04:00").getTime()
+    );
+  });
+
+  it("wakes a non-today live day at today 01:00 during hour 0", () => {
+    const now = new Date("2026-06-20T00:30:00-04:00");
+    const todayOne = new Date("2026-06-20T01:00:00-04:00").getTime();
+
+    for (const offset of [-1, -2]) {
+      assert.equal(
+        getNextEnergyPeriodStart(
+          false,
+          now,
+          energyPeriodLocale,
+          energyPeriodConfig,
+          energyPeriodDay(now, offset).start
+        ).getTime(),
+        todayOne
+      );
+    }
+  });
+
+  it("keeps tomorrow 01:00 when statistics is already on today during hour 0", () => {
+    const now = new Date("2026-06-20T00:30:00-04:00");
+
+    assert.equal(
+      getNextEnergyPeriodStart(
+        false,
+        now,
+        energyPeriodLocale,
+        energyPeriodConfig,
+        energyPeriodDay(now).start
+      ).getTime(),
+      new Date("2026-06-21T01:00:00-04:00").getTime()
+    );
+  });
+});
+
+describe("shouldFallbackEnergyPeriodToYesterday", () => {
+  it("is true for the statistics view before 01:00", () => {
+    const now = new Date("2026-06-20T00:30:00-04:00");
+    assert.isTrue(
+      shouldFallbackEnergyPeriodToYesterday(
+        false,
+        now,
+        energyPeriodLocale,
+        energyPeriodConfig
+      )
+    );
+    assert.equal(
+      getEnergyFirstStatisticAt(
+        now,
+        energyPeriodLocale,
+        energyPeriodConfig
+      ).getTime(),
+      new Date("2026-06-20T01:00:00-04:00").getTime()
+    );
+  });
+
+  it("is false at 01:00 and for the real-time view", () => {
+    const atOne = new Date("2026-06-20T01:00:00-04:00");
+    const beforeOne = new Date("2026-06-20T00:30:00-04:00");
+    assert.isFalse(
+      shouldFallbackEnergyPeriodToYesterday(
+        false,
+        atOne,
+        energyPeriodLocale,
+        energyPeriodConfig
+      )
+    );
+    assert.isFalse(
+      shouldFallbackEnergyPeriodToYesterday(
+        true,
+        beforeOne,
+        energyPeriodLocale,
+        energyPeriodConfig
+      )
+    );
+  });
+});
+
+describe("getEnergyLiveDayPeriod", () => {
+  it("keeps yesterday during hour 0 when that is the current period", () => {
+    const now = new Date("2026-06-20T00:30:00-04:00");
+    const { start, end } = energyPeriodDay(now, -1);
+    const live = getEnergyLiveDayPeriod(
+      false,
+      now,
+      energyPeriodLocale,
+      energyPeriodConfig,
+      start
+    );
+    assert.equal(live.start.getTime(), start.getTime());
+    assert.equal(live.end.getTime(), end.getTime());
+  });
+
+  it("keeps today during hour 0 when the user already picked today", () => {
+    const now = new Date("2026-06-20T00:30:00-04:00");
+    const { start, end } = energyPeriodDay(now);
+    const live = getEnergyLiveDayPeriod(
+      false,
+      now,
+      energyPeriodLocale,
+      energyPeriodConfig,
+      start
+    );
+    assert.equal(live.start.getTime(), start.getTime());
+    assert.equal(live.end.getTime(), end.getTime());
+  });
+
+  it("advances a stale yesterday to today after 01:00", () => {
+    const now = new Date("2026-06-20T10:00:00-04:00");
+    const live = getEnergyLiveDayPeriod(
+      false,
+      now,
+      energyPeriodLocale,
+      energyPeriodConfig,
+      energyPeriodDay(now, -1).start
+    );
+    const expected = energyPeriodDay(now);
+    assert.equal(live.start.getTime(), expected.start.getTime());
+    assert.equal(live.end.getTime(), expected.end.getTime());
+  });
+
+  it("advances a two-day-old live day to today", () => {
+    const now = new Date("2026-06-20T10:00:00-04:00");
+    const live = getEnergyLiveDayPeriod(
+      false,
+      now,
+      energyPeriodLocale,
+      energyPeriodConfig,
+      energyPeriodDay(now, -2).start
+    );
+    const expected = energyPeriodDay(now);
+    assert.equal(live.start.getTime(), expected.start.getTime());
+    assert.equal(live.end.getTime(), expected.end.getTime());
+  });
+
+  it("falls back to yesterday for a stale live day during hour 0", () => {
+    const now = new Date("2026-06-20T00:30:00-04:00");
+    const live = getEnergyLiveDayPeriod(
+      false,
+      now,
+      energyPeriodLocale,
+      energyPeriodConfig,
+      energyPeriodDay(now, -2).start
+    );
+    const expected = energyPeriodDay(now, -1);
+    assert.equal(live.start.getTime(), expected.start.getTime());
+    assert.equal(live.end.getTime(), expected.end.getTime());
+  });
+});
+
+describe("getEnergyDataCollection cache", () => {
+  it("reuses collections per connection and key and clears their preferences", async () => {
+    const hass = createMockHass();
+    const otherHass = createMockHass();
+    for (const mockHass of [hass, otherHass]) {
+      Object.assign(mockHass, {
+        connection: {
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          connected: true,
+        },
+      });
+    }
+    const options = {
+      callWS: hass.callWS,
+      entities: hass.entities,
+      states: hass.states,
+      locale: hass.locale,
+      config: hass.config,
+      panelUrl: hass.panelUrl,
+      prefs: EMPTY_PREFERENCES,
+      key: "energy_cache",
+    };
+    const collection = getEnergyDataCollection(hass.connection, options);
+    const otherKey = getEnergyDataCollection(hass.connection, {
+      ...options,
+      key: "energy_cache_other",
+    });
+    const otherConnection = getEnergyDataCollection(
+      otherHass.connection,
+      options
+    );
+    assert.strictEqual(
+      getEnergyDataCollection(hass.connection, options),
+      collection
+    );
+    assert.strictEqual(
+      Reflect.get(hass.connection, "_energy_cache"),
+      collection
+    );
+    assert.strictEqual(
+      Reflect.get(hass.connection, "_energy_cache_other"),
+      otherKey
+    );
+    assert.strictEqual(
+      Reflect.get(otherHass.connection, "_energy_cache"),
+      otherConnection
+    );
+    assert.notStrictEqual(otherKey, collection);
+    assert.notStrictEqual(otherConnection, collection);
+
+    hass.callWS = vi.fn().mockResolvedValue(EMPTY_PREFERENCES);
+    await saveEnergyPreferences(hass, EMPTY_PREFERENCES);
+    assert.isUndefined(collection.prefs);
+    assert.isUndefined(otherKey.prefs);
+    assert.strictEqual(otherConnection.prefs, EMPTY_PREFERENCES);
+    assert.strictEqual(
+      getEnergyDataCollection(hass.connection, options),
+      collection
+    );
+  });
+});
+
+describe("getEnergyDataCollection overlapping refreshes", () => {
+  afterEach(() => {
+    localStorage.clear();
+    vi.useRealTimers();
+  });
+
+  const createCollection = (
+    key = "energy_overlapping",
+    prefs: EnergyPreferences = EMPTY_PREFERENCES
+  ) => {
+    const hass = createMockHass();
+    const pending: {
+      resolve: (info: {
+        cost_sensors: Record<string, string>;
+        solar_forecast_domains: string[];
+      }) => void;
+      reject: (error: Error) => void;
+    }[] = [];
+    const callWS = vi.fn((msg: { type: string }) => {
+      if (msg.type.startsWith("recorder/")) {
+        return Promise.resolve(
+          msg.type === "recorder/get_statistics_metadata" ? [] : {}
+        );
+      }
+      if (msg.type !== "energy/info") {
+        throw new Error(`unexpected ${msg.type}`);
+      }
+      return new Promise((resolve, reject) => {
+        pending.push({ resolve, reject });
+      });
+    });
+    Object.assign(hass, {
+      connection: {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        connected: true,
+      },
+      callWS,
+    });
+    const collection = getEnergyDataCollection(hass.connection, {
+      callWS: hass.callWS,
+      entities: hass.entities,
+      states: hass.states,
+      locale: hass.locale,
+      config: hass.config,
+      panelUrl: hass.panelUrl,
+      key,
+      prefs,
+    });
+    collection.setPeriod(
+      new Date("2026-01-01T00:00:00Z"),
+      new Date("2026-01-31T23:59:59Z")
+    );
+    return { collection, pending, connection: hass.connection, callWS };
+  };
+
+  const complete = async (
+    request: ReturnType<typeof createCollection>["pending"][number]
+  ) => {
+    request.resolve({ cost_sensors: {}, solar_forecast_domains: [] });
+    await vi.advanceTimersByTimeAsync(0);
+  };
+
+  it.each([true, false])(
+    "keeps today's data on resubscribe within the grace period (already loaded: %s)",
+    async (loaded) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T12:00:00Z"));
+      const { collection, pending } = createCollection();
+      collection.setPeriod(startOfDay(new Date()), endOfDay(new Date()));
+      const unsub = collection.subscribe(() => undefined);
+      if (loaded) {
+        await complete(pending[0]);
+      }
+      unsub();
+      // The Home summary reapplies today's range before every subscription.
+      collection.setPeriod(startOfDay(new Date()), endOfDay(new Date()));
+      const received = vi.fn();
+      const unsubAgain = collection.subscribe(received);
+      if (!loaded) {
+        await complete(pending[0]);
+      }
+      await vi.advanceTimersByTimeAsync(0);
+      assert.equal(pending.length, 1);
+      assert.equal(received.mock.calls.length, 1);
+      assert.strictEqual(received.mock.calls[0][0], collection.state);
+      unsubAgain();
+      await vi.advanceTimersByTimeAsync(5000);
+    }
+  );
+
+  it.each([true, false])(
+    "refreshes Home across midnight within the grace period (already loaded: %s)",
+    async (loaded) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-01-01T23:59:58Z"));
+      const { collection, pending } = createCollection();
+      collection.setPeriod(startOfDay(new Date()), endOfDay(new Date()));
+      const unsub = collection.subscribe(() => undefined);
+      if (loaded) {
+        await complete(pending[0]);
+      }
+      unsub();
+      await vi.advanceTimersByTimeAsync(3000);
+      // Home selects today before subscribing, so the collection's live-day
+      // catch-up sees no further period change.
+      collection.setPeriod(startOfDay(new Date()), endOfDay(new Date()));
+      const received = vi.fn();
+      const unsubAgain = collection.subscribe(received);
+      await vi.advanceTimersByTimeAsync(0);
+      assert.equal(pending.length, 2);
+      assert.equal(received.mock.calls.length, 0);
+      if (!loaded) {
+        await complete(pending[0]);
+      }
+      // An obsolete completion must not clear the current request's marker.
+      const unsubSecond = collection.subscribe(() => undefined);
+      assert.equal(pending.length, 2);
+      await complete(pending[1]);
+      assert.equal(received.mock.calls.length, 1);
+      assert.equal(
+        collection.state?.start.getTime(),
+        startOfDay(new Date()).getTime()
+      );
+      unsubSecond();
+      unsubAgain();
+      await vi.advanceTimersByTimeAsync(5000);
+    }
+  );
+
+  it("keeps an in-flight result when the comparison mode is reapplied", async () => {
+    vi.useFakeTimers();
+    const { collection, pending } = createCollection();
+    collection.setCompare(CompareMode.PREVIOUS);
+    const received = vi.fn();
+    const unsub = collection.subscribe(received);
+    collection.setCompare(CompareMode.PREVIOUS);
+    await complete(pending[0]);
+    assert.equal(received.mock.calls.length, 1);
+    assert.equal(collection.state?.compareMode, CompareMode.PREVIOUS);
+    unsub();
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+
+  it("re-publishes combineSources without refetching and remembers only explicit choices", async () => {
+    vi.useFakeTimers();
+    const solar = { type: "solar", stat_energy_from: "sensor.solar" };
+    const prefs = {
+      ...EMPTY_PREFERENCES,
+      energy_sources: [solar, { ...solar, stat_energy_from: "sensor.solar_2" }],
+    } as EnergyPreferences;
+    const { collection, pending } = createCollection(undefined, prefs);
+    const received: EnergyData[] = [];
+    const unsub = collection.subscribe((data) => received.push(data));
+    await complete(pending[0]);
+    collection.setDefaultCombineSources(false);
+    collection.setDefaultCombineSources(true);
+    assert.isUndefined(createCollection().collection.combineSources);
+    collection.setCombineSources(true);
+    assert.equal(pending.length, 1);
+    assert.deepEqual(
+      received.map((data) => data.combineSources),
+      [undefined, false, true]
+    );
+    assert.strictEqual(received[2].stats, received[0].stats);
+    assert.isTrue(createCollection().collection.combineSources);
+    unsub();
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+
+  it("does not apply combineSources while no source type is configured twice", async () => {
+    vi.useFakeTimers();
+    const { collection, pending } = createCollection();
+    const received: EnergyData[] = [];
+    const unsub = collection.subscribe((data) => received.push(data));
+    await complete(pending[0]);
+    collection.setCombineSources(false);
+    assert.isFalse(collection.combineSources);
+    assert.isUndefined(received[received.length - 1].combineSources);
+    unsub();
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+
+  it.each([true, false])(
+    "discards an older response (latest completes first: %s)",
+    async (latestFirst) => {
+      vi.useFakeTimers();
+      const { collection, pending } = createCollection();
+      const received: EnergyData[] = [];
+      const unsub = collection.subscribe((data) => received.push(data));
+      collection.setPeriod(
+        new Date("2026-02-01T00:00:00Z"),
+        new Date("2026-02-28T23:59:59Z")
+      );
+      const refresh = collection.refresh();
+      const [older, latest] = pending;
+      await complete(latestFirst ? latest : older);
+      if (!latestFirst) {
+        assert.equal(received.length, 0);
+        assert.equal(collection.state, undefined);
+      }
+      await complete(latestFirst ? older : latest);
+      await refresh;
+      assert.equal(received.length, 1);
+      assert.equal(
+        collection.state?.start.getTime(),
+        collection.start.getTime()
+      );
+      assert.strictEqual(received[0], collection.state);
+      unsub();
+      await vi.advanceTimersByTimeAsync(5000);
+    }
+  );
+
+  it("invalidates a load when the selection changes before another refresh starts", async () => {
+    vi.useFakeTimers();
+    const { collection, pending } = createCollection();
+    const received = vi.fn();
+    const unsub = collection.subscribe(received);
+    collection.setCompare(CompareMode.PREVIOUS);
+    await complete(pending[0]);
+    assert.equal(received.mock.calls.length, 0);
+    assert.equal(collection.state, undefined);
+    const refresh = collection.refresh();
+    await complete(pending[1]);
+    await refresh;
+    assert.equal(collection.state?.compareMode, CompareMode.PREVIOUS);
+    assert.equal(received.mock.calls.length, 1);
+    unsub();
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+
+  it("distinguishes requests when navigating away and back to the same period", async () => {
+    vi.useFakeTimers();
+    const { collection, pending } = createCollection();
+    const received = vi.fn();
+    const unsub = collection.subscribe(received);
+    const { start, end } = collection;
+    collection.setPeriod(
+      new Date("2026-02-01T00:00:00Z"),
+      new Date("2026-02-28T23:59:59Z")
+    );
+    collection.setPeriod(start, end);
+    const refresh = collection.refresh();
+    await complete(pending[0]);
+    assert.equal(received.mock.calls.length, 0);
+    await complete(pending[1]);
+    await refresh;
+    assert.equal(received.mock.calls.length, 1);
+    unsub();
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+
+  it("ignores obsolete failures but rejects failures for the current request", async () => {
+    vi.useFakeTimers();
+    const { collection, pending } = createCollection();
+    const oldRefresh = collection.refresh();
+    const oldResult = oldRefresh.then(
+      () => "resolved",
+      () => "rejected"
+    );
+    const latestRefresh = collection.refresh();
+    const latestError = new Error("current load failed");
+    const latestResult = latestRefresh.then(
+      () => undefined,
+      (error: unknown) => error
+    );
+    pending[0].reject(new Error("obsolete load failed"));
+    assert.equal(await oldResult, "resolved");
+    pending[1].reject(latestError);
+    assert.strictEqual(await latestResult, latestError);
+  });
+
+  it.each(["period", "comparison"])(
+    "retains loaded preferences when the %s changes during a refresh",
+    async (selection) => {
+      vi.useFakeTimers();
+      const { collection, pending, callWS } = createCollection();
+      const prefs = { ...EMPTY_PREFERENCES };
+      let resolvePrefs!: (prefs: typeof EMPTY_PREFERENCES) => void;
+      callWS.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolvePrefs = resolve;
+          })
+      );
+      collection.clearPrefs();
+      // View strategies await refresh before reading collection.prefs.
+      const refresh = collection.refresh();
+      if (selection === "period") {
+        collection.setPeriod(
+          new Date("2026-02-01T00:00:00Z"),
+          new Date("2026-02-28T23:59:59Z")
+        );
+      } else {
+        collection.setCompare(CompareMode.PREVIOUS);
+      }
+      resolvePrefs(prefs);
+      await vi.advanceTimersByTimeAsync(0);
+      await complete(pending[0]);
+      await refresh;
+      assert.strictEqual(collection.prefs, prefs);
+      // The preferences remain usable, but the superseded data is discarded.
+      assert.isUndefined(collection.state);
+    }
+  );
+
+  it("replays relevant cached data while refreshing the same selection", async () => {
+    vi.useFakeTimers();
+    const { collection, pending } = createCollection();
+    const unsub = collection.subscribe(() => undefined);
+    await complete(pending[0]);
+    const cachedData = collection.state;
+    const refresh = collection.refresh();
+    const received = vi.fn();
+    const unsubSecond = collection.subscribe(received);
+    await vi.advanceTimersByTimeAsync(0);
+    assert.equal(received.mock.calls.length, 1);
+    assert.strictEqual(received.mock.calls[0][0], cachedData);
+    await complete(pending[1]);
+    await refresh;
+    assert.equal(received.mock.calls.length, 2);
+    unsubSecond();
+    unsub();
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+
+  it("does not replay obsolete cached data to a newly attached subscriber", async () => {
+    vi.useFakeTimers();
+    const { collection, pending } = createCollection();
+    const unsub = collection.subscribe(() => undefined);
+    await complete(pending[0]);
+    collection.setPeriod(
+      new Date("2026-02-01T00:00:00Z"),
+      new Date("2026-02-28T23:59:59Z")
+    );
+    const refresh = collection.refresh();
+    const received = vi.fn();
+    const unsubSecond = collection.subscribe(received);
+    await vi.advanceTimersByTimeAsync(0);
+    assert.equal(received.mock.calls.length, 0);
+    await complete(pending[1]);
+    await refresh;
+    assert.equal(received.mock.calls.length, 1);
+    unsubSecond();
+    unsub();
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+
+  it("consumes initial and reconnect failures and recovers on the next reconnect", async () => {
+    vi.useFakeTimers();
+    const { collection, pending, connection } = createCollection();
+    const received = vi.fn();
+    const unsub = collection.subscribe(received);
+    const ready = vi
+      .mocked(connection.addEventListener)
+      .mock.calls.find(([event]) => event === "ready")![1];
+
+    // Leave lifecycle promises unhandled by the test, just as the connection
+    // does. Vitest reports an unhandled rejection if either failure escapes.
+    pending[0].reject(new Error("initial load failed"));
+    await vi.advanceTimersByTimeAsync(0);
+    ready(connection, undefined);
+    pending[1].reject(new Error("reconnect load failed"));
+    await vi.advanceTimersByTimeAsync(0);
+    assert.equal(received.mock.calls.length, 0);
+    assert.isUndefined(collection.state);
+
+    ready(connection, undefined);
+    await complete(pending[2]);
+    assert.equal(received.mock.calls.length, 1);
+    assert.strictEqual(received.mock.calls[0][0], collection.state);
+    unsub();
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+
+  it("guards reconnect refreshes and removes their listener on teardown", async () => {
+    vi.useFakeTimers();
+    const { collection, pending, connection } = createCollection();
+    const received = vi.fn();
+    const unsub = collection.subscribe(received);
+    const addListener = vi.mocked(connection.addEventListener);
+    const ready = addListener.mock.calls.find(
+      ([event]) => event === "ready"
+    )![1];
+    ready(connection, undefined);
+    await complete(pending[1]);
+    await complete(pending[0]);
+    assert.equal(received.mock.calls.length, 1);
+    unsub();
+    await vi.advanceTimersByTimeAsync(5000);
+    assert.equal(collection.state, undefined);
+    assert.isTrue(
+      vi
+        .mocked(connection.removeEventListener)
+        .mock.calls.some(
+          ([event, listener]) => event === "ready" && listener === ready
+        )
+    );
+  });
+
+  it("discards responses after the last subscriber's grace period expires", async () => {
+    vi.useFakeTimers();
+    const { collection, pending } = createCollection();
+    const unsub = collection.subscribe(() => undefined);
+    unsub();
+    await vi.advanceTimersByTimeAsync(5000);
+    await complete(pending[0]);
+    assert.equal(collection.state, undefined);
+    const received = vi.fn();
+    const unsubSecond = collection.subscribe(received);
+    await complete(pending[1]);
+    assert.equal(received.mock.calls.length, 1);
+    unsubSecond();
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+
+  it("keeps refreshes independent between collections", async () => {
+    vi.useFakeTimers();
+    const first = createCollection("energy_first");
+    const second = createCollection("energy_second");
+    const firstRefresh = first.collection.refresh();
+    const secondRefresh = second.collection.refresh();
+    await complete(first.pending[0]);
+    await complete(second.pending[0]);
+    await Promise.all([firstRefresh, secondRefresh]);
+    assert.isDefined(first.collection.state);
+    assert.isDefined(second.collection.state);
+  });
+});
+
+describe("getEnergyDataCollection live day", () => {
+  afterEach(() => {
+    localStorage.clear();
+    vi.useRealTimers();
+  });
+
+  const createCollection = (
+    key: string,
+    preset?: string,
+    midnightRollover = false
+  ) => {
+    const hass = createMockHass();
+    hass.locale = energyPeriodLocale;
+    hass.config = { ...hass.config, time_zone: "America/New_York" };
+    const callWS = vi.fn(async (msg: { type: string }) => {
+      if (msg.type === "energy/info") {
+        return { cost_sensors: {}, solar_forecast_domains: [] };
+      }
+      throw new Error(`unexpected ${msg.type}`);
+    });
+    Object.assign(hass, {
+      connection: {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        connected: true,
+      },
+      callWS,
+    });
+    if (preset) {
+      localStorage.setItem(
+        getEnergyDefaultPeriodStorageKey(hass.panelUrl, key),
+        preset
+      );
+    }
+    return {
+      collection: getEnergyDataCollection(hass.connection, {
+        callWS: hass.callWS,
+        entities: hass.entities,
+        states: hass.states,
+        locale: hass.locale,
+        config: hass.config,
+        panelUrl: hass.panelUrl,
+        key,
+        prefs: EMPTY_PREFERENCES,
+        midnightRollover,
+      }),
+      callWS,
+    };
+  };
+
+  const energyInfoFetches = (callWS: ReturnType<typeof vi.fn>) =>
+    callWS.mock.calls.filter((call) => call[0].type === "energy/info");
+
+  it("advances hour-0 yesterday to today at 01:00 and fetches the new day", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-20T00:30:00-04:00"));
+
+    const { collection, callWS } = createCollection("energy_timer");
+    const refresh = vi.spyOn(collection, "refresh");
+    const unsub = collection.subscribe(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    refresh.mockClear();
+    callWS.mockClear();
+
+    assert.equal(
+      collection.start.getTime(),
+      energyPeriodDay(new Date(), -1).start.getTime()
+    );
+
+    await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
+
+    assert.equal(
+      collection.start.getTime(),
+      energyPeriodDay(new Date()).start.getTime()
+    );
+    // Cards render EnergyData from the websocket store, not collection.start.
+    // The 01:00 callback must refresh() so getEnergyData runs for today.
+    assert.equal(refresh.mock.calls.length, 1);
+    assert.equal(energyInfoFetches(callWS).length, 1);
+
+    unsub();
+  });
+
+  it("catches up a stale live day on resubscribe", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-18T15:00:00-04:00"));
+
+    const { collection, callWS } = createCollection("energy_catchup");
+    const refresh = vi.spyOn(collection, "refresh");
+    let unsub = collection.subscribe(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    refresh.mockClear();
+    callWS.mockClear();
+
+    unsub();
+    vi.setSystemTime(new Date("2026-06-20T10:00:00-04:00"));
+    unsub = collection.subscribe(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+
+    assert.equal(
+      collection.start.getTime(),
+      energyPeriodDay(new Date()).start.getTime()
+    );
+    assert.equal(refresh.mock.calls.length, 1);
+    assert.equal(energyInfoFetches(callWS).length, 1);
+
+    unsub();
+  });
+
+  it("does not double-refresh on a cold subscribe after the unsub grace", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-18T15:00:00-04:00"));
+
+    const { collection, callWS } = createCollection("energy_cold_refresh");
+    const refresh = vi.spyOn(collection, "refresh");
+    let unsub = collection.subscribe(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+    unsub();
+    await vi.advanceTimersByTimeAsync(5000);
+    refresh.mockClear();
+    callWS.mockClear();
+
+    vi.setSystemTime(new Date("2026-06-20T10:00:00-04:00"));
+    unsub = collection.subscribe(() => undefined);
+    await vi.advanceTimersByTimeAsync(0);
+
+    assert.equal(
+      collection.start.getTime(),
+      energyPeriodDay(new Date()).start.getTime()
+    );
+    // The library's first fetch is not collection.refresh(); this spy only
+    // sees the extra refresh used during the unsub-grace re-subscribe.
+    assert.equal(refresh.mock.calls.length, 0);
+    assert.equal(energyInfoFetches(callWS).length, 1);
+
+    unsub();
+  });
+
+  it("keeps a custom setPeriod range overnight", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-18T15:00:00-04:00"));
+
+    const { collection } = createCollection("energy_custom_period");
+    let unsub = collection.subscribe(() => undefined);
+    const custom = energyPeriodDay(new Date(), -5);
+    collection.setPeriod(custom.start, custom.end);
+    unsub();
+
+    vi.setSystemTime(new Date("2026-06-20T10:00:00-04:00"));
+    unsub = collection.subscribe(() => undefined);
+
+    assert.equal(collection.start.getTime(), custom.start.getTime());
+
+    unsub();
+  });
+
+  it("does not advance the period after the last subscriber leaves", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-20T00:30:00-04:00"));
+
+    const { collection } = createCollection("energy_unsub_timer");
+    const unsub = collection.subscribe(() => undefined);
+    const start = collection.start.getTime();
+    unsub();
+
+    vi.advanceTimersByTime(48 * 60 * 60 * 1000);
+
+    assert.equal(collection.start.getTime(), start);
+  });
+
+  it("does not roll a remembered week preset over to today", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-18T15:00:00-04:00"));
+
+    const { collection } = createCollection("energy_week_stored", "this_week");
+    const weekStart = collection.start.getTime();
+    const unsub = collection.subscribe(() => undefined);
+
+    vi.setSystemTime(new Date("2026-06-20T10:00:00-04:00"));
+    vi.advanceTimersByTime(48 * 60 * 60 * 1000);
+
+    assert.equal(collection.start.getTime(), weekStart);
+
+    unsub();
+  });
+
+  it("does not roll a remembered week preset over to today with midnightRollover", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-18T15:00:00-04:00"));
+
+    const { collection } = createCollection(
+      "energy_week_stored_now",
+      "this_week",
+      true
+    );
+    const weekStart = collection.start.getTime();
+    const unsub = collection.subscribe(() => undefined);
+
+    vi.setSystemTime(new Date("2026-06-20T10:00:00-04:00"));
+    vi.advanceTimersByTime(48 * 60 * 60 * 1000);
+
+    assert.equal(collection.start.getTime(), weekStart);
+
+    unsub();
+  });
+});
+
+describe("getEnergyDataCollection statistics range", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const requestStatistics = async (key: string, start: Date, end: Date) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-28T12:00:00Z"));
+    const hass = createMockHass();
+    hass.locale = { ...energyPeriodLocale, time_zone: TimeZone.local };
+    hass.config = { ...hass.config, time_zone: "Europe/Sofia" };
+    const callWS = vi.fn(async (msg: Record<string, unknown>) => {
+      switch (msg.type) {
+        case "energy/info":
+          return { cost_sensors: {}, solar_forecast_domains: [] };
+        case "recorder/get_statistics_metadata":
+          return [];
+        case "recorder/statistics_during_period":
+          return {};
+      }
+      throw new Error(`unexpected ${msg.type}`);
+    });
+    Object.assign(hass, {
+      connection: {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        connected: true,
+      },
+      callWS,
+    });
+    const collection = getEnergyDataCollection(hass.connection, {
+      callWS: hass.callWS,
+      entities: hass.entities,
+      states: hass.states,
+      locale: hass.locale,
+      config: hass.config,
+      panelUrl: hass.panelUrl,
+      key,
+      prefs: {
+        ...EMPTY_PREFERENCES,
+        energy_sources: [
+          {
+            type: "solar",
+            stat_energy_from: "sensor.solar_energy",
+            config_entry_solar_forecast: null,
+          },
+        ],
+      },
+    });
+    collection.setPeriod(start, end);
+    await collection.refresh();
+    return callWS.mock.calls
+      .map(([msg]) => msg)
+      .find((msg) => msg.type === "recorder/statistics_during_period");
+  };
+
+  it("requests the picked days in the server time zone", async () => {
+    const request = await requestStatistics(
+      "energy_range_days",
+      new Date(2026, 8, 18),
+      endOfDay(new Date(2026, 8, 21))
+    );
+    assert.deepInclude(request, {
+      period: "day",
+      start_time: "2026-09-17T21:00:00.000Z",
+      end_time: "2026-09-21T20:59:59.999Z",
+    });
+  });
+
+  it("keeps hourly requests in the browser time zone", async () => {
+    const start = new Date(2026, 8, 18);
+    const end = endOfDay(start);
+    const request = await requestStatistics("energy_range_hours", start, end);
+    assert.deepInclude(request, {
+      period: "hour",
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+    });
+  });
+});
+
+describe("getEnergyDataCollection gas energy unit", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const gasMetadata = (
+    statisticId: string,
+    unit: string
+  ): StatisticsMetaData => ({
+    statistic_id: statisticId,
+    source: "test",
+    name: null,
+    statistics_unit_of_measurement: unit,
+    unit_class: "energy",
+    mean_type: StatisticMeanType.NONE,
+    has_sum: true,
+  });
+
+  const loadGasData = async (
+    key: string,
+    gasUnits: Record<string, string>,
+    compare?: CompareMode,
+    deviceStatIds: string[] = [],
+    otherSources: EnergySource[] = []
+  ) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-28T12:00:00Z"));
+    const hass = createMockHass();
+    hass.locale = { ...energyPeriodLocale, time_zone: TimeZone.local };
+    const statisticIds = Object.keys(gasUnits);
+    const callWS = vi.fn(async (msg: Record<string, unknown>) => {
+      switch (msg.type) {
+        case "energy/info":
+          return { cost_sensors: {}, solar_forecast_domains: [] };
+        case "recorder/get_statistics_metadata":
+          return statisticIds.map((id) => gasMetadata(id, gasUnits[id]));
+        case "recorder/statistics_during_period":
+          return {};
+      }
+      throw new Error(`unexpected ${msg.type}`);
+    });
+    Object.assign(hass, {
+      connection: {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        connected: true,
+      },
+      callWS,
+    });
+    const collection = getEnergyDataCollection(hass.connection, {
+      callWS: hass.callWS,
+      entities: hass.entities,
+      states: hass.states,
+      locale: hass.locale,
+      config: hass.config,
+      panelUrl: hass.panelUrl,
+      key,
+      prefs: {
+        ...EMPTY_PREFERENCES,
+        device_consumption: deviceStatIds.map((id) => ({
+          stat_consumption: id,
+        })),
+        energy_sources: [
+          ...statisticIds.map((id) => ({
+            type: "gas" as const,
+            stat_energy_from: id,
+            stat_cost: null,
+            entity_energy_price: null,
+            number_energy_price: null,
+          })),
+          ...otherSources,
+        ],
+      },
+    });
+    collection.setPeriod(
+      new Date(2026, 8, 18),
+      endOfDay(new Date(2026, 8, 21))
+    );
+    if (compare) {
+      collection.setCompare(compare);
+    }
+    await collection.refresh();
+    const energyRequests = callWS.mock.calls
+      .map(([msg]) => msg)
+      .filter((msg) => msg.type === "recorder/statistics_during_period");
+    return { data: collection.state, energyRequests };
+  };
+
+  it("shows therm gas in therms and requests it in therms", async () => {
+    const { data, energyRequests } = await loadGasData("energy_gas_thm", {
+      "integration:gas": "thm",
+    });
+    assert.equal(data?.gasUnit, "thm");
+    const thermRequest = energyRequests.find(
+      (msg) => (msg.units as { energy?: string }).energy === "thm"
+    );
+    assert.deepEqual(thermRequest?.statistic_ids, ["integration:gas"]);
+  });
+
+  it("shows gas in the unit of its sources for any energy unit", async () => {
+    const { data, energyRequests } = await loadGasData("energy_gas_gj", {
+      "integration:gas_a": "GJ",
+      "integration:gas_b": "GJ",
+    });
+    assert.equal(data?.gasUnit, "GJ");
+    const request = energyRequests.find(
+      (msg) => (msg.units as { energy?: string }).energy === "GJ"
+    );
+    assert.sameMembers(request?.statistic_ids as string[], [
+      "integration:gas_a",
+      "integration:gas_b",
+    ]);
+  });
+
+  it("falls back to kWh when gas sources use different energy units", async () => {
+    const { data } = await loadGasData("energy_gas_gj_mwh", {
+      "integration:gas_a": "GJ",
+      "integration:gas_b": "MWh",
+    });
+    assert.equal(data?.gasUnit, "kWh");
+  });
+
+  it("keeps other energy gas in kWh", async () => {
+    const { data, energyRequests } = await loadGasData("energy_gas_kwh", {
+      "integration:gas": "kWh",
+    });
+    assert.equal(data?.gasUnit, "kWh");
+    assert.isUndefined(
+      energyRequests.find(
+        (msg) => (msg.units as { energy?: string }).energy === "thm"
+      )
+    );
+  });
+
+  it("falls back to kWh when gas sources mix therms and another unit", async () => {
+    const { data, energyRequests } = await loadGasData("energy_gas_mixed", {
+      "integration:gas_a": "thm",
+      "integration:gas_b": "kWh",
+    });
+    assert.equal(data?.gasUnit, "kWh");
+    assert.isUndefined(
+      energyRequests.find(
+        (msg) => (msg.units as { energy?: string }).energy === "thm"
+      )
+    );
+  });
+
+  it("keeps kWh when a therm gas statistic is also an individual device", async () => {
+    const { data, energyRequests } = await loadGasData(
+      "energy_gas_device",
+      { "integration:gas": "thm" },
+      undefined,
+      ["integration:gas"]
+    );
+    assert.equal(data?.gasUnit, "kWh");
+    assert.isUndefined(
+      energyRequests.find(
+        (msg) => (msg.units as { energy?: string }).energy === "thm"
+      )
+    );
+  });
+
+  const sharedSources: Record<string, EnergySource> = {
+    grid: {
+      type: "grid",
+      stat_energy_from: "integration:gas",
+      stat_energy_to: null,
+      stat_cost: null,
+      entity_energy_price: null,
+      number_energy_price: null,
+      stat_compensation: null,
+      entity_energy_price_export: null,
+      number_energy_price_export: null,
+    },
+    solar: {
+      type: "solar",
+      stat_energy_from: "integration:gas",
+      config_entry_solar_forecast: null,
+    },
+    battery: {
+      type: "battery",
+      stat_energy_from: "integration:gas",
+      stat_energy_to: "integration:other",
+    },
+  };
+
+  Object.entries(sharedSources).forEach(([name, source]) => {
+    it(`keeps kWh when a therm gas statistic is also a ${name} statistic`, async () => {
+      const { data, energyRequests } = await loadGasData(
+        `energy_gas_shared_${name}`,
+        { "integration:gas": "thm" },
+        undefined,
+        [],
+        [source]
+      );
+      assert.equal(data?.gasUnit, "kWh");
+      assert.isUndefined(
+        energyRequests.find(
+          (msg) => (msg.units as { energy?: string }).energy === "thm"
+        )
+      );
+    });
+  });
+
+  it("also requests therm gas in therms for the compare period", async () => {
+    const { energyRequests } = await loadGasData(
+      "energy_gas_thm_compare",
+      { "integration:gas": "thm" },
+      CompareMode.PREVIOUS
+    );
+    const thermRequests = energyRequests.filter(
+      (msg) => (msg.units as { energy?: string }).energy === "thm"
+    );
+    assert.equal(thermRequests.length, 2);
+  });
+});
+
+describe("getEnergyDefaultPeriodStorageKey", () => {
+  it("uses an explicit collection key", () => {
+    assert.equal(
+      getEnergyDefaultPeriodStorageKey("energy", "energy_dashboard"),
+      "energy-default-period-_energy_dashboard"
+    );
+  });
+
+  it("scopes to the panel when no collection key is given", () => {
+    assert.equal(
+      getEnergyDefaultPeriodStorageKey("my-dashboard"),
+      "energy-default-period-_energy_my-dashboard"
+    );
+  });
+
+  it("falls back to the global key without a panel url", () => {
+    assert.equal(
+      getEnergyDefaultPeriodStorageKey(""),
+      "energy-default-period-_energy"
+    );
+  });
+
+  it("rejects a collection key with the wrong prefix", () => {
+    assert.throws(() => getEnergyDefaultPeriodStorageKey("", "dashboard"));
+  });
+});
+
+describe("computeEnergyLabel", () => {
+  const ENTITY_ID = "sensor.washer_energy";
+
+  const createEntry = (
+    entry: Partial<EntityRegistryDisplayEntry>
+  ): EntityRegistryDisplayEntry =>
+    ({
+      entity_id: ENTITY_ID,
+      labels: [],
+      ...entry,
+    }) as EntityRegistryDisplayEntry;
+
+  const createDevice = (
+    device: Partial<DeviceRegistryEntry>
+  ): DeviceRegistryEntry =>
+    ({ id: "device1", name_by_user: null, ...device }) as DeviceRegistryEntry;
+
+  const createHass = (
+    friendlyName: string,
+    entry?: Partial<EntityRegistryDisplayEntry>,
+    device?: Partial<DeviceRegistryEntry>
+  ) =>
+    createMockHass(
+      {
+        [ENTITY_ID]: createMockEntityState(ENTITY_ID, "1", {
+          friendly_name: friendlyName,
+        }),
+      },
+      {
+        entities: entry ? { [ENTITY_ID]: createEntry(entry) } : {},
+        devices: device ? { device1: createDevice(device) } : {},
+      }
+    );
+
+  it("uses the device name without the entity name", () => {
+    const hass = createHass(
+      "Washer Energy",
+      { name: "Energy", device_id: "device1" },
+      { name: "Washer" }
+    );
+
+    assert.equal(
+      computeEnergyLabel(hass.states, hass.formatEntityName, ENTITY_ID),
+      "Washer"
+    );
+  });
+
+  it("prefixes a sub-device with its parent device", () => {
+    const hass = createMockHass(
+      {
+        [ENTITY_ID]: createMockEntityState(ENTITY_ID, "1", {
+          friendly_name: "Shelly EM Channel 1 Energy",
+        }),
+      },
+      {
+        entities: {
+          [ENTITY_ID]: createEntry({ name: "Energy", device_id: "channel1" }),
+        },
+        devices: {
+          shelly: createDevice({ id: "shelly", name: "Shelly EM" }),
+          channel1: createDevice({
+            id: "channel1",
+            name: "Channel 1",
+            parent_device_id: "shelly",
+            next_name_part: "parent_device",
+          }),
+        },
+      }
+    );
+
+    assert.equal(
+      computeEnergyLabel(hass.states, hass.formatEntityName, ENTITY_ID),
+      "Shelly EM Channel 1"
+    );
+  });
+
+  it("uses the entity name when the entity has no device", () => {
+    const hass = createHass("Washer Energy", { name: "Washer Energy" });
+
+    assert.equal(
+      computeEnergyLabel(hass.states, hass.formatEntityName, ENTITY_ID),
+      "Washer Energy"
+    );
+  });
+
+  it("uses the device name alone when the entity has no name of its own", () => {
+    const hass = createHass(
+      "Washer",
+      { device_id: "device1", next_name_part: "device" },
+      { name: "Washer" }
+    );
+
+    assert.equal(
+      computeEnergyLabel(hass.states, hass.formatEntityName, ENTITY_ID),
+      "Washer"
+    );
+  });
+
+  it("keeps a name set by the user", () => {
+    const hass = createHass(
+      "Washer Energy",
+      { name: "Energy", device_id: "device1" },
+      { name: "Washer" }
+    );
+
+    assert.equal(
+      computeEnergyLabel(
+        hass.states,
+        hass.formatEntityName,
+        ENTITY_ID,
+        undefined,
+        "Laundry"
+      ),
+      "Laundry"
+    );
+  });
+
+  it("ignores an empty name", () => {
+    const hass = createHass(
+      "Washer Energy",
+      { name: "Energy", device_id: "device1" },
+      { name: "Washer" }
+    );
+
+    assert.equal(
+      computeEnergyLabel(
+        hass.states,
+        hass.formatEntityName,
+        ENTITY_ID,
+        undefined,
+        ""
+      ),
+      "Washer"
+    );
+  });
+
+  it("falls back to the friendly name for an entity outside the registry", () => {
+    const hass = createHass("Washer Energy");
+
+    assert.equal(
+      computeEnergyLabel(hass.states, hass.formatEntityName, ENTITY_ID),
+      "Washer Energy"
+    );
+  });
+
+  it("uses the statistic metadata name when there is no entity", () => {
+    const hass = createMockHass();
+
+    assert.equal(
+      computeEnergyLabel(hass.states, hass.formatEntityName, "external:solar", {
+        statistic_id: "external:solar",
+        name: "Solar production",
+      } as StatisticsMetaData),
+      "Solar production"
+    );
+  });
+
+  it("falls back to the statistic id when there is nothing to name it with", () => {
+    const hass = createMockHass();
+
+    assert.equal(
+      computeEnergyLabel(hass.states, hass.formatEntityName, "external:solar"),
+      "external:solar"
+    );
+  });
+});
+
+describe("computeEnergyDeviceLabels", () => {
+  const DEVICES = [
+    {
+      stat_consumption: "sensor.washer_energy",
+      stat_rate: "sensor.washer_power",
+    },
+    { stat_consumption: "sensor.heater_energy", name: "Heater" },
+  ];
+
+  const hass = createMockHass({
+    "sensor.washer_energy": createMockEntityState("sensor.washer_energy", "1", {
+      friendly_name: "Washer Energy",
+    }),
+    "sensor.washer_power": createMockEntityState("sensor.washer_power", "5", {
+      friendly_name: "Washer Power",
+    }),
+  });
+
+  it("keys labels by the consumption statistic", () => {
+    assert.deepEqual(
+      computeEnergyDeviceLabels(hass.states, hass.formatEntityName, DEVICES),
+      {
+        "sensor.washer_energy": "Washer Energy",
+        "sensor.heater_energy": "Heater",
+      }
+    );
+  });
+
+  it("keys labels by the rate statistic, skipping devices without one", () => {
+    assert.deepEqual(
+      computeEnergyDeviceLabels(
+        hass.states,
+        hass.formatEntityName,
+        DEVICES,
+        undefined,
+        "stat_rate"
+      ),
+      { "sensor.washer_power": "Washer Power" }
+    );
+  });
+
+  describe("devices that share a device", () => {
+    const PANEL_STATES = {
+      "sensor.panel_kitchen_energy": createMockEntityState(
+        "sensor.panel_kitchen_energy",
+        "1",
+        { friendly_name: "Panel Kitchen energy" }
+      ),
+      "sensor.panel_kitchen_power": createMockEntityState(
+        "sensor.panel_kitchen_power",
+        "5",
+        { friendly_name: "Panel Kitchen power" }
+      ),
+      "sensor.panel_laundry_energy": createMockEntityState(
+        "sensor.panel_laundry_energy",
+        "1",
+        { friendly_name: "Panel Laundry energy" }
+      ),
+      "sensor.panel_laundry_power": createMockEntityState(
+        "sensor.panel_laundry_power",
+        "5",
+        { friendly_name: "Panel Laundry power" }
+      ),
+      "sensor.boiler_energy": createMockEntityState(
+        "sensor.boiler_energy",
+        "1",
+        { friendly_name: "Boiler energy" }
+      ),
+    };
+
+    const createEntry = (entityId: string, name: string, deviceId: string) =>
+      ({
+        entity_id: entityId,
+        labels: [],
+        name,
+        device_id: deviceId,
+      }) as unknown as EntityRegistryDisplayEntry;
+
+    const panelHass = createMockHass(PANEL_STATES, {
+      entities: {
+        "sensor.panel_kitchen_energy": createEntry(
+          "sensor.panel_kitchen_energy",
+          "Kitchen",
+          "panel"
+        ),
+        "sensor.panel_kitchen_power": createEntry(
+          "sensor.panel_kitchen_power",
+          "Kitchen power",
+          "panel"
+        ),
+        "sensor.panel_laundry_energy": createEntry(
+          "sensor.panel_laundry_energy",
+          "Laundry",
+          "panel"
+        ),
+        "sensor.panel_laundry_power": createEntry(
+          "sensor.panel_laundry_power",
+          "Laundry power",
+          "panel"
+        ),
+        "sensor.boiler_energy": createEntry(
+          "sensor.boiler_energy",
+          "Energy",
+          "boiler"
+        ),
+      },
+      devices: {
+        panel: { id: "panel", name: "Panel", name_by_user: null },
+        boiler: { id: "boiler", name: "Boiler", name_by_user: null },
+      } as unknown as Record<string, DeviceRegistryEntry>,
+    });
+
+    it("adds the entity name to devices sharing a device", () => {
+      assert.deepEqual(
+        computeEnergyDeviceLabels(
+          panelHass.states,
+          panelHass.formatEntityName,
+          [
+            { stat_consumption: "sensor.panel_kitchen_energy" },
+            { stat_consumption: "sensor.panel_laundry_energy" },
+            { stat_consumption: "sensor.boiler_energy" },
+          ]
+        ),
+        {
+          "sensor.panel_kitchen_energy": "Panel Kitchen",
+          "sensor.panel_laundry_energy": "Panel Laundry",
+          "sensor.boiler_energy": "Boiler",
+        }
+      );
+    });
+
+    it("leaves a device alone once its sibling is named by the user", () => {
+      assert.deepEqual(
+        computeEnergyDeviceLabels(
+          panelHass.states,
+          panelHass.formatEntityName,
+          [
+            {
+              stat_consumption: "sensor.panel_kitchen_energy",
+              name: "Kitchen",
+            },
+            { stat_consumption: "sensor.panel_laundry_energy" },
+          ]
+        ),
+        {
+          "sensor.panel_kitchen_energy": "Kitchen",
+          "sensor.panel_laundry_energy": "Panel",
+        }
+      );
+    });
+
+    it("gives way to a user name that collides with the device name", () => {
+      assert.deepEqual(
+        computeEnergyDeviceLabels(
+          panelHass.states,
+          panelHass.formatEntityName,
+          [
+            { stat_consumption: "sensor.panel_kitchen_energy", name: "Panel" },
+            { stat_consumption: "sensor.panel_laundry_energy" },
+          ]
+        ),
+        {
+          "sensor.panel_kitchen_energy": "Panel",
+          "sensor.panel_laundry_energy": "Panel Laundry",
+        }
+      );
+    });
+
+    it("tells apart the rate statistics of one device", () => {
+      assert.deepEqual(
+        computeEnergyDeviceLabels(
+          panelHass.states,
+          panelHass.formatEntityName,
+          [
+            {
+              stat_consumption: "sensor.panel_kitchen_energy",
+              stat_rate: "sensor.panel_kitchen_power",
+            },
+            {
+              stat_consumption: "sensor.panel_laundry_energy",
+              stat_rate: "sensor.panel_laundry_power",
+            },
+          ],
+          undefined,
+          "stat_rate"
+        ),
+        {
+          "sensor.panel_kitchen_power": "Panel Kitchen power",
+          "sensor.panel_laundry_power": "Panel Laundry power",
+        }
+      );
+    });
+  });
+});
+
+describe("computeConsumptionData with a home meter", () => {
+  const summed: EnergySumData = {
+    from_grid: { 1: 4, 2: 4, 3: 4 },
+    solar: { 1: 3, 2: 3, 3: 3 },
+    home: { 1: 9, 2: 0 },
+    total: { from_grid: 12, solar: 9, home: 9 },
+    timestamps: [1, 2, 3],
+  };
+  const { home: _home, ...withoutHome } = summed;
+  const baseline = computeConsumptionData(withoutHome, undefined).consumption;
+  const { consumption } = computeConsumptionData(summed, undefined);
+
+  it("uses the home reading as used_total", () => {
+    assert.equal(consumption.used_total[1], 9);
+  });
+
+  it("keeps a real zero reading", () => {
+    assert.equal(consumption.used_total[2], 0);
+  });
+
+  it("falls back to the calculated value when a bucket has no reading", () => {
+    assert.equal(consumption.used_total[3], baseline.used_total[3]);
+    assert.equal(consumption.used_grid[3], baseline.used_grid[3]);
+  });
+
+  it("never changes the measured grid value", () => {
+    assert.equal(consumption.used_grid[1], baseline.used_grid[1]);
   });
 });

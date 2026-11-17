@@ -36,7 +36,14 @@ class HaLabel extends LitElement {
     if (!changedProps.has("color")) {
       return;
     }
-    this.style.cssText = getLabelColorStyle(this.color);
+    if (!this.color) {
+      this.style.cssText = getLabelColorStyle(this.color);
+      return;
+    }
+    const contrast = getContrastedColorHex(this.color);
+    this.style.cssText = `--ha-label-background-color: ${computeCssColor(this.color)};
+      --ha-label-text-color: ${contrast};
+      --ha-label-icon-color: ${contrast};`;
   }
 
   protected render(): TemplateResult {
@@ -50,7 +57,9 @@ class HaLabel extends LitElement {
       <div class="container" .id=${this._elementId}>
         <span class="content">
           <slot name="icon"></slot>
-          <slot></slot>
+          <span class="label-content">
+            <slot></slot>
+          </span>
         </span>
       </div>
     `;
@@ -74,7 +83,8 @@ class HaLabel extends LitElement {
           line-height: var(--ha-line-height-condensed);
           letter-spacing: 0.1px;
           height: 32px;
-          border-radius: var(--ha-border-radius-xl);
+          --ha-label-border-radius: var(--ha-border-radius-xl);
+          border-radius: var(--ha-label-border-radius);
           color: var(--ha-label-text-color);
           --mdc-icon-size: 12px;
           text-wrap: nowrap;
@@ -89,7 +99,10 @@ class HaLabel extends LitElement {
           position: absolute;
           content: "";
           inset: 0;
-          border-radius: inherit;
+          /* The pseudo-element sits inside the 1px border, so match the
+             padding box's radius; inheriting the outer radius leaves
+             see-through gaps at the corners. */
+          border-radius: calc(var(--ha-label-border-radius) - 1px);
           background-color: var(--ha-label-background-color);
           opacity: var(--ha-label-background-opacity);
         }
@@ -113,9 +126,13 @@ class HaLabel extends LitElement {
           display: inline-flex;
         }
 
+        .label-content {
+          display: contents;
+        }
+
         :host([dense]) {
           height: 20px;
-          border-radius: var(--ha-border-radius-md);
+          --ha-label-border-radius: var(--ha-border-radius-md);
         }
         :host([dense]) .container {
           padding: 0 12px;
@@ -125,6 +142,29 @@ class HaLabel extends LitElement {
           margin-left: -4px;
           margin-inline-start: -4px;
           margin-inline-end: 4px;
+        }
+
+        :host(.text-ellipsis) {
+          max-width: 100%;
+          min-width: 0;
+        }
+        :host(.text-ellipsis) .container {
+          min-width: 0;
+          overflow: hidden;
+        }
+        :host(.text-ellipsis) span.content {
+          display: flex;
+          width: 100%;
+          min-width: 0;
+        }
+        :host(.text-ellipsis) .label-content {
+          display: block;
+          flex: 1;
+          min-width: 0;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
       `,
     ];

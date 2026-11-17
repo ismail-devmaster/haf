@@ -1,12 +1,11 @@
+import type { UnsubscribeFunc } from "home-assistant-js-websocket";
 import type { CSSResultGroup } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
-import type { UnsubscribeFunc } from "home-assistant-js-websocket";
 import "../../../../../components/ha-alert";
 import "../../../../../components/ha-button";
 import "../../../../../components/ha-card";
-import "../../../../../components/ha-md-list";
-import "../../../../../components/ha-md-list-item";
+import "../../../../../components/item/ha-row-item";
 import {
   acceptSharedMatterDevice,
   canCommissionMatterExternal,
@@ -50,12 +49,14 @@ class MatterOptionsPage extends LitElement {
       >
         <div class="container">
           <ha-card>
-            ${this._error
-              ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
-              : nothing}
-            <ha-md-list>
-              ${canCommissionMatterExternal(this.hass)
-                ? html`<ha-md-list-item>
+            ${
+              this._error
+                ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
+                : nothing
+            }
+            ${
+              canCommissionMatterExternal(this.hass)
+                ? html`<ha-row-item wrap-headline wrap-supporting-text>
                     <span slot="headline">
                       ${this.hass.localize(
                         "ui.panel.config.matter.panel.mobile_app_commisioning"
@@ -69,104 +70,104 @@ class MatterOptionsPage extends LitElement {
                     <ha-button
                       appearance="plain"
                       slot="end"
-                      size="small"
+                      size="s"
                       @click=${this._startMobileCommissioning}
                     >
                       ${this.hass.localize(
                         "ui.panel.config.matter.panel.mobile_app_commisioning_action"
                       )}
                     </ha-button>
-                  </ha-md-list-item>`
-                : nothing}
-              <ha-md-list-item>
-                <span slot="headline">
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.commission_device"
-                  )}
-                </span>
-                <span slot="supporting-text">
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.commission_device_description"
-                  )}
-                </span>
-                <ha-button
-                  appearance="plain"
-                  slot="end"
-                  size="small"
-                  @click=${this._commission}
-                >
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.commission_device_action"
-                  )}
-                </ha-button>
-              </ha-md-list-item>
-              <ha-md-list-item>
-                <span slot="headline">
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.add_shared_device"
-                  )}
-                </span>
-                <span slot="supporting-text">
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.add_shared_device_description"
-                  )}
-                </span>
-                <ha-button
-                  appearance="plain"
-                  slot="end"
-                  size="small"
-                  @click=${this._acceptSharedDevice}
-                >
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.add_shared_device_action"
-                  )}
-                </ha-button>
-              </ha-md-list-item>
-              <ha-md-list-item>
-                <span slot="headline">
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.set_wifi_credentials"
-                  )}
-                </span>
-                <span slot="supporting-text">
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.set_wifi_credentials_description"
-                  )}
-                </span>
-                <ha-button
-                  appearance="plain"
-                  slot="end"
-                  size="small"
-                  @click=${this._setWifi}
-                >
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.set_wifi_credentials_action"
-                  )}
-                </ha-button>
-              </ha-md-list-item>
-              <ha-md-list-item>
-                <span slot="headline">
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.set_thread_credentials"
-                  )}
-                </span>
-                <span slot="supporting-text">
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.set_thread_credentials_description"
-                  )}
-                </span>
-                <ha-button
-                  appearance="plain"
-                  slot="end"
-                  size="small"
-                  @click=${this._setThread}
-                >
-                  ${this.hass.localize(
-                    "ui.panel.config.matter.panel.set_thread_credentials_action"
-                  )}
-                </ha-button>
-              </ha-md-list-item>
-            </ha-md-list>
+                  </ha-row-item>`
+                : nothing
+            }
+            <ha-row-item wrap-headline wrap-supporting-text>
+              <span slot="headline">
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.commission_device"
+                )}
+              </span>
+              <span slot="supporting-text">
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.commission_device_description"
+                )}
+              </span>
+              <ha-button
+                appearance="plain"
+                slot="end"
+                size="s"
+                @click=${this._commission}
+              >
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.commission_device_action"
+                )}
+              </ha-button>
+            </ha-row-item>
+            <ha-row-item wrap-headline wrap-supporting-text>
+              <span slot="headline">
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.add_shared_device"
+                )}
+              </span>
+              <span slot="supporting-text">
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.add_shared_device_description"
+                )}
+              </span>
+              <ha-button
+                appearance="plain"
+                slot="end"
+                size="s"
+                @click=${this._acceptSharedDevice}
+              >
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.add_shared_device_action"
+                )}
+              </ha-button>
+            </ha-row-item>
+            <ha-row-item wrap-headline wrap-supporting-text>
+              <span slot="headline">
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.set_wifi_credentials"
+                )}
+              </span>
+              <span slot="supporting-text">
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.set_wifi_credentials_description"
+                )}
+              </span>
+              <ha-button
+                appearance="plain"
+                slot="end"
+                size="s"
+                @click=${this._setWifi}
+              >
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.set_wifi_credentials_action"
+                )}
+              </ha-button>
+            </ha-row-item>
+            <ha-row-item wrap-headline wrap-supporting-text>
+              <span slot="headline">
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.set_thread_credentials"
+                )}
+              </span>
+              <span slot="supporting-text">
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.set_thread_credentials_description"
+                )}
+              </span>
+              <ha-button
+                appearance="plain"
+                slot="end"
+                size="s"
+                @click=${this._setThread}
+              >
+                ${this.hass.localize(
+                  "ui.panel.config.matter.panel.set_thread_credentials_action"
+                )}
+              </ha-button>
+            </ha-row-item>
           </ha-card>
         </div>
       </hass-subpage>
@@ -211,7 +212,7 @@ class MatterOptionsPage extends LitElement {
     this._error = undefined;
     this._redirectOnNewMatterDevice();
     try {
-      await commissionMatterDevice(this.hass, code);
+      await commissionMatterDevice(this.hass, code, false);
     } catch (err: any) {
       this._error = err.message;
       this._stopRedirect();
@@ -312,21 +313,12 @@ class MatterOptionsPage extends LitElement {
       haStyle,
       css`
         .container {
-          padding: var(--ha-space-2) var(--ha-space-4) var(--ha-space-4);
+          padding: var(--ha-space-2) var(--ha-content-gutter) var(--ha-space-4);
         }
 
         ha-card {
-          max-width: 600px;
+          max-width: var(--ha-content-width-narrow);
           margin: auto;
-        }
-
-        ha-md-list {
-          background: none;
-          padding: 0;
-        }
-
-        ha-md-list-item {
-          --md-item-overflow: visible;
         }
       `,
     ];

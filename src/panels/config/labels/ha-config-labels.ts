@@ -15,17 +15,21 @@ import type { PropertyValues } from "lit";
 import { LitElement, html, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
+import { DataTableSettingsController } from "../../../common/controllers/data-table-settings-controller";
 import { storage } from "../../../common/decorators/storage";
+import type { HASSDomEvent } from "../../../common/dom/fire_event";
 import { navigate } from "../../../common/navigate";
 import type {
   FlattenObjectKeys,
   LocalizeFunc,
 } from "../../../common/translations/localize";
+import { hasRejectedItems } from "../../../common/util/promise-all-settled-results";
 import type {
   DataTableColumnContainer,
   RowClickedEvent,
-  SortingChangedEvent,
+  SelectionChangedEvent,
 } from "../../../components/data-table/ha-data-table";
+import "../../../components/chips/ha-assist-chip";
 import "../../../components/ha-dropdown";
 import type {
   HaDropdown,
@@ -52,12 +56,13 @@ import {
   showConfirmationDialog,
 } from "../../../dialogs/generic/show-dialog-box";
 import "../../../layouts/hass-tabs-subpage-data-table";
+import type { HaTabsSubpageDataTable } from "../../../layouts/hass-tabs-subpage-data-table";
 import type { HomeAssistant, Route, TranslationDict } from "../../../types";
 import {
   getCreatedAtTableColumn,
   getModifiedAtTableColumn,
 } from "../common/data-table-columns";
-import { configSections } from "../ha-panel-config";
+import { configSections } from "../config-sections";
 import { showLabelDetailDialog } from "./show-dialog-label-detail";
 
 type ConfigTranslationKey = FlattenObjectKeys<
@@ -108,21 +113,12 @@ export class HaConfigLabels extends LitElement {
 
   @state() private _labels: LabelRegistryEntry[] = [];
 
-  @state()
-  @storage({
-    storage: "sessionStorage",
-    key: "labels-table-search",
-    state: true,
-    subscribe: false,
-  })
-  private _filter = "";
+  @state() private _loading = true;
 
-  @storage({
-    key: "labels-table-sort",
-    state: false,
-    subscribe: false,
-  })
-  private _activeSorting?: SortingChangedEvent;
+  private _tableSettings = new DataTableSettingsController(this, {
+    search: "labels-table-search",
+    sorting: "labels-table-sort",
+  });
 
   @storage({
     key: "labels-table-column-order",
@@ -143,6 +139,11 @@ export class HaConfigLabels extends LitElement {
   private _overflowLabel!: LabelRegistryEntry;
 
   private _openingOverflow = false;
+
+  @state() private _selected: string[] = [];
+
+  @query("hass-tabs-subpage-data-table", true)
+  private _dataTable!: HaTabsSubpageDataTable;
 
   private _columns = memoizeOne((localize: LocalizeFunc, narrow: boolean) => {
     const columns: DataTableColumnContainer<LabelRegistryEntry> = {
@@ -174,9 +175,11 @@ export class HaConfigLabels extends LitElement {
           ? undefined
           : (label) => html`
               <div>${label.name}</div>
-              ${label.description
-                ? html`<div class="secondary">${label.description}</div>`
-                : nothing}
+              ${
+                label.description
+                  ? html`<div class="secondary">${label.description}</div>`
+                  : nothing
+              }
             `,
       },
       description: {
@@ -256,18 +259,23 @@ export class HaConfigLabels extends LitElement {
         .tabs=${configSections.areas}
         .columns=${this._columns(this.hass.localize, this.narrow)}
         .data=${this._data(this._labels)}
+        .loading=${this._loading}
         .noDataText=${this.hass.localize("ui.panel.config.labels.no_labels")}
         has-fab
-        .initialSorting=${this._activeSorting}
+        .initialSorting=${this._tableSettings.sorting}
         .columnOrder=${this._activeColumnOrder}
         .hiddenColumns=${this._activeHiddenColumns}
         @columns-changed=${this._handleColumnsChanged}
-        @sorting-changed=${this._handleSortingChanged}
-        .filter=${this._filter}
-        @search-changed=${this._handleSearchChange}
+        @sorting-changed=${this._tableSettings.sortingChanged}
+        .filter=${this._tableSettings.search}
+        @search-changed=${this._tableSettings.searchChanged}
+        sync-url
         @row-click=${this._editLabel}
         clickable
         id="label_id"
+        selectable
+        .selected=${this._selected.length}
+        @selection-changed=${this._handleSelectionChanged}
       >
         <ha-icon-button
           slot="toolbar-icon"
@@ -275,7 +283,13 @@ export class HaConfigLabels extends LitElement {
           .label=${this.hass.localize("ui.common.help")}
           .path=${mdiHelpCircleOutline}
         ></ha-icon-button>
-        <ha-button slot="fab" size="large" @click=${this._addLabel}>
+        <ha-assist-chip
+          slot="selection-bar"
+          .label=${this.hass.localize("ui.common.delete")}
+          .disabled=${!this._selected.length}
+          @click=${this._deleteSelected}
+        ></ha-assist-chip>
+        <ha-button slot="fab" size="l" @click=${this._addLabel}>
           <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
           ${this.hass.localize("ui.panel.config.labels.add_label")}
         </ha-button>
@@ -295,7 +309,7 @@ export class HaConfigLabels extends LitElement {
           `
         )}
         <wa-divider></wa-divider>
-        <ha-dropdown-item variant="danger" value="remove">
+        <ha-dropdown-item variant="danger" value="delete">
           <ha-svg-icon slot="icon" .path=${mdiDelete}></ha-svg-icon>
           ${this.hass.localize("ui.common.delete")}
         </ha-dropdown-item>
@@ -319,7 +333,11 @@ export class HaConfigLabels extends LitElement {
   }
 
   private async _fetchLabels() {
-    this._labels = await fetchLabelRegistry(this.hass.connection);
+    try {
+      this._labels = await fetchLabelRegistry(this.hass.connection);
+    } finally {
+      this._loading = false;
+    }
   }
 
   private _addLabel() {
@@ -333,14 +351,14 @@ export class HaConfigLabels extends LitElement {
       updateEntry: entry
         ? (values) => this._updateLabel(entry, values)
         : undefined,
-      removeEntry: entry ? () => this._removeLabel(entry) : undefined,
+      removeEntry: entry ? () => this._deleteLabel(entry) : undefined,
     });
   }
 
   private async _createLabel(
     values: LabelRegistryEntryMutableParams
   ): Promise<LabelRegistryEntry> {
-    const newTag = await createLabelRegistryEntry(this.hass, values);
+    const newTag = await createLabelRegistryEntry(this.hass.callWS, values);
     this._labels = [...this._labels, newTag];
     return newTag;
   }
@@ -350,7 +368,7 @@ export class HaConfigLabels extends LitElement {
     values: Partial<LabelRegistryEntryMutableParams>
   ): Promise<LabelRegistryEntry> {
     const updated = await updateLabelRegistryEntry(
-      this.hass,
+      this.hass.callWS,
       selectedLabel.label_id,
       values
     );
@@ -360,28 +378,28 @@ export class HaConfigLabels extends LitElement {
     return updated;
   }
 
-  private _handleRemoveLabelClick = () => {
-    this._removeLabel(this._overflowLabel);
+  private _handleDeleteLabelClick = () => {
+    this._deleteLabel(this._overflowLabel);
   };
 
-  private async _removeLabel(selectedLabel: LabelRegistryEntry) {
+  private async _deleteLabel(selectedLabel: LabelRegistryEntry) {
     if (
       !(await showConfirmationDialog(this, {
         title: this.hass!.localize(
-          "ui.panel.config.labels.confirm_remove_title"
+          "ui.panel.config.labels.confirm_delete_title"
         ),
-        text: this.hass.localize("ui.panel.config.labels.confirm_remove", {
+        text: this.hass.localize("ui.panel.config.labels.confirm_delete", {
           label: selectedLabel.name || selectedLabel.label_id,
         }),
         dismissText: this.hass!.localize("ui.common.cancel"),
-        confirmText: this.hass!.localize("ui.common.remove"),
+        confirmText: this.hass!.localize("ui.common.delete"),
         destructive: true,
       }))
     ) {
       return false;
     }
     try {
-      await deleteLabelRegistryEntry(this.hass, selectedLabel.label_id);
+      await deleteLabelRegistryEntry(this.hass.callWS, selectedLabel.label_id);
       this._labels = this._labels.filter(
         (label) => label.label_id !== selectedLabel.label_id
       );
@@ -390,6 +408,54 @@ export class HaConfigLabels extends LitElement {
       return false;
     }
   }
+
+  private _handleSelectionChanged = (
+    ev: HASSDomEvent<SelectionChangedEvent>
+  ): void => {
+    this._selected = ev.detail.value;
+  };
+
+  private _deleteSelected = () => {
+    let deleteFailed = false;
+    showConfirmationDialog(this, {
+      title: this.hass.localize(
+        "ui.panel.config.labels.confirm_delete_selected_title"
+      ),
+      text: this.hass.localize(
+        "ui.panel.config.labels.confirm_delete_selected",
+        { count: this._selected.length }
+      ),
+      confirmText: this.hass.localize("ui.common.delete"),
+      dismissText: this.hass.localize("ui.common.cancel"),
+      destructive: true,
+      action: async () => {
+        const results = await Promise.allSettled(
+          this._selected.map((labelId) =>
+            deleteLabelRegistryEntry(this.hass.callWS, labelId)
+          )
+        );
+        const deletedIds = new Set(
+          this._selected.filter(
+            (_id, index) => results[index].status === "fulfilled"
+          )
+        );
+        this._labels = this._labels.filter(
+          (label) => !deletedIds.has(label.label_id)
+        );
+        deleteFailed = hasRejectedItems(results);
+        this._dataTable.clearSelection();
+      },
+    }).then((confirmed) => {
+      if (confirmed && deleteFailed) {
+        showAlertDialog(this, {
+          title: this.hass.localize(
+            "ui.panel.config.labels.delete_failed_title"
+          ),
+          text: this.hass.localize("ui.panel.config.labels.delete_failed"),
+        });
+      }
+    });
+  };
 
   private _handleOverflowAction = (ev: HaDropdownSelectEvent) => {
     const action = ev.detail.item.value;
@@ -402,7 +468,7 @@ export class HaConfigLabels extends LitElement {
         this._navigateConfig("/config/entities");
         break;
       case "navigate-devices":
-        this._navigateConfig("/config/devices/dashboard");
+        this._navigateConfig("/config/devices/dashboard", "&status=disabled");
         break;
       case "navigate-automations":
         this._navigateConfig("/config/automation/dashboard");
@@ -413,23 +479,17 @@ export class HaConfigLabels extends LitElement {
       case "navigate-scripts":
         this._navigateConfig("/config/script/dashboard");
         break;
-      case "remove":
-        this._handleRemoveLabelClick();
+      case "delete":
+        this._handleDeleteLabelClick();
         break;
     }
   };
 
-  private _navigateConfig = (path: string) => {
-    navigate(`${path}?historyBack=1&label=${this._overflowLabel.label_id}`);
+  private _navigateConfig = (path: string, params = "") => {
+    navigate(
+      `${path}?historyBack=1&label=${this._overflowLabel.label_id}${params}`
+    );
   };
-
-  private _handleSortingChanged(ev: CustomEvent) {
-    this._activeSorting = ev.detail;
-  }
-
-  private _handleSearchChange(ev: CustomEvent) {
-    this._filter = ev.detail.value;
-  }
 
   private _handleColumnsChanged(ev: CustomEvent) {
     this._activeColumnOrder = ev.detail.columnOrder;

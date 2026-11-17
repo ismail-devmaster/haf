@@ -3,35 +3,22 @@ import type { CSSResultGroup } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { cache } from "lit/directives/cache";
-import { classMap } from "lit/directives/class-map";
+import { storage } from "../../../../common/decorators/storage";
 import { fireEvent } from "../../../../common/dom/fire_event";
-import "../../../../components/ha-button";
+import "../../../../components/ha-dialog";
 import "../../../../components/ha-dialog-header";
-import "../../../../components/ha-dialog-footer";
+import "../../../../components/ha-paste-bar";
 import "../../../../components/ha-tab-group";
 import "../../../../components/ha-tab-group-tab";
-import "../../../../components/ha-dialog";
-import type { LovelaceViewConfig } from "../../../../data/lovelace/config/view";
+import type { LovelaceBadgeConfig } from "../../../../data/lovelace/config/badge";
 import type { HassDialog } from "../../../../dialogs/make-dialog-manager";
 import { haStyleDialog } from "../../../../resources/styles";
 import type { HomeAssistant } from "../../../../types";
-import { computeBadges } from "../../common/generate-lovelace-config";
-import "../card-editor/hui-entity-picker-table";
-import { findLovelaceContainer } from "../lovelace-path";
+import { appendAtPath, getAtPath, getParentPath } from "../lovelace-path";
 import "./hui-badge-picker";
+import "./hui-badge-suggestion-picker";
 import type { CreateBadgeDialogParams } from "./show-create-badge-dialog";
 import { showEditBadgeDialog } from "./show-edit-badge-dialog";
-import { showSuggestBadgeDialog } from "./show-suggest-badge-dialog";
-
-declare global {
-  interface HASSDomEvents {
-    "selected-changed": SelectedChangedEvent;
-  }
-}
-
-interface SelectedChangedEvent {
-  selectedEntities: string[];
-}
 
 @customElement("hui-dialog-create-badge")
 export class HuiCreateDialogBadge
@@ -44,19 +31,33 @@ export class HuiCreateDialogBadge
 
   @state() private _open = false;
 
-  @state() private _containerConfig!: LovelaceViewConfig;
+  @state() private _containerConfig!: { title?: string };
 
-  @state() private _selectedEntities: string[] = [];
+  @state() private _currTab: "badge" | "entity" = "entity";
 
-  @state() private _currTab: "badge" | "entity" = "badge";
+  @state() private _narrow = false;
+
+  @state()
+  @storage({
+    key: "dashboardBadgeClipboard",
+    state: true,
+    subscribe: true,
+    storage: "sessionStorage",
+  })
+  private _clipboard?: LovelaceBadgeConfig;
 
   public async showDialog(params: CreateBadgeDialogParams): Promise<void> {
     this._params = params;
 
-    const containerConfig = findLovelaceContainer(
+    this._narrow = matchMedia(
+      "all and (max-width: 450px), all and (max-height: 500px)"
+    ).matches;
+
+    const containerPath = getParentPath(params.path);
+    const containerConfig = getAtPath<{ title?: string }>(
       params.lovelaceConfig,
-      params.path
-    );
+      containerPath
+    )!;
 
     if ("strategy" in containerConfig) {
       throw new Error("Can't edit strategy");
@@ -74,8 +75,7 @@ export class HuiCreateDialogBadge
   private _dialogClosed(): void {
     this._open = false;
     this._params = undefined;
-    this._currTab = "badge";
-    this._selectedEntities = [];
+    this._currTab = "entity";
     fireEvent(this, "dialog-closed", { dialog: this.localName });
   }
 
@@ -98,7 +98,6 @@ export class HuiCreateDialogBadge
         width="large"
         @keydown=${this._ignoreKeydown}
         @closed=${this._dialogClosed}
-        class=${classMap({ table: this._currTab === "entity" })}
       >
         <ha-dialog-header show-border slot="header">
           <ha-icon-button
@@ -111,6 +110,15 @@ export class HuiCreateDialogBadge
           <ha-tab-group @wa-tab-show=${this._handleTabChanged}>
             <ha-tab-group-tab
               slot="nav"
+              .active=${this._currTab === "entity"}
+              panel="entity"
+              ?autofocus=${this._narrow}
+              >${this.hass!.localize(
+                "ui.panel.lovelace.editor.badge_picker.by_entity"
+              )}</ha-tab-group-tab
+            >
+            <ha-tab-group-tab
+              slot="nav"
               .active=${this._currTab === "badge"}
               panel="badge"
             >
@@ -118,54 +126,50 @@ export class HuiCreateDialogBadge
                 "ui.panel.lovelace.editor.badge_picker.by_badge"
               )}
             </ha-tab-group-tab>
-            <ha-tab-group-tab
-              slot="nav"
-              .active=${this._currTab === "entity"}
-              panel="entity"
-              >${this.hass!.localize(
-                "ui.panel.lovelace.editor.badge_picker.by_entity"
-              )}</ha-tab-group-tab
-            >
           </ha-tab-group>
         </ha-dialog-header>
-        ${cache(
-          this._currTab === "badge"
-            ? html`
-                <hui-badge-picker
-                  autofocus
-                  .suggestedBadges=${this._params.suggestedBadges}
-                  .lovelace=${this._params.lovelaceConfig}
-                  .hass=${this.hass}
-                  @config-changed=${this._handleBadgePicked}
-                ></hui-badge-picker>
-              `
-            : html`
-                <hui-entity-picker-table
-                  .hass=${this.hass}
-                  .narrow=${true}
-                  @selected-changed=${this._handleSelectedChanged}
-                ></hui-entity-picker-table>
-              `
-        )}
-
-        <ha-dialog-footer slot="footer">
-          <ha-button
-            slot="secondaryAction"
-            appearance="plain"
-            @click=${this._cancel}
-          >
-            ${this.hass!.localize("ui.common.cancel")}
-          </ha-button>
-          ${this._selectedEntities.length
-            ? html`
-                <ha-button slot="primaryAction" @click=${this._suggestBadges}>
-                  ${this.hass!.localize("ui.common.continue")}
-                </ha-button>
-              `
-            : ""}
-        </ha-dialog-footer>
+        <div class="body">
+          ${cache(
+            this._currTab === "entity"
+              ? html`
+                  <hui-badge-suggestion-picker
+                    ?autofocus=${!this._narrow}
+                    .hass=${this.hass}
+                    .prioritizedBadgeTypes=${this._params.suggestedBadges}
+                    @badge-suggestion-picked=${this._handleSuggestionPicked}
+                    @browse-badges=${this._handleBrowseBadges}
+                  >
+                    ${this._renderPasteBar()}
+                  </hui-badge-suggestion-picker>
+                `
+              : html`
+                  <hui-badge-picker
+                    ?autofocus=${!this._narrow}
+                    .suggestedBadges=${this._params.suggestedBadges}
+                    .lovelace=${this._params.lovelaceConfig}
+                    .hass=${this.hass}
+                    @config-changed=${this._handleBadgePicked}
+                  >
+                    ${this._renderPasteBar()}
+                  </hui-badge-picker>
+                `
+          )}
+        </div>
       </ha-dialog>
     `;
+  }
+
+  private _renderPasteBar() {
+    if (!this._clipboard) {
+      return nothing;
+    }
+
+    return html`<ha-paste-bar
+      .label=${this.hass.localize(
+        "ui.panel.lovelace.editor.badge_picker.paste_badge"
+      )}
+      @paste-element=${this._paste}
+    ></ha-paste-bar>`;
   }
 
   private _ignoreKeydown(ev: KeyboardEvent) {
@@ -176,17 +180,50 @@ export class HuiCreateDialogBadge
     return [
       haStyleDialog,
       css`
+        :host {
+          --dialog-safe-area-inset-bottom: var(--safe-area-inset-bottom, 0px);
+        }
+
         ha-dialog {
           --dialog-content-padding: 0;
           --dialog-z-index: 6;
         }
 
-        ha-dialog.table {
-          --dialog-content-padding: 0;
+        @media (min-width: 451px) and (min-height: 501px) {
+          ha-dialog {
+            --ha-dialog-min-height: min(900px, 80vh);
+            --ha-dialog-max-height: var(--ha-dialog-min-height);
+          }
         }
 
         ha-dialog::part(body) {
           overflow: hidden;
+        }
+        @media all and (max-width: 450px), all and (max-height: 500px) {
+          ha-dialog {
+            --safe-area-inset-bottom: 0px;
+          }
+          ha-paste-bar {
+            padding-bottom: max(
+              var(--dialog-safe-area-inset-bottom),
+              var(--ha-space-3)
+            );
+          }
+          hui-badge-picker:not(:has(> ha-paste-bar)) {
+            --ha-badge-picker-content-padding-bottom: var(
+              --dialog-safe-area-inset-bottom
+            );
+          }
+          hui-badge-suggestion-picker {
+            --ha-suggestion-picker-main-padding-bottom: var(
+              --dialog-safe-area-inset-bottom
+            );
+          }
+          hui-badge-suggestion-picker:not(:has(> ha-paste-bar)) {
+            --ha-suggestion-picker-tree-padding-bottom: var(
+              --dialog-safe-area-inset-bottom
+            );
+          }
         }
 
         ha-tab-group-tab {
@@ -196,32 +233,39 @@ export class HuiCreateDialogBadge
           width: 100%;
           justify-content: center;
         }
+        .body {
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          min-height: 0;
+        }
+        hui-badge-picker,
+        hui-badge-suggestion-picker {
+          flex: 1;
+          min-height: 0;
+        }
         hui-badge-picker {
           --badge-picker-search-shape: 0;
           --badge-picker-search-margin: 0;
-          display: flex;
-          flex-direction: column;
-          min-height: 0;
-        }
-
-        hui-badge-picker,
-        hui-entity-picker-table {
-          height: calc(100vh - 198px);
-        }
-
-        hui-entity-picker-table {
-          display: block;
-          --mdc-shape-small: 0;
-        }
-
-        @media all and (max-width: 450px), all and (max-height: 500px) {
-          hui-badge-picker,
-          hui-entity-picker-table {
-            height: calc(100vh - 158px);
-          }
         }
       `,
     ];
+  }
+
+  private _handleBrowseBadges(): void {
+    this._currTab = "badge";
+  }
+
+  private async _handleSuggestionPicked(
+    ev: CustomEvent<{ config: LovelaceBadgeConfig }>
+  ): Promise<void> {
+    const config = ev.detail.config;
+    const lovelaceConfig = this._params!.lovelaceConfig;
+    const badgesPath = this._params!.path;
+    const saveConfig = this._params!.saveConfig;
+    const newConfig = appendAtPath(lovelaceConfig, badgesPath, config);
+    await saveConfig(newConfig);
+    this.closeDialog();
   }
 
   private _handleBadgePicked(ev) {
@@ -234,11 +278,29 @@ export class HuiCreateDialogBadge
       }
     }
 
+    this._editNewBadge(config);
+  }
+
+  private _paste() {
+    this._editNewBadge(this._clipboard!);
+  }
+
+  private _editNewBadge(config: LovelaceBadgeConfig) {
+    const lovelaceConfig = this._params!.lovelaceConfig;
+    const badgesPath = this._params!.path;
+    const saveConfig = this._params!.saveConfig;
     showEditBadgeDialog(this, {
-      lovelaceConfig: this._params!.lovelaceConfig,
-      saveConfig: this._params!.saveConfig,
-      path: this._params!.path,
+      lovelaceConfig,
+      saveBadgeConfig: async (newBadgeConfig) => {
+        const newConfig = appendAtPath(
+          lovelaceConfig,
+          badgesPath,
+          newBadgeConfig
+        );
+        await saveConfig(newConfig);
+      },
       badgeConfig: config,
+      isNew: true,
     });
 
     this.closeDialog();
@@ -249,33 +311,13 @@ export class HuiCreateDialogBadge
     if (newTab === this._currTab) {
       return;
     }
-
     this._currTab = newTab;
-    this._selectedEntities = [];
-  }
-
-  private _handleSelectedChanged(ev: CustomEvent): void {
-    this._selectedEntities = ev.detail.selectedEntities;
   }
 
   private _cancel(ev?: Event) {
     if (ev) {
       ev.stopPropagation();
     }
-    this.closeDialog();
-  }
-
-  private _suggestBadges(): void {
-    const badgeConfig = computeBadges(this.hass.states, this._selectedEntities);
-
-    showSuggestBadgeDialog(this, {
-      lovelaceConfig: this._params!.lovelaceConfig,
-      saveConfig: this._params!.saveConfig,
-      path: this._params!.path as [number],
-      entities: this._selectedEntities,
-      badgeConfig,
-    });
-
     this.closeDialog();
   }
 }

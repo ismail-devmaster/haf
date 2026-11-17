@@ -2,16 +2,11 @@ import type { CSSResultGroup } from "lit";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
 import { fireEvent } from "../../../../common/dom/fire_event";
-import { computeAreaName } from "../../../../common/entity/compute_area_name";
-import { computeDeviceName } from "../../../../common/entity/compute_device_name";
 import {
-  computeEntityEntryName,
-  computeEntityName,
-} from "../../../../common/entity/compute_entity_name";
-import {
-  getEntityContext,
-  getEntityEntryContext,
-} from "../../../../common/entity/context/get_entity_context";
+  computeEntityEntryNameParts,
+  computeEntityNameParts,
+  type EntityNameType,
+} from "../../../../common/entity/compute_entity_name_display";
 import { computeRTL } from "../../../../common/util/compute_rtl";
 import "../../../../components/ha-button";
 import "../../../../components/ha-dialog-footer";
@@ -27,13 +22,25 @@ import {
   updateEntityRegistryEntry,
 } from "../../../../data/entity/entity_registry";
 import type { HassDialog } from "../../../../dialogs/make-dialog-manager";
+import { DirtyStateProviderMixin } from "../../../../mixins/dirty-state-provider-mixin";
 import { haStyleDialog } from "../../../../resources/styles";
 import type { HomeAssistant } from "../../../../types";
 import type { VacuumSegmentMappingDialogParams } from "./show-dialog-vacuum-segment-mapping";
 
+const BREADCRUMB_NAME: EntityNameType[] = [
+  "area",
+  "parent_device",
+  "device",
+  "entity",
+];
+
+interface VacuumSegmentMappingState {
+  areaMapping: Record<string, string[]>;
+}
+
 @customElement("dialog-vacuum-segment-mapping")
 export class DialogVacuumSegmentMapping
-  extends LitElement
+  extends DirtyStateProviderMixin<VacuumSegmentMappingState>()(LitElement)
   implements HassDialog<VacuumSegmentMappingDialogParams>
 {
   @property({ attribute: false }) public hass!: HomeAssistant;
@@ -70,13 +77,20 @@ export class DialogVacuumSegmentMapping
     if (!this._params) return;
 
     const entityId = this._params.entityId;
-    this._entry = await getExtendedEntityRegistryEntry(this.hass, entityId);
+    this._entry = await getExtendedEntityRegistryEntry(
+      this.hass.callWS,
+      entityId
+    );
 
     if (this._entry?.options?.vacuum) {
       this._areaMapping = this._entry.options.vacuum.area_mapping || {};
     } else {
       this._areaMapping = {};
     }
+    this._initDirtyTracking(
+      { type: "deep" },
+      { areaMapping: this._areaMapping }
+    );
   }
 
   private _dialogClosed(): void {
@@ -86,6 +100,7 @@ export class DialogVacuumSegmentMapping
 
   private _valueChanged(ev: CustomEvent) {
     this._areaMapping = ev.detail.value;
+    this._updateDirtyState({ areaMapping: ev.detail.value });
   }
 
   private async _save() {
@@ -102,11 +117,12 @@ export class DialogVacuumSegmentMapping
         last_seen_segments: mapper.lastSeenSegments,
       };
 
-      await updateEntityRegistryEntry(this.hass, this._params.entityId, {
+      await updateEntityRegistryEntry(this.hass.callWS, this._params.entityId, {
         options_domain: "vacuum",
         options: options,
       });
 
+      this._markDirtyStateClean();
       this.closeDialog();
     } catch (_err: any) {
       // Error will be shown by the system
@@ -122,43 +138,22 @@ export class DialogVacuumSegmentMapping
 
     const stateObj = this.hass.states[this._params.entityId];
 
-    const context = stateObj
-      ? getEntityContext(
-          stateObj,
-          this.hass.entities,
-          this.hass.devices,
-          this.hass.areas,
-          this.hass.floors
-        )
+    const nameParts = stateObj
+      ? computeEntityNameParts(stateObj, this.hass)
       : this._entry
-        ? getEntityEntryContext(
-            this._entry,
-            this.hass.entities,
-            this.hass.devices,
-            this.hass.areas,
-            this.hass.floors
-          )
+        ? computeEntityEntryNameParts(this._entry, this.hass)
         : undefined;
-
-    const entityName = stateObj
-      ? computeEntityName(stateObj, this.hass.entities, this.hass.devices)
-      : this._entry
-        ? computeEntityEntryName(this._entry, this.hass.devices)
-        : this._params.entityId;
-
-    const deviceName = context?.device
-      ? computeDeviceName(context.device)
-      : undefined;
-    const areaName = context?.area ? computeAreaName(context.area) : undefined;
-
-    const breadcrumb = [areaName, deviceName, entityName].filter(
-      (v): v is string => Boolean(v)
-    );
+    const breadcrumb = (
+      nameParts
+        ? BREADCRUMB_NAME.map((type) => nameParts[type])
+        : [this._params.entityId]
+    ).filter((v): v is string => Boolean(v));
 
     return html`
       <ha-dialog
         .open=${this._open}
         @closed=${this._dialogClosed}
+        .preventScrimClose=${this.isDirtyState}
         .headerTitle=${this.hass.localize(
           "ui.dialogs.vacuum_segment_mapping.title"
         )}
@@ -172,7 +167,6 @@ export class DialogVacuumSegmentMapping
         )}
       >
         <ha-vacuum-segment-area-mapper
-          .hass=${this.hass}
           entity-id=${this._params.entityId}
           .value=${this._areaMapping}
           @value-changed=${this._valueChanged}

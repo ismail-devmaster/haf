@@ -22,8 +22,6 @@ class HaConfigBlueprint extends HassRouterPage {
 
   @property({ attribute: "is-wide", type: Boolean }) public isWide = false;
 
-  @property({ attribute: false }) public showAdvanced = false;
-
   @property({ attribute: false })
   public blueprints: Record<string, Blueprints> = {};
 
@@ -42,8 +40,8 @@ class HaConfigBlueprint extends HassRouterPage {
 
   private async _getBlueprints() {
     const [automation, script] = await Promise.all([
-      fetchBlueprints(this.hass, "automation"),
-      fetchBlueprints(this.hass, "script"),
+      fetchBlueprints(this.hass.callWS, "automation"),
+      fetchBlueprints(this.hass.callWS, "script"),
     ]);
     this.blueprints = { automation, script };
   }
@@ -61,7 +59,6 @@ class HaConfigBlueprint extends HassRouterPage {
     pageEl.narrow = this.narrow;
     pageEl.isWide = this.isWide;
     pageEl.route = this.routeTail;
-    pageEl.showAdvanced = this.showAdvanced;
     pageEl.blueprints = this.blueprints;
 
     if (

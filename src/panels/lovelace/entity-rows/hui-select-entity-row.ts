@@ -56,13 +56,12 @@ class HuiSelectEntityRow extends LitElement implements LovelaceRow {
     }
 
     const stateObj = this.hass.states[this._config.entity] as
-      | SelectEntity
-      | undefined;
+      SelectEntity | undefined;
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this._config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this.hass.localize, this.hass.config)}
         </hui-warning>
       `;
     }
@@ -117,7 +116,7 @@ class HuiSelectEntityRow extends LitElement implements LovelaceRow {
 
     this._selectedEntityRow = option;
 
-    setSelectOption(this.hass!, stateObj.entity_id, option)
+    setSelectOption(this.hass!.callService, stateObj.entity_id, option)
       .catch((_err) => {
         // silently swallow exception
       })

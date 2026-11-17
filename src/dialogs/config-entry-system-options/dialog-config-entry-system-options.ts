@@ -2,21 +2,29 @@ import type { CSSResultGroup } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { fireEvent } from "../../common/dom/fire_event";
+import type { HASSDomTargetEvent } from "../../common/dom/fire_event";
 import "../../components/ha-dialog";
 import "../../components/ha-dialog-footer";
-import "../../components/ha-formfield";
 import "../../components/ha-switch";
 import "../../components/ha-button";
 import type { HaSwitch } from "../../components/ha-switch";
 import type { ConfigEntryMutableParams } from "../../data/config_entries";
 import { updateConfigEntry } from "../../data/config_entries";
+import { DirtyStateProviderMixin } from "../../mixins/dirty-state-provider-mixin";
 import { haStyleDialog } from "../../resources/styles";
 import type { HomeAssistant } from "../../types";
 import { showAlertDialog } from "../generic/show-dialog-box";
 import type { ConfigEntrySystemOptionsDialogParams } from "./show-dialog-config-entry-system-options";
 
+interface SystemOptionsState {
+  disableNewEntities: boolean;
+  disablePolling: boolean;
+}
+
 @customElement("dialog-config-entry-system-options")
-class DialogConfigEntrySystemOptions extends LitElement {
+class DialogConfigEntrySystemOptions extends DirtyStateProviderMixin<SystemOptionsState>()(
+  LitElement
+) {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
   @state() private _disableNewEntities!: boolean;
@@ -38,6 +46,13 @@ class DialogConfigEntrySystemOptions extends LitElement {
     this._error = undefined;
     this._disableNewEntities = params.entry.pref_disable_new_entities;
     this._disablePolling = params.entry.pref_disable_polling;
+    this._initDirtyTracking(
+      { type: "shallow" },
+      {
+        disableNewEntities: this._disableNewEntities,
+        disablePolling: this._disablePolling,
+      }
+    );
     this._open = true;
   }
 
@@ -68,60 +83,54 @@ class DialogConfigEntrySystemOptions extends LitElement {
               ) || this._params.entry.domain,
           }
         )}
-        prevent-scrim-close
+        .preventScrimClose=${this.isDirtyState}
         @closed=${this._dialogClosed}
       >
         ${this._error ? html` <div class="error">${this._error}</div> ` : ""}
-        <ha-formfield
-          .label=${html`<p>
-              ${this.hass.localize(
-                "ui.dialogs.config_entry_system_options.enable_new_entities_label"
-              )}
-            </p>
-            <p class="secondary">
-              ${this.hass.localize(
-                "ui.dialogs.config_entry_system_options.enable_new_entities_description",
-                {
-                  integration:
-                    this.hass.localize(
-                      `component.${this._params.entry.domain}.title`
-                    ) || this._params.entry.domain,
-                }
-              )}
-            </p>`}
+        <ha-switch
+          autofocus
+          .checked=${!this._disableNewEntities}
+          @change=${this._disableNewEntitiesChanged}
+          .disabled=${this._submitting}
+          ><p>
+            ${this.hass.localize(
+              "ui.dialogs.config_entry_system_options.enable_new_entities_label"
+            )}
+          </p>
+          <p class="secondary">
+            ${this.hass.localize(
+              "ui.dialogs.config_entry_system_options.enable_new_entities_description",
+              {
+                integration:
+                  this.hass.localize(
+                    `component.${this._params.entry.domain}.title`
+                  ) || this._params.entry.domain,
+              }
+            )}
+          </p></ha-switch
         >
-          <ha-switch
-            autofocus
-            .checked=${!this._disableNewEntities}
-            @change=${this._disableNewEntitiesChanged}
-            .disabled=${this._submitting}
-          ></ha-switch>
-        </ha-formfield>
 
-        <ha-formfield
-          .label=${html`<p>
-              ${this.hass.localize(
-                "ui.dialogs.config_entry_system_options.enable_polling_label"
-              )}
-            </p>
-            <p class="secondary">
-              ${this.hass.localize(
-                "ui.dialogs.config_entry_system_options.enable_polling_description",
-                {
-                  integration:
-                    this.hass.localize(
-                      `component.${this._params.entry.domain}.title`
-                    ) || this._params.entry.domain,
-                }
-              )}
-            </p>`}
+        <ha-switch
+          .checked=${!this._disablePolling}
+          @change=${this._disablePollingChanged}
+          .disabled=${this._submitting}
+          ><p>
+            ${this.hass.localize(
+              "ui.dialogs.config_entry_system_options.enable_polling_label"
+            )}
+          </p>
+          <p class="secondary">
+            ${this.hass.localize(
+              "ui.dialogs.config_entry_system_options.enable_polling_description",
+              {
+                integration:
+                  this.hass.localize(
+                    `component.${this._params.entry.domain}.title`
+                  ) || this._params.entry.domain,
+              }
+            )}
+          </p></ha-switch
         >
-          <ha-switch
-            .checked=${!this._disablePolling}
-            @change=${this._disablePollingChanged}
-            .disabled=${this._submitting}
-          ></ha-switch>
-        </ha-formfield>
 
         <ha-dialog-footer slot="footer">
           <ha-button
@@ -135,7 +144,7 @@ class DialogConfigEntrySystemOptions extends LitElement {
           <ha-button
             slot="primaryAction"
             @click=${this._updateEntry}
-            .disabled=${this._submitting}
+            .disabled=${this._submitting || !this.isDirtyState}
           >
             ${this.hass.localize(
               "ui.dialogs.config_entry_system_options.update"
@@ -146,14 +155,22 @@ class DialogConfigEntrySystemOptions extends LitElement {
     `;
   }
 
-  private _disableNewEntitiesChanged(ev: Event): void {
+  private _disableNewEntitiesChanged(ev: HASSDomTargetEvent<HaSwitch>): void {
     this._error = undefined;
-    this._disableNewEntities = !(ev.target as HaSwitch).checked;
+    this._disableNewEntities = !ev.target.checked;
+    this._updateDirtyState({
+      disableNewEntities: this._disableNewEntities,
+      disablePolling: this._disablePolling,
+    });
   }
 
-  private _disablePollingChanged(ev: Event): void {
+  private _disablePollingChanged(ev: HASSDomTargetEvent<HaSwitch>): void {
     this._error = undefined;
-    this._disablePolling = !(ev.target as HaSwitch).checked;
+    this._disablePolling = !ev.target.checked;
+    this._updateDirtyState({
+      disableNewEntities: this._disableNewEntities,
+      disablePolling: this._disablePolling,
+    });
   }
 
   private async _updateEntry(): Promise<void> {
@@ -189,6 +206,12 @@ class DialogConfigEntrySystemOptions extends LitElement {
       css`
         .error {
           color: var(--error-color);
+        }
+        ha-switch {
+          display: flex;
+        }
+        .secondary {
+          color: var(--secondary-text-color);
         }
       `,
     ];

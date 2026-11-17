@@ -13,9 +13,11 @@ import type { HaFormSchema } from "../../../components/ha-form/types";
 import type { HomeFrontendSystemData } from "../../../data/frontend";
 import type { ShortcutItem } from "../../../data/home_shortcuts";
 import type { HassDialog } from "../../../dialogs/make-dialog-manager";
+import { DirtyStateProviderMixin } from "../../../mixins/dirty-state-provider-mixin";
 import { haStyleDialog } from "../../../resources/styles";
 import type { HomeAssistant, ValueChangedEvent } from "../../../types";
-import "../components/home-favorites-editor";
+import "../../../components/entity/ha-favorites-editor";
+import { computeFavoriteCardsSize } from "../../lovelace/strategies/helpers/favorite-cards";
 import "../components/home-shortcuts-editor";
 import type { EditHomeDialogParams } from "./show-dialog-edit-home";
 
@@ -26,9 +28,9 @@ interface EditorState {
   shortcuts: ShortcutItem[];
 }
 
-// The common-controls strategy caps the section at 8 (or the favorites count,
-// whichever is larger); once favorites reach the cap, predictions never render
-// so the suggested-entities toggle has no effect.
+// The common-controls strategy caps the section at 8 slots (or the slots the
+// favorites use, whichever is larger); once favorites reach the cap,
+// predictions never render so the suggested-entities toggle has no effect.
 const SUGGESTED_ENTITIES_CAP = 8;
 
 const WELCOME_SCHEMA: HaFormSchema[] = [
@@ -37,7 +39,7 @@ const WELCOME_SCHEMA: HaFormSchema[] = [
 
 @customElement("dialog-edit-home")
 export class DialogEditHome
-  extends LitElement
+  extends DirtyStateProviderMixin<EditorState>()(LitElement)
   implements HassDialog<EditHomeDialogParams>
 {
   @property({ attribute: false }) public hass!: HomeAssistant;
@@ -60,6 +62,7 @@ export class DialogEditHome
       show_welcome_message: !params.config.hide_welcome_message,
       shortcuts: params.config.shortcuts ? [...params.config.shortcuts] : [],
     };
+    this._initDirtyTracking({ type: "shallow" }, this._state);
     this._open = true;
   }
 
@@ -87,7 +90,7 @@ export class DialogEditHome
         .headerSubtitle=${this.hass.localize(
           "ui.panel.home.editor.description"
         )}
-        prevent-scrim-close
+        .preventScrimClose=${this.isDirtyState}
         @closed=${this._dialogClosed}
       >
         <ha-alert alert-type="info">
@@ -121,14 +124,16 @@ export class DialogEditHome
               @value-changed=${this._welcomeChanged}
             ></ha-form>
 
-            <home-favorites-editor
-              .hass=${this.hass}
+            <ha-favorites-editor
               .favorites=${this._state.favorite_entities}
               .label=${this.hass.localize(
                 "ui.panel.lovelace.editor.strategy.home.favorite_entities"
               )}
+              .addButtonLabel=${this.hass.localize(
+                "ui.panel.lovelace.editor.strategy.home.add_favorite_entity"
+              )}
               @value-changed=${this._favoriteEntitiesChanged}
-            ></home-favorites-editor>
+            ></ha-favorites-editor>
 
             <ha-form
               .hass=${this.hass}
@@ -136,7 +141,8 @@ export class DialogEditHome
                 show_suggested_entities: this._state.show_suggested_entities,
               }}
               .schema=${this._suggestedSchema(
-                this._state.favorite_entities.length >= SUGGESTED_ENTITIES_CAP
+                computeFavoriteCardsSize(this._state.favorite_entities) >=
+                  SUGGESTED_ENTITIES_CAP
               )}
               .computeLabel=${this._computeSuggestedLabel}
               .computeHelper=${this._computeSuggestedHelper}
@@ -178,7 +184,7 @@ export class DialogEditHome
           <ha-button
             slot="primaryAction"
             @click=${this._save}
-            .disabled=${this._submitting}
+            .disabled=${this._submitting || !this.isDirtyState}
           >
             ${this.hass.localize("ui.common.save")}
           </ha-button>
@@ -209,7 +215,8 @@ export class DialogEditHome
 
   private _computeSuggestedHelper = (): string => {
     const favoritesFull =
-      (this._state?.favorite_entities.length ?? 0) >= SUGGESTED_ENTITIES_CAP;
+      computeFavoriteCardsSize(this._state?.favorite_entities ?? []) >=
+      SUGGESTED_ENTITIES_CAP;
     return this.hass.localize(
       favoritesFull
         ? "ui.panel.home.editor.suggested_entities_disabled_description"
@@ -222,6 +229,7 @@ export class DialogEditHome
       ...this._state!,
       favorite_entities: ev.detail.value,
     };
+    this._updateDirtyState(this._state);
   }
 
   private _welcomeChanged(
@@ -231,6 +239,7 @@ export class DialogEditHome
       ...this._state!,
       show_welcome_message: ev.detail.value.show_welcome_message,
     };
+    this._updateDirtyState(this._state);
   }
 
   private _suggestedChanged(
@@ -240,6 +249,7 @@ export class DialogEditHome
       ...this._state!,
       show_suggested_entities: ev.detail.value.show_suggested_entities,
     };
+    this._updateDirtyState(this._state);
   }
 
   private _shortcutsChanged(ev: ValueChangedEvent<ShortcutItem[]>): void {
@@ -247,6 +257,7 @@ export class DialogEditHome
       ...this._state!,
       shortcuts: ev.detail.value,
     };
+    this._updateDirtyState(this._state);
   }
 
   private async _save(): Promise<void> {
@@ -270,6 +281,7 @@ export class DialogEditHome
 
     try {
       await this._params.saveConfig(config);
+      this._markDirtyStateClean();
       this.closeDialog();
     } finally {
       this._submitting = false;
@@ -302,7 +314,7 @@ export class DialogEditHome
         display: block;
       }
 
-      home-favorites-editor {
+      ha-favorites-editor {
         display: block;
         margin-top: var(--ha-space-2);
         margin-bottom: var(--ha-space-4);

@@ -14,12 +14,13 @@ import {
   listAssistPipelines,
 } from "../../data/assist_pipeline";
 import type { AssistSatelliteConfiguration } from "../../data/assist_satellite";
+import type { CloudStatus } from "../../data/cloud";
 import { fetchCloudStatus } from "../../data/cloud";
 import type { LanguageScore, LanguageScores } from "../../data/conversation";
 import { getLanguageScores, listAgents } from "../../data/conversation";
 import { listSTTEngines } from "../../data/stt";
 import { listTTSEngines, listTTSVoices } from "../../data/tts";
-import type { HomeAssistant } from "../../types";
+import type { HomeAssistant, ValueChangedEvent } from "../../types";
 import { documentationUrl } from "../../util/documentation-url";
 import { AssistantSetupStyles } from "./styles";
 import { STEP } from "./voice-assistant-setup-dialog";
@@ -75,10 +76,7 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
           this._languageScores[lang] || EMPTY_SCORE,
           this.hass.localize
         ).supportedOptions[0]?.value as
-          | "cloud"
-          | "focused_local"
-          | "full_local"
-          | undefined;
+          "cloud" | "focused_local" | "full_local" | undefined;
       }
     }
   }
@@ -132,7 +130,6 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
           { language }
         )}
         <ha-language-picker
-          .hass=${this.hass}
           .label=${this.hass.localize(
             "ui.panel.config.voice_assistants.satellite_wizard.pipeline.unsupported_language.language_picker"
           )}
@@ -185,11 +182,13 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
               "ui.panel.config.voice_assistants.satellite_wizard.pipeline.performance.header"
             )}</span
           ><span
-            >${!performance
-              ? ""
-              : this.hass.localize(
-                  `ui.panel.config.voice_assistants.satellite_wizard.pipeline.performance.${performance}`
-                )}</span
+            >${
+              !performance
+                ? ""
+                : this.hass.localize(
+                    `ui.panel.config.voice_assistants.satellite_wizard.pipeline.performance.${performance}`
+                  )
+            }</span
           >
         </div>
         <div class="perf-bar ${performance}">
@@ -203,11 +202,13 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
               "ui.panel.config.voice_assistants.satellite_wizard.pipeline.commands.header"
             )}</span
           ><span
-            >${!commands
-              ? ""
-              : this.hass.localize(
-                  `ui.panel.config.voice_assistants.satellite_wizard.pipeline.commands.${commands}`
-                )}</span
+            >${
+              !commands
+                ? ""
+                : this.hass.localize(
+                    `ui.panel.config.voice_assistants.satellite_wizard.pipeline.commands.${commands}`
+                  )
+            }</span
           >
         </div>
         <div class="perf-bar ${commands}">
@@ -221,18 +222,20 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
           .value=${this._value}
           @value-changed=${this._valueChanged}
         ></ha-select-box>
-        ${options.unsupportedOptions.length
-          ? html`<h3>
-                ${this.hass.localize(
-                  "ui.panel.config.voice_assistants.satellite_wizard.pipeline.unsupported"
-                )}
-              </h3>
-              <ha-select-box
-                max_columns="1"
-                .options=${options.unsupportedOptions}
-                disabled
-              ></ha-select-box>`
-          : nothing}
+        ${
+          options.unsupportedOptions.length
+            ? html`<h3>
+                  ${this.hass.localize(
+                    "ui.panel.config.voice_assistants.satellite_wizard.pipeline.unsupported"
+                  )}
+                </h3>
+                <ha-select-box
+                  max_columns="1"
+                  .options=${options.unsupportedOptions}
+                  disabled
+                ></ha-select-box>`
+            : nothing
+        }
       </div>
       <div class="footer">
         <ha-button @click=${this._createPipeline} .disabled=${!this._value}
@@ -254,7 +257,14 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
     if (!isComponentLoaded(this.hass.config, "cloud")) {
       return false;
     }
-    const cloudStatus = await fetchCloudStatus(this.hass);
+    // Fall back to a local pipeline when the cloud status can't be fetched,
+    // instead of leaving the step blank.
+    let cloudStatus: CloudStatus;
+    try {
+      cloudStatus = await fetchCloudStatus(this.hass.callWS);
+    } catch (_err: any) {
+      return false;
+    }
     if (!cloudStatus.logged_in || !cloudStatus.active_subscription) {
       return false;
     }
@@ -262,8 +272,8 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
   }
 
   private async _createCloudPipeline(useLanguage: boolean): Promise<boolean> {
-    let cloudTtsEntityId;
-    let cloudSttEntityId;
+    let cloudTtsEntityId: string | undefined;
+    let cloudSttEntityId: string | undefined;
     for (const entity of Object.values(this.hass.entities)) {
       if (entity.platform === "cloud") {
         const domain = computeDomain(entity.entity_id);
@@ -280,7 +290,7 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
       }
     }
     try {
-      const pipelines = await listAssistPipelines(this.hass);
+      const pipelines = await listAssistPipelines(this.hass.callWS);
 
       if (pipelines.preferred_pipeline) {
         pipelines.pipelines.sort((a) =>
@@ -300,7 +310,7 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
       if (!cloudPipeline) {
         const agent = (
           await listAgents(
-            this.hass,
+            this.hass.callWS,
             this.language || this.hass.config.language,
             this.hass.config.country || undefined
           )
@@ -312,7 +322,7 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
 
         const ttsEngine = (
           await listTTSEngines(
-            this.hass,
+            this.hass.callWS,
             this.language || this.hass.config.language,
             this.hass.config.country || undefined
           )
@@ -323,14 +333,14 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
         }
 
         const ttsVoices = await listTTSVoices(
-          this.hass,
-          cloudTtsEntityId,
+          this.hass.callWS,
+          cloudTtsEntityId!,
           ttsEngine.supported_languages[0]
         );
 
         const sttEngine = (
           await listSTTEngines(
-            this.hass,
+            this.hass.callWS,
             this.language || this.hass.config.language,
             this.hass.config.country || undefined
           )
@@ -354,9 +364,9 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
           language: (this.language || this.hass.config.language).split("-")[0],
           conversation_engine: "conversation.home_assistant",
           conversation_language: agent.supported_languages[0],
-          stt_engine: cloudSttEntityId,
+          stt_engine: cloudSttEntityId!,
           stt_language: sttEngine.supported_languages[0],
-          tts_engine: cloudTtsEntityId,
+          tts_engine: cloudTtsEntityId!,
           tts_language: ttsEngine.supported_languages[0],
           tts_voice: ttsVoices.voices![0].voice_id,
           wake_word_entity: null,
@@ -368,7 +378,7 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
         "select",
         "select_option",
         { option: cloudPipeline.name },
-        { entity_id: this.assistConfiguration?.pipeline_entity_id }
+        { entity_id: this.assistConfiguration?.pipeline_entity_id ?? undefined }
       );
       fireEvent(this, "next-step", { step: STEP.SUCCESS, noPrevious: true });
       return true;
@@ -377,7 +387,9 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
     }
   }
 
-  private _valueChanged(ev: CustomEvent) {
+  private _valueChanged(
+    ev: ValueChangedEvent<(typeof OPTIONS)[number] | undefined>
+  ) {
     this._value = ev.detail.value;
   }
 
@@ -407,7 +419,7 @@ export class HaVoiceAssistantSetupStepPipeline extends LitElement {
     fireEvent(this, "next-step", { step: STEP.LOCAL, option: this._value });
   }
 
-  private _languageChanged(ev: CustomEvent) {
+  private _languageChanged(ev: ValueChangedEvent<string | undefined>) {
     if (!ev.detail.value) {
       return;
     }

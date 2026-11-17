@@ -36,22 +36,27 @@ class HuiDateEntityRow extends LitElement implements LovelaceRow {
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this._config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this.hass.localize, this.hass.config)}
         </hui-warning>
       `;
     }
 
     const unavailable = stateObj.state === UNAVAILABLE;
 
+    const name = this.hass.formatEntityName(stateObj, this._config.name);
+
     return html`
       <hui-generic-entity-row .hass=${this.hass} .config=${this._config}>
         <ha-date-input
           .locale=${this.hass.locale}
           .disabled=${unavailable}
-          .value=${stateObj.state === UNAVAILABLE || stateObj.state === UNKNOWN
-            ? undefined
-            : stateObj.state}
+          .accessibleLabel=${name}
+          .value=${
+            stateObj.state === UNAVAILABLE || stateObj.state === UNKNOWN
+              ? undefined
+              : stateObj.state
+          }
           @value-changed=${this._dateChanged}
         >
         </ha-date-input>
@@ -61,7 +66,11 @@ class HuiDateEntityRow extends LitElement implements LovelaceRow {
 
   private _dateChanged(ev: ValueChangedEvent<string>): void {
     if (ev.detail.value) {
-      setDateValue(this.hass!, this._config!.entity, ev.detail.value);
+      setDateValue(
+        this.hass!.callService,
+        this._config!.entity,
+        ev.detail.value
+      );
     }
   }
 

@@ -27,6 +27,12 @@ export class MockBaseEntity {
 
   public state: string;
 
+  public areaId?: string;
+
+  public deviceId?: string;
+
+  public platform?: string;
+
   public baseAttributes: EntityAttributes;
 
   public attributes: EntityAttributes;
@@ -47,8 +53,11 @@ export class MockBaseEntity {
     this.domain = domain;
     this.objectId = objectId;
     this.state = input.state;
-    this.lastChanged = randomTime();
-    this.lastUpdated = randomTime();
+    this.areaId = input.area_id;
+    this.deviceId = input.device_id;
+    this.platform = input.platform;
+    this.lastChanged = input.last_changed ?? randomTime();
+    this.lastUpdated = input.last_changed ?? randomTime();
 
     const attributes: EntityAttributes = input.attributes || {};
 
@@ -113,7 +122,13 @@ export class MockBaseEntity {
       this.attributes = { ...this.attributes, ...changes.attributes };
     }
 
-    this.hass!.updateStates({
+    // A removed or replaced entity can finish its transitions, so that their
+    // timers stop, but must not bring its state back
+    if (this.hass?.mockEntities[this.entityId] !== this) {
+      return;
+    }
+
+    this.hass.updateStates({
       [this.entityId]: this.toState(),
     });
   }
@@ -127,6 +142,8 @@ export class MockBaseEntity {
       "entity_picture",
       "assumed_state",
       "device_class",
+      "state_class",
+      "unit_of_measurement",
       "supported_features",
     ]) {
       if (key in attrs) {
@@ -148,7 +165,11 @@ export class MockBaseEntity {
     return {
       entity_id: this.entityId,
       state: this.state,
+      // Every attribute of the input, like Core keeps the attributes of an
+      // integration. What the mock works out itself wins, like a light that
+      // is off having no brightness.
       attributes: {
+        ...this.attributes,
         ...this._getBaseAttributes(),
         ...this._getCapabilityAttributes(),
         ...this._getStateAttributes(),

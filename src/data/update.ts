@@ -10,10 +10,12 @@ import { computeStateDomain } from "../common/entity/compute_state_domain";
 import { supportsFeature } from "../common/entity/supports-feature";
 import { formatNumber } from "../common/number/format_number";
 import { caseInsensitiveStringCompare } from "../common/string/compare";
+import type { LocalizeFunc } from "../common/translations/localize";
 import { showAlertDialog } from "../dialogs/generic/show-dialog-box";
 import type { HomeAssistant } from "../types";
 import { showToast } from "../util/toast";
 import type { EntitySources } from "./entity/entity_sources";
+import type { FrontendLocaleData } from "./translation";
 
 export enum UpdateEntityFeature {
   INSTALL = 1,
@@ -77,7 +79,10 @@ export const updateButtonIsDisabled = (entity: UpdateEntity): boolean =>
 export const updateIsInstalling = (entity: UpdateEntity): boolean =>
   !!entity.attributes.in_progress;
 
-export const updateReleaseNotes = (hass: HomeAssistant, entityId: string) =>
+export const updateReleaseNotes = (
+  hass: Pick<HomeAssistant, "callWS">,
+  entityId: string
+) =>
   hass.callWS<string | null>({
     type: "update/release_notes",
     entity_id: entityId,
@@ -87,8 +92,22 @@ const HOME_ASSISTANT_CORE_TITLE = "Domolux Core";
 const HOME_ASSISTANT_SUPERVISOR_TITLE = "Domolux Supervisor";
 const HOME_ASSISTANT_OS_TITLE = "Domolux Operating System";
 
+// The hassio integration sets these as hard-coded `_attr_title` on the Core,
+// Operating System, and Supervisor update entities. They are not translated,
+// so a title comparison is the reliable way to identify them without depending
+// on the (lazily-fetched) entity sources.
+export const isSystemUpdate = (entity: UpdateEntity): boolean => {
+  const title = entity.attributes.title || "";
+  return (
+    title === HOME_ASSISTANT_CORE_TITLE ||
+    title === HOME_ASSISTANT_OS_TITLE ||
+    title === HOME_ASSISTANT_SUPERVISOR_TITLE
+  );
+};
+
 export const filterUpdateEntities = (
   entities: HassEntities,
+  formatEntityName: HomeAssistant["formatEntityName"],
   language?: string
 ) =>
   (
@@ -115,44 +134,67 @@ export const filterUpdateEntities = (
       return 1;
     }
     return caseInsensitiveStringCompare(
-      a.attributes.title || a.attributes.friendly_name || "",
-      b.attributes.title || b.attributes.friendly_name || "",
+      a.attributes.title || formatEntityName(a),
+      b.attributes.title || formatEntityName(b),
       language
     );
   });
 
 export const filterUpdateEntitiesParameterized = (
   entities: HassEntities,
+  formatEntityName: HomeAssistant["formatEntityName"],
   showSkipped = false,
   showNotInstallable = false
 ) =>
-  filterUpdateEntities(entities).filter((entity) => {
+  filterUpdateEntities(entities, formatEntityName).filter((entity) => {
     if (showNotInstallable) {
       return updateCanNotInstall(entity, showSkipped);
     }
     return updateCanInstall(entity, showSkipped);
   });
 
+export const installUpdates = (
+  hass: HomeAssistant,
+  entityIds: string[],
+  notifyOnError = true
+) =>
+  hass.callService(
+    "update",
+    "install",
+    {
+      entity_id: entityIds,
+    },
+    undefined,
+    notifyOnError
+  );
+
 export const checkForEntityUpdates = async (
   element: HTMLElement,
   hass: HomeAssistant
 ) => {
-  const entities = filterUpdateEntities(hass.states, hass.locale.language).map(
-    (entity) => entity.entity_id
+  const updateEntities = filterUpdateEntities(
+    hass.states,
+    hass.formatEntityName,
+    hass.locale.language
   );
+  const entities = updateEntities
+    .filter((entity) => !entity.attributes.restored)
+    .map((entity) => entity.entity_id);
 
   if (!entities.length) {
+    const messageKey = updateEntities.length
+      ? "update_integrations_not_loaded"
+      : "no_update_entities";
     showAlertDialog(element, {
-      title: hass.localize("ui.panel.config.updates.no_update_entities.title"),
-      text: hass.localize(
-        "ui.panel.config.updates.no_update_entities.description"
-      ),
+      title: hass.localize(`ui.panel.config.updates.${messageKey}.title`),
+      text: hass.localize(`ui.panel.config.updates.${messageKey}.description`),
       warning: true,
     });
     return;
   }
 
   showToast(element, {
+    id: "check-updates",
     message: hass.localize("ui.panel.config.updates.checking_updates"),
   });
 
@@ -163,6 +205,7 @@ export const checkForEntityUpdates = async (
       if (computeDomain(event.data.entity_id) === "update") {
         updated++;
         showToast(element, {
+          id: "check-updates",
           message: hass.localize("ui.panel.config.updates.updates_refreshed", {
             count: updated,
           }),
@@ -185,12 +228,14 @@ export const checkForEntityUpdates = async (
 
   if (updated === 0) {
     showToast(element, {
+      id: "check-updates",
       message: hass.localize("ui.panel.config.updates.no_new_updates"),
     });
   }
 };
 
 // When updating, and entity does not support % show "Installing"
+// When updating, and entity does support % but has not reported it yet, show "Preparing"
 // When updating, and entity does support % show "Installing (xx%)"
 // When update available, show "Update available"
 // When the latest version is skipped, show the latest version
@@ -198,10 +243,38 @@ export const checkForEntityUpdates = async (
 // When update is not available and there is no latest_version show "Unavailable"
 export const computeUpdateStateDisplay = (
   stateObj: UpdateEntity,
-  hass: HomeAssistant
+  localize: LocalizeFunc,
+  locale: FrontendLocaleData,
+  formatEntityState: HomeAssistant["formatEntityState"]
 ): string => {
   const state = stateObj.state;
   const attributes = stateObj.attributes;
+
+  // An install can be in progress even when the state is "off", e.g. when
+  // downgrading firmware (installed_version is newer than latest_version).
+  // Show the installing status regardless of state in that case.
+  if (updateIsInstalling(stateObj)) {
+    // The install has not started yet, for example while a backup is
+    // created before the update.
+    if (
+      supportsFeature(stateObj, UpdateEntityFeature.PROGRESS) &&
+      attributes.update_percentage == null
+    ) {
+      return localize("ui.card.update.preparing");
+    }
+    const supportsProgress =
+      supportsFeature(stateObj, UpdateEntityFeature.PROGRESS) &&
+      attributes.update_percentage !== null;
+    if (supportsProgress) {
+      return localize("ui.card.update.installing_with_progress", {
+        progress: formatNumber(attributes.update_percentage!, locale, {
+          maximumFractionDigits: attributes.display_precision,
+          minimumFractionDigits: attributes.display_precision,
+        }),
+      });
+    }
+    return localize("ui.card.update.installing");
+  }
 
   if (state === "off") {
     const isSkipped =
@@ -210,34 +283,14 @@ export const computeUpdateStateDisplay = (
     if (isSkipped) {
       return attributes.latest_version!;
     }
-    return hass.formatEntityState(stateObj);
+    return formatEntityState(stateObj);
   }
 
-  if (state === "on") {
-    if (updateIsInstalling(stateObj)) {
-      const supportsProgress =
-        supportsFeature(stateObj, UpdateEntityFeature.PROGRESS) &&
-        attributes.update_percentage !== null;
-      if (supportsProgress) {
-        return hass.localize("ui.card.update.installing_with_progress", {
-          progress: formatNumber(attributes.update_percentage!, hass.locale, {
-            maximumFractionDigits: attributes.display_precision,
-            minimumFractionDigits: attributes.display_precision,
-          }),
-        });
-      }
-      return hass.localize("ui.card.update.installing");
-    }
-  }
-
-  return hass.formatEntityState(stateObj);
+  return formatEntityState(stateObj);
 };
 
 export type UpdateType =
-  | "addon"
-  | "home_assistant"
-  | "home_assistant_os"
-  | "generic";
+  "addon" | "home_assistant" | "home_assistant_os" | "generic";
 
 export const getUpdateType = (
   stateObj: UpdateEntity,

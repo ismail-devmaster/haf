@@ -1,11 +1,11 @@
+import type { ContextType } from "@lit/context";
 import type { HassEntity } from "home-assistant-js-websocket";
 import { css, html, LitElement, nothing } from "lit";
-import { customElement, property } from "lit/decorators";
+import { customElement, property, state } from "lit/decorators";
 import Fuse from "fuse.js";
 import memoizeOne from "memoize-one";
-import { computeEntityNameList } from "../common/entity/compute_entity_name_display";
-import { computeRTL } from "../common/util/compute_rtl";
-import type { LocalizeFunc } from "../common/translations/localize";
+import { consume } from "../common/decorators/consume";
+import { computeEntityPickerDisplay } from "../common/entity/compute_entity_name_display";
 import {
   multiTermSortedSearch,
   type FuseWeightedKey,
@@ -13,9 +13,14 @@ import {
 import {
   AREA_CONTROLS_BUTTONS,
   getAreaControlEntities,
+  getAreaEntityIds,
   type AreaControlDomain,
 } from "../data/area/area_controls";
-import type { HomeAssistant } from "../types";
+import {
+  internationalizationContext,
+  registriesContext,
+  statesContext,
+} from "../data/context";
 import type { PickerComboBoxItem } from "./ha-picker-combo-box";
 import "./ha-combo-box-item";
 import "./ha-domain-icon";
@@ -47,8 +52,6 @@ const AREA_CONTROL_DOMAINS = [
 
 @customElement("ha-area-controls-picker")
 export class HaAreaControlsPicker extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property({ attribute: "area-id" }) public areaId!: string;
 
   @property({ type: Array, attribute: "exclude-entities" })
@@ -70,6 +73,17 @@ export class HaAreaControlsPicker extends LitElement {
   @property({ type: Boolean }) public required = false;
 
   @property({ attribute: "add-button-label" }) public addButtonLabel?: string;
+
+  @consume({ context: statesContext, subscribe: true })
+  private _states!: ContextType<typeof statesContext>;
+
+  @state()
+  @consume({ context: registriesContext, subscribe: true })
+  private _registries!: ContextType<typeof registriesContext>;
+
+  @state()
+  @consume({ context: internationalizationContext, subscribe: true })
+  private _i18n!: ContextType<typeof internationalizationContext>;
 
   private _domainSearchKeys: FuseWeightedKey[] = [
     {
@@ -112,28 +126,43 @@ export class HaAreaControlsPicker extends LitElement {
       excludeEntities: string[] | undefined,
       currentValue: string | undefined,
       excludeValues: string[] | undefined,
-      localize: LocalizeFunc,
-      _entities: HomeAssistant["entities"],
-      _devices: HomeAssistant["devices"],
-      _areas: HomeAssistant["areas"]
+      registries: ContextType<typeof registriesContext>,
+      i18n: ContextType<typeof internationalizationContext>
     ): ((
       searchString?: string,
       section?: string
     ) => (AreaControlPickerItem | string)[]) =>
       (searchString?: string, section?: string) => {
-        if (!this.hass) {
+        const states = this._states;
+        if (
+          !states ||
+          !registries?.entities ||
+          !registries.devices ||
+          !registries.areas ||
+          !registries.floors
+        ) {
           return [];
         }
+        const { localize } = i18n;
 
         const isSelected = (id: string): boolean =>
           currentValue === id ||
           (excludeValues !== undefined && excludeValues.includes(id));
 
-        const controlEntities = getAreaControlEntities(
-          AREA_CONTROL_DOMAINS,
+        const areaEntities = getAreaEntityIds(
+          registries.entities,
+          registries.devices,
           areaId,
-          excludeEntities,
-          this.hass
+          excludeEntities
+        );
+        const controlEntities = getAreaControlEntities(
+          areaEntities,
+          states,
+          registries.entities,
+          registries.devices,
+          registries.areas,
+          registries.floors,
+          AREA_CONTROL_DOMAINS
         );
 
         const items: (AreaControlPickerItem | string)[] = [];
@@ -173,7 +202,6 @@ export class HaAreaControlsPicker extends LitElement {
             domainItems = multiTermSortedSearch(
               domainItems,
               searchString,
-              this._domainSearchKeys,
               (item) => item.id,
               fuseIndex
             );
@@ -184,33 +212,26 @@ export class HaAreaControlsPicker extends LitElement {
           const allEntityIds = Object.values(controlEntities).flat();
           const uniqueEntityIds = Array.from(new Set(allEntityIds));
 
-          const isRTL = computeRTL(
-            this.hass.language,
-            this.hass.translationMetadata.translations
-          );
-
           uniqueEntityIds.forEach((entityId) => {
             if (isSelected(entityId)) {
               return;
             }
-            const stateObj = this.hass!.states[entityId];
+            const stateObj = states[entityId];
             if (!stateObj) {
               return;
             }
 
-            const [entityName, deviceName, areaName] = computeEntityNameList(
-              stateObj,
-              [{ type: "entity" }, { type: "device" }, { type: "area" }],
-              this.hass!.entities,
-              this.hass!.devices,
-              this.hass!.areas,
-              this.hass!.floors
+            const { primary, secondary } = computeEntityPickerDisplay(
+              {
+                entities: registries.entities,
+                devices: registries.devices,
+                areas: registries.areas,
+                floors: registries.floors,
+                language: i18n.language,
+                translationMetadata: i18n.translationMetadata,
+              },
+              stateObj
             );
-
-            const primary = entityName || deviceName || entityId;
-            const secondary = [areaName, entityName ? deviceName : undefined]
-              .filter(Boolean)
-              .join(isRTL ? " ◂ " : " ▸ ");
 
             entityItems.push({
               type: "entity",
@@ -226,7 +247,6 @@ export class HaAreaControlsPicker extends LitElement {
             entityItems = multiTermSortedSearch(
               entityItems,
               searchString,
-              this._entitySearchKeys,
               (item) => item.id,
               fuseIndex
             );
@@ -260,39 +280,40 @@ export class HaAreaControlsPicker extends LitElement {
   );
 
   private _rowRenderer = (item: AreaControlPickerItem) => html`
-    <ha-combo-box-item type="button" compact>
-      ${item.type === "entity" && item.stateObj
-        ? html`<ha-state-icon
-            slot="start"
-            .stateObj=${item.stateObj}
-          ></ha-state-icon>`
-        : item.domain
-          ? html`<ha-domain-icon
+    <ha-combo-box-item>
+      ${
+        item.type === "entity" && item.stateObj
+          ? html`<ha-state-icon
               slot="start"
-              .domain=${item.domain}
-              .deviceClass=${item.deviceClass}
-            ></ha-domain-icon>`
-          : nothing}
+              .stateObj=${item.stateObj}
+            ></ha-state-icon>`
+          : item.domain
+            ? html`<ha-domain-icon
+                slot="start"
+                .domain=${item.domain}
+                .deviceClass=${item.deviceClass}
+              ></ha-domain-icon>`
+            : nothing
+      }
       <span slot="headline">${item.primary}</span>
-      ${item.secondary
-        ? html`<span slot="supporting-text">${item.secondary}</span>`
-        : nothing}
-      ${item.type === "entity" && item.stateObj
-        ? html`<span slot="supporting-text" class="code">
-            ${item.stateObj.entity_id}
-          </span>`
-        : nothing}
+      ${
+        item.secondary
+          ? html`<span slot="supporting-text">${item.secondary}</span>`
+          : nothing
+      }
+      ${
+        item.type === "entity" && item.stateObj
+          ? html`<span slot="supporting-text" class="code">
+              ${item.stateObj.entity_id}
+            </span>`
+          : nothing
+      }
     </ha-combo-box-item>
   `;
 
   protected render() {
-    if (!this.hass) {
-      return nothing;
-    }
-
     return html`
       <ha-generic-picker
-        .hass=${this.hass}
         .value=${this.value || ""}
         .disabled=${this.disabled}
         .required=${this.required}
@@ -305,22 +326,20 @@ export class HaAreaControlsPicker extends LitElement {
           this.excludeEntities,
           this.value,
           this.excludeValues,
-          this.hass.localize,
-          this.hass.entities,
-          this.hass.devices,
-          this.hass.areas
+          this._registries,
+          this._i18n
         )}
         .rowRenderer=${this._rowRenderer as any}
         .sections=${[
           {
             id: "domain",
-            label: this.hass.localize(
+            label: this._i18n.localize(
               "ui.panel.lovelace.editor.features.types.area-controls.sections.domain"
             ),
           },
           {
             id: "entity",
-            label: this.hass.localize(
+            label: this._i18n.localize(
               "ui.panel.lovelace.editor.features.types.area-controls.sections.entity"
             ),
           },

@@ -1,7 +1,5 @@
 import { html, css, LitElement } from "lit";
-import { customElement, property, query, state } from "lit/decorators";
-import { applyThemesOnElement } from "../../../src/common/dom/apply_themes_on_element";
-import "../../../src/components/ha-formfield";
+import { customElement, property, state } from "lit/decorators";
 import "../../../src/components/ha-switch";
 import type { HomeAssistant } from "../../../src/types";
 import "./demo-card";
@@ -16,17 +14,10 @@ class DemoCards extends LitElement {
 
   @state() private _showConfig = false;
 
-  @query("#container") private _container!: HTMLElement;
-
   render() {
     return html`
       <ha-demo-options>
-        <ha-formfield label="Show config">
-          <ha-switch @change=${this._showConfigToggled}> </ha-switch>
-        </ha-formfield>
-        <ha-formfield label="Dark theme">
-          <ha-switch @change=${this._darkThemeToggled}> </ha-switch>
-        </ha-formfield>
+        <ha-switch @change=${this._showConfigToggled}>Show config</ha-switch>
       </ha-demo-options>
       <div id="container">
         <div class="cards">
@@ -48,12 +39,6 @@ class DemoCards extends LitElement {
     this._showConfig = ev.target.checked;
   }
 
-  private _darkThemeToggled(ev) {
-    applyThemesOnElement(this._container, { themes: {} } as any, "default", {
-      dark: ev.target.checked,
-    });
-  }
-
   static styles = css`
     .cards {
       display: flex;
@@ -63,7 +48,7 @@ class DemoCards extends LitElement {
     demo-card {
       margin: 16px 16px 32px;
     }
-    ha-formfield {
+    ha-switch {
       margin-right: 16px;
     }
     #container {

@@ -1,21 +1,26 @@
 import { STATE_NOT_RUNNING } from "home-assistant-js-websocket";
 import { ReactiveElement } from "lit";
 import { customElement } from "lit/decorators";
+import type { SecurityAlertEntityConfig } from "../../../../data/frontend";
+import type { ShortcutItem } from "../../../../data/home_shortcuts";
 import type { LovelaceConfig } from "../../../../data/lovelace/config/types";
 import type { LovelaceViewRawConfig } from "../../../../data/lovelace/config/view";
 import type { HomeAssistant } from "../../../../types";
-import type { LovelaceStrategyEditor } from "../types";
+import type {
+  LovelaceStrategyEditor,
+  LovelaceStrategyDependency,
+} from "../types";
 import {
   getSummaryLabel,
   HOME_SUMMARIES_ICONS,
 } from "./helpers/home-summaries";
 import type { HomeAreaViewStrategyConfig } from "./home-area-view-strategy";
 import type { HomeOtherDevicesViewStrategyConfig } from "./home-other-devices-view-strategy";
-import type { ShortcutItem } from "../../../../data/home_shortcuts";
 import type { HomeOverviewViewStrategyConfig } from "./home-overview-view-strategy";
 
 export interface HomeDashboardStrategyConfig {
   type: "home";
+  alert_entities?: SecurityAlertEntityConfig[];
   favorite_entities?: string[];
   home_panel?: boolean;
   hide_welcome_message?: boolean;
@@ -25,6 +30,10 @@ export interface HomeDashboardStrategyConfig {
 
 @customElement("home-dashboard-strategy")
 export class HomeDashboardStrategy extends ReactiveElement {
+  static registryDependencies: readonly LovelaceStrategyDependency[] = [
+    "areas",
+  ];
+
   static async generate(
     config: HomeDashboardStrategyConfig,
     hass: HomeAssistant
@@ -96,6 +105,7 @@ export class HomeDashboardStrategy extends ReactiveElement {
           path: "overview",
           strategy: {
             type: "home-overview",
+            alert_entities: config.alert_entities,
             favorite_entities: config.favorite_entities,
             home_panel: config.home_panel,
             hide_welcome_message: config.hide_welcome_message,

@@ -16,6 +16,7 @@ import type { KeyBinding, DecorationSet, ViewUpdate } from "@codemirror/view";
 import { Decoration, EditorView, ViewPlugin } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { NodeProp } from "@lezer/common";
+import type { LocalizeFunc } from "../common/translations/localize";
 
 export {
   autocompletion,
@@ -56,8 +57,18 @@ export { tags } from "@lezer/highlight";
 
 const _yamlWithJinja = jinja({ base: yaml() });
 
+// The jinja2 mode is rendered on a YAML base, whose line comment is "#". In a
+// template that is meaningless, so toggle-comment (Ctrl+/) should use the Jinja
+// block comment "{# #}" instead. Scope this to the jinja2 language only so the
+// plain YAML mode keeps its "#" comment.
+const _jinjaCommentTokens = Prec.highest(
+  EditorState.languageData.of(() => [
+    { commentTokens: { block: { open: "{#", close: "#}" } } },
+  ])
+);
+
 export const langs = {
-  jinja2: _yamlWithJinja,
+  jinja2: [_yamlWithJinja, _jinjaCommentTokens],
   yaml: _yamlWithJinja,
 };
 
@@ -82,6 +93,48 @@ export const langCompartment = new Compartment();
 export const readonlyCompartment = new Compartment();
 export const linewrapCompartment = new Compartment();
 export const yamlLintCompartment = new Compartment();
+export const phrasesCompartment = new Compartment();
+
+// CodeMirror renders the search panel, the go to line dialog and the fold
+// markers with hardcoded English text, looked up through `state.phrase()`.
+// Map those phrases to our translations. CodeMirror replaces `$` with the line
+// number or match count after the lookup, so pass it in as the placeholder
+// value.
+export const localizedPhrases = (localize: LocalizeFunc) => {
+  const phrases: Record<string, string> = {
+    Find: localize("ui.components.yaml-editor.search.find"),
+    Replace: localize("ui.common.replace"),
+    next: localize("ui.common.next"),
+    previous: localize("ui.common.previous"),
+    all: localize("ui.components.yaml-editor.search.select_all"),
+    "match case": localize("ui.components.yaml-editor.search.match_case"),
+    regexp: localize("ui.components.yaml-editor.search.regexp"),
+    "by word": localize("ui.components.yaml-editor.search.by_word"),
+    replace: localize("ui.common.replace"),
+    "replace all": localize("ui.components.yaml-editor.search.replace_all"),
+    close: localize("ui.common.close"),
+    "current match": localize("ui.components.yaml-editor.search.current_match"),
+    "on line": localize("ui.components.yaml-editor.search.on_line"),
+    "replaced match on line $": localize(
+      "ui.components.yaml-editor.search.replaced_match_on_line",
+      { line: "$" }
+    ),
+    "replaced $ matches": localize(
+      "ui.components.yaml-editor.search.replaced_matches",
+      { count: "$" }
+    ),
+    "Go to line": localize("ui.components.yaml-editor.go_to_line.label"),
+    go: localize("ui.components.yaml-editor.go_to_line.go"),
+    "Fold line": localize("ui.components.yaml-editor.fold.fold_line"),
+    "Unfold line": localize("ui.components.yaml-editor.fold.unfold_line"),
+    "folded code": localize("ui.components.yaml-editor.fold.folded_code"),
+    unfold: localize("ui.components.yaml-editor.fold.unfold"),
+  };
+  // Leave out missing translations so CodeMirror falls back to its own text
+  return EditorState.phrases.of(
+    Object.fromEntries(Object.entries(phrases).filter(([, value]) => value))
+  );
+};
 
 // ---------------------------------------------------------------------------
 // YAML scalar type highlighter
@@ -272,13 +325,12 @@ export const haTheme = EditorView.theme({
     margin: "4px",
     background: "none",
     color: "var(--primary-color)",
-    fontFamily:
-      "var(--mdc-typography-button-font-family, var(--mdc-typography-font-family, var(--ha-font-family-body)))",
-    fontSize: "var(--mdc-typography-button-font-size, 0.875rem)",
+    fontFamily: "var(--ha-font-family-body)",
+    fontSize: "0.875rem",
     height: "36px",
-    fontWeight: "var(--mdc-typography-button-font-weight, 500)",
+    fontWeight: "500",
     borderRadius: "4px",
-    letterSpacing: "var(--mdc-typography-button-letter-spacing, 0.0892857em)",
+    letterSpacing: "0.0892857em",
   },
 
   ".cm-textfield": {
@@ -377,7 +429,7 @@ export const haTheme = EditorView.theme({
   ".cm-lint-marker-warning": { color: "var(--warning-color)" },
   ".cm-lint-marker-info": { color: "var(--info-color, var(--primary-color))" },
   ".cm-diagnostic": {
-    fontFamily: "var(--mdc-typography-font-family, var(--ha-font-family-body))",
+    fontFamily: "var(--ha-font-family-body)",
   },
   ".cm-diagnostic.cm-diagnostic-error": {
     borderLeft: "3px solid var(--error-color)",

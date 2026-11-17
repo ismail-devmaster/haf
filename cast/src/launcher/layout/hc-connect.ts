@@ -47,8 +47,13 @@ const translateErr = (err) =>
 
 const INTRO = html`
   <p>
+<<<<<<< HEAD
     Domolux Cast allows you to cast your Domolux installation to
     Chromecast video devices and to Google Assistant devices with a screen.
+=======
+    Home Assistant Cast allows you to cast your Home Assistant installation to
+    Chromecast video devices and to Google Home devices with a screen.
+>>>>>>> dev
   </p>
   <p>
     For more information, see the
@@ -135,9 +140,11 @@ export class HcConnect extends LitElement {
               Show Demo
               <ha-svg-icon
                 slot="end"
-                .path=${this.castManager.castState === "CONNECTED"
-                  ? mdiCastConnected
-                  : mdiCast}
+                .path=${
+                  this.castManager.castState === "CONNECTED"
+                    ? mdiCastConnected
+                    : mdiCast
+                }
               ></ha-svg-icon>
             </ha-button>
             <div class="spacer"></div>

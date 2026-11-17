@@ -1,7 +1,8 @@
 import "@home-assistant/webawesome/dist/components/divider/divider";
 import { mdiClose, mdiPlus } from "@mdi/js";
+import type { PropertyValues } from "lit";
 import { css, html, LitElement, nothing } from "lit";
-import { customElement, property, query } from "lit/decorators";
+import { customElement, property, query, queryAll } from "lit/decorators";
 import { ensureArray } from "../../../../../common/array/ensure-array";
 import { fireEvent } from "../../../../../common/dom/fire_event";
 import "../../../../../components/ha-icon-button";
@@ -27,39 +28,57 @@ export class HaConversationTrigger
 
   @query("#option_input", true) private _optionInput?: HaInput;
 
+  @queryAll("ha-input.option") private _options!: NodeListOf<HaInput>;
+
   public static get defaultConfig(): ConversationTrigger {
     return { trigger: "conversation", command: "" };
+  }
+
+  protected updated(changedProps: PropertyValues<this>) {
+    super.updated(changedProps);
+    if (changedProps.has("trigger")) {
+      this._validateOptions();
+    }
+  }
+
+  private async _validateOptions() {
+    const options = [...this._options];
+    await Promise.all(options.map((option) => option.updateComplete));
+    options.forEach((option) => option.reportValidity());
   }
 
   protected render() {
     const { command } = this.trigger;
     const commands = command ? ensureArray(command) : [];
 
-    return html`${commands.length
-        ? html`${commands.map(
-              (option, index) => html`
-                <ha-input
-                  class="option"
-                  iconTrailing
-                  .index=${index}
-                  .value=${option}
-                  .validationMessage=${this.hass.localize(
-                    "ui.panel.config.automation.editor.triggers.type.conversation.no_punctuation"
-                  )}
-                  auto-validate
-                  validateOnInitialRender
-                  pattern=${PATTERN}
-                  @change=${this._updateOption}
-                >
-                  <ha-icon-button
-                    @click=${this._removeOption}
-                    slot="end"
-                    .path=${mdiClose}
-                  ></ha-icon-button>
-                </ha-input>
-              `
-            )} <wa-divider></wa-divider>`
-        : nothing}
+    return html`${
+        commands.length
+          ? html`${commands.map(
+                (option, index) => html`
+                  <ha-input
+                    class="option"
+                    .index=${index}
+                    .value=${option}
+                    .validationMessage=${this.hass.localize(
+                      "ui.panel.config.automation.editor.triggers.type.conversation.no_punctuation"
+                    )}
+                    auto-validate
+                    pattern=${PATTERN}
+                    @change=${this._updateOption}
+                  >
+                    <ha-icon-button
+                      @click=${this._removeOption}
+                      slot="end"
+                      .path=${mdiClose}
+                      .label=${this.hass.localize(
+                        "ui.panel.config.automation.editor.triggers.type.conversation.delete"
+                      )}
+                    ></ha-icon-button>
+                  </ha-input>
+                `
+              )} <wa-divider></wa-divider>`
+          : nothing
+      }
       <ha-input
         class="flex-auto"
         id="option_input"
@@ -78,6 +97,9 @@ export class HaConversationTrigger
           @click=${this._addOption}
           slot="end"
           .path=${mdiPlus}
+          .label=${this.hass.localize(
+            "ui.panel.config.automation.editor.triggers.type.conversation.add_sentence"
+          )}
         ></ha-icon-button>
       </ha-input>`;
   }

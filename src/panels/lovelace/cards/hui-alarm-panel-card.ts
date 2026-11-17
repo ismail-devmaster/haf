@@ -1,10 +1,21 @@
 import { mdiClose } from "@mdi/js";
-import type { HassEntity, UnsubscribeFunc } from "home-assistant-js-websocket";
+import type {
+  Connection,
+  HassConfig,
+  HassEntity,
+  UnsubscribeFunc,
+} from "home-assistant-js-websocket";
 import type { PropertyValues } from "lit";
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators";
+import { customElement, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
 import { styleMap } from "lit/directives/style-map";
+import { consume } from "../../../common/decorators/consume";
+import {
+  consumeEntityState,
+  consumeLocalize,
+} from "../../../common/decorators/consume-context-entry";
+import { transform } from "../../../common/decorators/transform";
 import { applyThemesOnElement } from "../../../common/dom/apply_themes_on_element";
 import { fireEvent } from "../../../common/dom/fire_event";
 import { stateColorCss } from "../../../common/entity/state_color";
@@ -21,13 +32,29 @@ import {
   FORMAT_NUMBER,
   callAlarmAction,
 } from "../../../data/alarm_control_panel";
+import {
+  apiContext,
+  configContext,
+  connectionContext,
+  formattersContext,
+  uiContext,
+} from "../../../data/context";
 import { UNAVAILABLE } from "../../../data/entity/entity";
 import type { ExtEntityRegistryEntry } from "../../../data/entity/entity_registry";
 import {
   getExtendedEntityRegistryEntry,
   subscribeEntityRegistry,
 } from "../../../data/entity/entity_registry";
-import type { HomeAssistant } from "../../../types";
+import type { LocalizeFunc } from "../../../common/translations/localize";
+import type { Themes } from "../../../data/ws-themes";
+import type {
+  HomeAssistant,
+  HomeAssistantApi,
+  HomeAssistantConfig,
+  HomeAssistantConnection,
+  HomeAssistantFormatters,
+  HomeAssistantUI,
+} from "../../../types";
 import { findEntities } from "../common/find-entities";
 import { createEntityNotFoundWarning } from "../components/hui-warning";
 import type { LovelaceCard } from "../types";
@@ -96,9 +123,40 @@ class HuiAlarmPanelCard extends LitElement implements LovelaceCard {
     };
   }
 
-  @property({ attribute: false }) public hass?: HomeAssistant;
-
   @state() private _config?: AlarmPanelCardConfig;
+
+  @state()
+  @consumeEntityState({ entityIdPath: ["_config", "entity"] })
+  private _stateObj?: HassEntity;
+
+  @state() @consumeLocalize() private _localize!: LocalizeFunc;
+
+  @state()
+  @consume({ context: formattersContext, subscribe: true })
+  private _formatters!: HomeAssistantFormatters;
+
+  @state()
+  @consume({ context: configContext, subscribe: true })
+  @transform<HomeAssistantConfig, HassConfig>({
+    transformer: ({ config }) => config,
+  })
+  private _hassConfig!: HassConfig;
+
+  @state()
+  @consume({ context: uiContext, subscribe: true })
+  @transform<HomeAssistantUI, Themes>({
+    transformer: ({ themes }) => themes,
+  })
+  private _themes!: Themes;
+
+  @consume({ context: apiContext, subscribe: true })
+  private _api!: HomeAssistantApi;
+
+  @consume({ context: connectionContext, subscribe: true })
+  @transform<HomeAssistantConnection, Connection>({
+    transformer: ({ connection }) => connection,
+  })
+  private _connection?: Connection;
 
   @state() private _entry?: ExtEntityRegistryEntry | null;
 
@@ -117,11 +175,16 @@ class HuiAlarmPanelCard extends LitElement implements LovelaceCard {
   }
 
   public async getCardSize(): Promise<number> {
-    if (!this._config || !this.hass) {
+    if (!this._config) {
       return 10;
     }
 
-    const stateObj = this.hass.states[this._config.entity];
+    const stateObj = this._stateObj;
+
+    // Sized before the first update, so the state is not known yet.
+    if (!stateObj && !this.hasUpdated) {
+      return 10;
+    }
 
     return !stateObj || stateObj.attributes.code_format !== FORMAT_NUMBER
       ? 4
@@ -143,87 +206,71 @@ class HuiAlarmPanelCard extends LitElement implements LovelaceCard {
 
   protected updated(changedProps: PropertyValues): void {
     super.updated(changedProps);
-    if (!this._config || !this.hass) {
+    if (!this._config || !this._themes) {
       return;
     }
-    const oldHass = changedProps.get("hass") as HomeAssistant | undefined;
+    if (!changedProps.has("_themes") && !changedProps.has("_config")) {
+      return;
+    }
+    const oldThemes = changedProps.get("_themes") as Themes | undefined;
     const oldConfig = changedProps.get("_config") as
-      | AlarmPanelCardConfig
-      | undefined;
+      AlarmPanelCardConfig | undefined;
 
     if (
-      !oldHass ||
+      !oldThemes ||
       !oldConfig ||
-      oldHass.themes !== this.hass.themes ||
+      oldThemes !== this._themes ||
       oldConfig.theme !== this._config.theme
     ) {
-      applyThemesOnElement(this, this.hass.themes, this._config.theme);
+      applyThemesOnElement(this, this._themes, this._config.theme);
     }
   }
 
-  protected shouldUpdate(changedProps: PropertyValues): boolean {
-    if (changedProps.has("_config")) {
-      return true;
-    }
-
-    const oldHass = changedProps.get("hass") as HomeAssistant | undefined;
-
-    if (
-      !oldHass ||
-      oldHass.themes !== this.hass!.themes ||
-      oldHass.locale !== this.hass!.locale
-    ) {
-      return true;
-    }
-    return (
-      oldHass.states[this._config!.entity] !==
-      this.hass!.states[this._config!.entity]
-    );
-  }
-
-  private async _unsubscribeEntityRegistry() {
+  private _unsubscribeEntityRegistry() {
     if (this._unsubEntityRegistry) {
       this._unsubEntityRegistry();
       this._unsubEntityRegistry = undefined;
     }
   }
 
-  private async _subscribeEntityEntry() {
-    if (!this._config?.entity) {
+  private _subscribeEntityEntry() {
+    this._unsubscribeEntityRegistry();
+    if (!this.isConnected || !this._config?.entity || !this._connection) {
       return;
     }
-    try {
-      this._unsubEntityRegistry = subscribeEntityRegistry(
-        this.hass!.connection,
-        async (entries) => {
-          if (
-            entries.some((entry) => entry.entity_id === this._config!.entity)
-          ) {
-            this._entry = await getExtendedEntityRegistryEntry(
-              this.hass!,
-              this._config!.entity
-            );
-          }
+    this._unsubEntityRegistry = subscribeEntityRegistry(
+      this._connection,
+      async (entries) => {
+        if (
+          !entries.some((entry) => entry.entity_id === this._config!.entity)
+        ) {
+          return;
         }
-      );
-    } catch (_e) {
-      this._entry = null;
-    }
+        try {
+          this._entry = await getExtendedEntityRegistryEntry(
+            this._api.callWS,
+            this._config!.entity
+          );
+        } catch (_e) {
+          this._entry = null;
+        }
+      }
+    );
   }
 
   protected render() {
-    if (!this._config || !this.hass) {
+    if (!this._config) {
       return nothing;
     }
-    const stateObj = this.hass.states[this._config.entity];
+    const stateObj = this._stateObj;
     const states =
       this._config.states ||
       filterSupportedAlarmStates(stateObj, DEFAULT_STATES);
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this._config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this._localize, this._hassConfig)}
         </hui-warning>
       `;
     }
@@ -232,7 +279,7 @@ class HuiAlarmPanelCard extends LitElement implements LovelaceCard {
 
     const defaultCode = this._entry?.options?.alarm_control_panel?.default_code;
 
-    const name = this.hass.formatEntityName(stateObj, this._config.name);
+    const name = this._formatters.formatEntityName(stateObj, this._config.name);
 
     return html`
       <ha-card>
@@ -260,7 +307,7 @@ class HuiAlarmPanelCard extends LitElement implements LovelaceCard {
                 .action=${stateAction}
                 @click=${this._handleActionClick}
                 appearance="filled"
-                size="small"
+                size="s"
                 variant=${stateAction === "disarm" ? "danger" : "brand"}
               >
                 ${this._actionDisplay(stateAction)}
@@ -268,50 +315,57 @@ class HuiAlarmPanelCard extends LitElement implements LovelaceCard {
             `
           )}
         </div>
-        ${!stateObj.attributes.code_format || defaultCode
-          ? nothing
-          : html`
-              <ha-input
-                .value=${this._value || ""}
-                @input=${this._handleInput}
-                .label=${this.hass.localize("ui.card.alarm_control_panel.code")}
-                type="password"
-                .inputmode=${stateObj.attributes.code_format === FORMAT_NUMBER
-                  ? "numeric"
-                  : "text"}
-              ></ha-input>
-            `}
-        ${stateObj.attributes.code_format !== FORMAT_NUMBER || defaultCode
-          ? nothing
-          : html`
-              <div class="keypad">
-                ${BUTTONS.map((value) =>
-                  value === ""
-                    ? html`<span></span>`
-                    : value === "clear"
-                      ? html`
-                          <ha-control-button
-                            @click=${this._handlePadClick}
-                            class="clear"
-                            .value=${value}
-                            .disabled=${!this._value}
-                            .label=${this.hass!.localize("ui.common.clear")}
-                          >
-                            <ha-svg-icon path=${mdiClose}></ha-svg-icon>
-                          </ha-control-button>
-                        `
-                      : html`
-                          <ha-control-button
-                            .value=${value}
-                            @click=${this._handlePadClick}
-                            .label=${value}
-                          >
-                            ${value}
-                          </ha-control-button>
-                        `
-                )}
-              </div>
-            `}
+        ${
+          !stateObj.attributes.code_format || defaultCode
+            ? nothing
+            : html`
+                <ha-input
+                  .value=${this._value || ""}
+                  @input=${this._handleInput}
+                  .label=${this._localize("ui.card.alarm_control_panel.code")}
+                  type="password"
+                  autocomplete="one-time-code"
+                  .inputmode=${
+                    stateObj.attributes.code_format === FORMAT_NUMBER
+                      ? "numeric"
+                      : "text"
+                  }
+                ></ha-input>
+              `
+        }
+        ${
+          stateObj.attributes.code_format !== FORMAT_NUMBER || defaultCode
+            ? nothing
+            : html`
+                <div class="keypad">
+                  ${BUTTONS.map((value) =>
+                    value === ""
+                      ? html`<span></span>`
+                      : value === "clear"
+                        ? html`
+                            <ha-control-button
+                              @click=${this._handlePadClick}
+                              class="clear"
+                              .value=${value}
+                              .disabled=${!this._value}
+                              .label=${this._localize("ui.common.clear")}
+                            >
+                              <ha-svg-icon path=${mdiClose}></ha-svg-icon>
+                            </ha-control-button>
+                          `
+                        : html`
+                            <ha-control-button
+                              .value=${value}
+                              @click=${this._handlePadClick}
+                              .label=${value}
+                            >
+                              ${value}
+                            </ha-control-button>
+                          `
+                  )}
+                </div>
+              `
+        }
       </ha-card>
     `;
   }
@@ -319,13 +373,13 @@ class HuiAlarmPanelCard extends LitElement implements LovelaceCard {
   private _actionDisplay(
     entityState: NonNullable<AlarmPanelCardConfig["states"]>[number]
   ): string {
-    return this.hass!.localize(`ui.card.alarm_control_panel.${entityState}`);
+    return this._localize(`ui.card.alarm_control_panel.${entityState}`);
   }
 
   private _stateDisplay(entityState: string): string {
     return entityState === UNAVAILABLE
-      ? this.hass!.localize("state.default.unavailable")
-      : this.hass!.localize(
+      ? this._localize("state.default.unavailable")
+      : this._localize(
           `component.alarm_control_panel.entity_component._.state.${entityState}`
         ) || entityState;
   }
@@ -341,7 +395,7 @@ class HuiAlarmPanelCard extends LitElement implements LovelaceCard {
 
   private _handleActionClick(e: MouseEvent): void {
     callAlarmAction(
-      this.hass!,
+      this._api,
       this._config!.entity,
       (e.currentTarget! as any).action,
       this._value || undefined

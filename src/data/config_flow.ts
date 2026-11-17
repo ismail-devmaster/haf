@@ -1,11 +1,10 @@
 import type { Connection } from "home-assistant-js-websocket";
 import type { LocalizeFunc } from "../common/translations/localize";
-import type { HomeAssistant } from "../types";
+import type { HomeAssistant, HomeAssistantApi } from "../types";
 import type {
   DataEntryFlowProgress,
   DataEntryFlowStep,
 } from "./data_entry_flow";
-import type { IntegrationType } from "./integration";
 import { domainToName } from "./integration";
 
 export const DISCOVERY_SOURCES = [
@@ -31,16 +30,15 @@ const HEADERS = {
 };
 
 export const createConfigFlow = (
-  hass: HomeAssistant,
+  callApi: HomeAssistant["callApi"],
   handler: string,
   entry_id?: string
 ) =>
-  hass.callApi<DataEntryFlowStep>(
+  callApi<DataEntryFlowStep>(
     "POST",
     "config/config_entries/flow",
     {
       handler,
-      show_advanced_options: Boolean(hass.userData?.showAdvanced),
       entry_id,
     },
     HEADERS
@@ -55,11 +53,11 @@ export const fetchConfigFlow = (hass: HomeAssistant, flowId: string) =>
   );
 
 export const handleConfigFlowStep = (
-  hass: HomeAssistant,
+  callApi: HomeAssistant["callApi"],
   flowId: string,
   data: Record<string, any>
 ) =>
-  hass.callApi<DataEntryFlowStep>(
+  callApi<DataEntryFlowStep>(
     "POST",
     `config/config_entries/flow/${flowId}`,
     data,
@@ -73,14 +71,17 @@ export const ignoreConfigFlow = (
 ) =>
   hass.callWS({ type: "config_entries/ignore_flow", flow_id: flowId, title });
 
-export const deleteConfigFlow = (hass: HomeAssistant, flowId: string) =>
-  hass.callApi("DELETE", `config/config_entries/flow/${flowId}`);
+export const deleteConfigFlow = (
+  hass: Pick<HomeAssistant, "callApi">,
+  flowId: string
+) => hass.callApi("DELETE", `config/config_entries/flow/${flowId}`);
 
+// The backend indexes a single key, and only these two exist.
 export const getConfigFlowHandlers = (
-  hass: HomeAssistant,
-  type?: IntegrationType[]
+  callApi: HomeAssistantApi["callApi"],
+  type?: "helper" | "integration"
 ) =>
-  hass.callApi<string[]>(
+  callApi<string[]>(
     "GET",
     `config/config_entries/flow_handlers${type ? `?type=${type}` : ""}`
   );
@@ -92,14 +93,19 @@ export const fetchConfigFlowInProgress = (
     type: "config_entries/flow/progress",
   });
 
-export interface ConfigFlowInProgressMessage {
-  type: null | "added" | "removed";
-  flow_id: string;
-  flow: DataEntryFlowProgress;
-}
+export type ConfigFlowInProgressMessage =
+  | {
+      type: "removed";
+      flow_id: string;
+    }
+  | {
+      type: null | "added";
+      flow_id: string;
+      flow: DataEntryFlowProgress;
+    };
 
 export const subscribeConfigFlowInProgress = (
-  hass: HomeAssistant,
+  hass: { connection: Connection },
   onChange: (update: ConfigFlowInProgressMessage[]) => void
 ) =>
   hass.connection.subscribeMessage<ConfigFlowInProgressMessage[]>(

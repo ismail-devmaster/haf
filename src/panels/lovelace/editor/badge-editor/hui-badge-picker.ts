@@ -2,12 +2,11 @@ import type { IFuseOptions } from "fuse.js";
 import Fuse from "fuse.js";
 import type { CSSResultGroup, PropertyValues, TemplateResult } from "lit";
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators";
+import { customElement, property, query, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
 import { styleMap } from "lit/directives/style-map";
 import { until } from "lit/directives/until";
 import memoizeOne from "memoize-one";
-import { storage } from "../../../../common/decorators/storage";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import { stringCompare } from "../../../../common/string/compare";
 import "../../../../components/ha-spinner";
@@ -39,20 +38,22 @@ interface BadgeElement {
   element: TemplateResult;
 }
 
+/**
+ * @element hui-badge-picker
+ *
+ * @summary Searchable grid of badges to pick from.
+ *
+ * @slot - Footer below the scrolling badges, e.g. an action bar.
+ *
+ * @cssprop --ha-badge-picker-content-padding-bottom - Space at the end of the scrolling badges.
+ *
+ * @fires config-changed - Fired with the config of the picked badge.
+ */
 @customElement("hui-badge-picker")
 export class HuiBadgePicker extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
   @property({ attribute: false }) public suggestedBadges?: string[];
-
-  @state()
-  @storage({
-    key: "dashboardBadgeClipboard",
-    state: true,
-    subscribe: true,
-    storage: "sessionStorage",
-  })
-  private _clipboard?: LovelaceBadgeConfig;
 
   @state() private _badges: BadgeElement[] = [];
 
@@ -66,9 +67,18 @@ export class HuiBadgePicker extends LitElement {
 
   @state() private _height?: number;
 
+  @query("ha-input-search") private _searchInput?: HaInputSearch;
+
   private _unusedEntities?: string[];
 
   private _usedEntities?: string[];
+
+  public async focus(): Promise<void> {
+    await this.updateComplete;
+    // Wait for the input's inner wa-input to render so focus delegation works.
+    await this._searchInput?.updateComplete;
+    this._searchInput?.focus();
+  }
 
   private _filterBadges = memoizeOne(
     (badgeElements: BadgeElement[], filter?: string): BadgeElement[] => {
@@ -84,6 +94,7 @@ export class HuiBadgePicker extends LitElement {
         minMatchCharLength: Math.min(filter.length, 2),
         threshold: 0.2,
         ignoreDiacritics: true,
+        ignoreLocation: true,
       };
       const fuse = new Fuse(badges, options);
       badges = fuse.search(filter).map((result) => result.item);
@@ -145,49 +156,56 @@ export class HuiBadgePicker extends LitElement {
         })}
       >
         <div class="badges-container">
-          ${this._filter
-            ? this._filterBadges(this._badges, this._filter).map(
-                (badgeElement: BadgeElement) => badgeElement.element
-              )
-            : html`
-                ${suggestedBadges.length > 0
-                  ? html`
-                      <div class="badges-container-header">
-                        ${this.hass!.localize(
-                          `ui.panel.lovelace.editor.badge.generic.suggested_badges`
-                        )}
-                      </div>
-                    `
-                  : nothing}
-                ${this._renderClipboardBadge()}
-                ${suggestedBadges.map(
+          ${
+            this._filter
+              ? this._filterBadges(this._badges, this._filter).map(
                   (badgeElement: BadgeElement) => badgeElement.element
-                )}
-                ${suggestedBadges.length > 0
-                  ? html`
-                      <div class="badges-container-header">
-                        ${this.hass!.localize(
-                          `ui.panel.lovelace.editor.badge.generic.other_badges`
-                        )}
-                      </div>
-                    `
-                  : nothing}
-                ${otherBadges.map(
-                  (badgeElement: BadgeElement) => badgeElement.element
-                )}
-                ${customBadgesItems.length > 0
-                  ? html`
-                      <div class="badges-container-header">
-                        ${this.hass!.localize(
-                          `ui.panel.lovelace.editor.badge.generic.custom_badges`
-                        )}
-                      </div>
-                    `
-                  : nothing}
-                ${customBadgesItems.map(
-                  (badgeElement: BadgeElement) => badgeElement.element
-                )}
-              `}
+                )
+              : html`
+                  ${
+                    suggestedBadges.length > 0
+                      ? html`
+                          <div class="badges-container-header">
+                            ${this.hass!.localize(
+                              `ui.panel.lovelace.editor.badge.generic.suggested_badges`
+                            )}
+                          </div>
+                        `
+                      : nothing
+                  }
+                  ${suggestedBadges.map(
+                    (badgeElement: BadgeElement) => badgeElement.element
+                  )}
+                  ${
+                    suggestedBadges.length > 0
+                      ? html`
+                          <div class="badges-container-header">
+                            ${this.hass!.localize(
+                              `ui.panel.lovelace.editor.badge.generic.other_badges`
+                            )}
+                          </div>
+                        `
+                      : nothing
+                  }
+                  ${otherBadges.map(
+                    (badgeElement: BadgeElement) => badgeElement.element
+                  )}
+                  ${
+                    customBadgesItems.length > 0
+                      ? html`
+                          <div class="badges-container-header">
+                            ${this.hass!.localize(
+                              `ui.panel.lovelace.editor.badge.generic.custom_badges`
+                            )}
+                          </div>
+                        `
+                      : nothing
+                  }
+                  ${customBadgesItems.map(
+                    (badgeElement: BadgeElement) => badgeElement.element
+                  )}
+                `
+          }
         </div>
         <div class="badges-container">
           <div
@@ -208,6 +226,7 @@ export class HuiBadgePicker extends LitElement {
           </div>
         </div>
       </div>
+      <slot></slot>
     `;
   }
 
@@ -232,18 +251,14 @@ export class HuiBadgePicker extends LitElement {
     const usedEntities = computeUsedEntities(this.lovelace);
     const unusedEntities = calcUnusedEntities(this.hass, usedEntities);
 
-    this._usedEntities = [...usedEntities].filter(
-      (eid) =>
-        this.hass!.states[eid] &&
-        this.hass!.states[eid].state !== UNAVAILABLE &&
-        this.hass!.states[eid].state !== UNKNOWN
-    );
-    this._unusedEntities = [...unusedEntities].filter(
-      (eid) =>
-        this.hass!.states[eid] &&
-        this.hass!.states[eid].state !== UNAVAILABLE &&
-        this.hass!.states[eid].state !== UNKNOWN
-    );
+    const isAvailable = (eid: string) => {
+      const stateObj = this.hass!.states[eid];
+      return (
+        stateObj && stateObj.state !== UNAVAILABLE && stateObj.state !== UNKNOWN
+      );
+    };
+    this._usedEntities = [...usedEntities].filter(isAvailable);
+    this._unusedEntities = [...unusedEntities].filter(isAvailable);
 
     this._loadBages();
   }
@@ -304,37 +319,6 @@ export class HuiBadgePicker extends LitElement {
         `
       )}`,
     }));
-  }
-
-  private _renderClipboardBadge() {
-    if (!this._clipboard) {
-      return nothing;
-    }
-
-    return html` ${until(
-      this._renderBadgeElement(
-        {
-          type: this._clipboard.type,
-          showElement: true,
-          isCustom: false,
-          name: this.hass!.localize(
-            "ui.panel.lovelace.editor.badge.generic.paste"
-          ),
-          description: `${this.hass!.localize(
-            "ui.panel.lovelace.editor.badge.generic.paste_description",
-            {
-              type: this._clipboard.type,
-            }
-          )}`,
-        },
-        this._clipboard
-      ),
-      html`
-        <div class="badge spinner">
-          <ha-spinner></ha-spinner>
-        </div>
-      `
-    )}`;
   }
 
   private _handleSearchChange(ev: InputEvent) {
@@ -451,14 +435,16 @@ export class HuiBadgePicker extends LitElement {
             description: !element || element.tagName === "HUI-ERROR-BADGE",
           })}"
         >
-          ${element && element.tagName !== "HUI-ERROR-BADGE"
-            ? element
-            : customBadge
-              ? customBadge.description ||
-                this.hass!.localize(
-                  `ui.panel.lovelace.editor.badge_picker.no_description`
-                )
-              : description}
+          ${
+            element && element.tagName !== "HUI-ERROR-BADGE"
+              ? element
+              : customBadge
+                ? customBadge.description ||
+                  this.hass!.localize(
+                    `ui.panel.lovelace.editor.badge_picker.no_description`
+                  )
+                : description
+          }
         </div>
       </div>
     `;
@@ -478,6 +464,7 @@ export class HuiBadgePicker extends LitElement {
           flex: 1;
           min-height: 0;
           overflow: auto;
+          padding-bottom: var(--ha-badge-picker-content-padding-bottom, 0px);
         }
 
         ha-input-search {

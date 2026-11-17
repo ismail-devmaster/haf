@@ -1,3 +1,4 @@
+import { ContextProvider } from "@lit/context";
 import type { PropertyValues, TemplateResult } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
@@ -12,10 +13,15 @@ import { navigate } from "../common/navigate";
 import type { HASSDomEvent } from "../common/dom/fire_event";
 import { fireEvent } from "../common/dom/fire_event";
 import { listenMediaQuery } from "../common/dom/media_query";
-import { toggleAttribute } from "../common/dom/toggle_attribute";
+import { storage } from "../common/decorators/storage";
+import { DEBUG_SAFE_AREA_TOOL_STORAGE_KEY } from "../common/util/debug-safe-area";
 import { computeRTLDirection } from "../common/util/compute_rtl";
 import "../components/ha-drawer";
+<<<<<<< HEAD
 import "../components/ha-logo-svg";
+=======
+import { narrowViewportContext } from "../data/context";
+>>>>>>> dev
 import { showNotificationDrawer } from "../dialogs/notifications/show-notification-drawer";
 import type { HomeAssistant, Route } from "../types";
 import "./partial-panel-resolver";
@@ -45,6 +51,18 @@ export class HomeAssistantMain extends LitElement {
 
   @state() private _drawerOpen = false;
 
+  @storage({
+    key: DEBUG_SAFE_AREA_TOOL_STORAGE_KEY,
+    state: true,
+    subscribe: true,
+  })
+  private _debugSafeAreaTool = false;
+
+  private _narrowViewportProvider = new ContextProvider(this, {
+    context: narrowViewportContext,
+    initialValue: this.narrow,
+  });
+
   constructor() {
     super();
     listenMediaQuery("(max-width: 870px)", (matches) => {
@@ -64,6 +82,7 @@ export class HomeAssistantMain extends LitElement {
       this.hass.panels && this.hass.userData && this.hass.systemData;
 
     return html`
+<<<<<<< HEAD
       <ha-snowflakes .hass=${this.hass} .narrow=${this.narrow}></ha-snowflakes>
       <div class="app-shell">
         ${this._isNonAdmin
@@ -102,6 +121,36 @@ export class HomeAssistantMain extends LitElement {
                 : nothing}
             `}
       </div>
+=======
+      <ha-snowflakes .narrow=${this.narrow}></ha-snowflakes>
+      <ha-drawer
+        .type=${sidebarNarrow ? "modal" : ""}
+        .open=${sidebarNarrow ? this._drawerOpen : false}
+        .direction=${computeRTLDirection(this.hass)}
+        @hass-drawer-closed=${this._drawerClosed}
+      >
+        <ha-sidebar
+          .hass=${this.hass}
+          .narrow=${sidebarNarrow}
+          .route=${this.route}
+          .alwaysExpand=${sidebarNarrow || this.hass.dockedSidebar === "docked"}
+        ></ha-sidebar>
+        ${
+          isPanelReady
+            ? html`<partial-panel-resolver
+                .hass=${this.hass}
+                .route=${this.route}
+                slot="appContent"
+              ></partial-panel-resolver>`
+            : nothing
+        }
+      </ha-drawer>
+      ${
+        this._debugSafeAreaTool
+          ? html`<ha-debug-safe-area-tool></ha-debug-safe-area-tool>`
+          : nothing
+      }
+>>>>>>> dev
     `;
   }
 
@@ -222,18 +271,25 @@ export class HomeAssistantMain extends LitElement {
   }
 
   public willUpdate(changedProps: PropertyValues<this>) {
+    if (changedProps.has("narrow")) {
+      this._narrowViewportProvider.setValue(this.narrow);
+    }
+
     if (changedProps.has("route") && this._sidebarNarrow) {
       this._drawerOpen = false;
+    }
+
+    if (this._debugSafeAreaTool) {
+      import("../components/ha-debug-safe-area-tool");
     }
   }
 
   protected updated(changedProps: PropertyValues<this>) {
     super.updated(changedProps);
 
-    toggleAttribute(this, "expanded", this.hass.dockedSidebar === "docked");
+    this.toggleAttribute("expanded", this.hass.dockedSidebar === "docked");
 
-    toggleAttribute(
-      this,
+    this.toggleAttribute(
       "modal",
       this._sidebarNarrow || this._externalSidebar || this.hass.kioskMode
     );
@@ -255,8 +311,20 @@ export class HomeAssistantMain extends LitElement {
     :host {
       color: var(--primary-text-color);
       -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+<<<<<<< HEAD
       --ha-sidebar-width: calc(80px + var(--safe-area-inset-left, 0px));
       --mdc-top-app-bar-width: calc(100% - var(--ha-sidebar-width));
+=======
+      /* Keep the negative z-index panel backgrounds (the resolver's ::before
+         and the Lovelace view background) in this host's stacking context.
+         Isolating the conditionally rendered partial-panel-resolver instead
+         can intermittently leave the Android WebView (Chromium 109-124)
+         accessibility tree with an empty panel subtree while the page paints
+         normally, which breaks UI automation such as the companion app E2E. */
+      isolation: isolate;
+      --ha-sidebar-width: calc(56px + var(--safe-area-inset-left, 0px));
+      --ha-top-app-bar-width: calc(100% - var(--ha-sidebar-width));
+>>>>>>> dev
       --safe-area-content-inset-left: 0px;
       --safe-area-content-inset-right: var(--safe-area-inset-right);
     }
@@ -266,7 +334,7 @@ export class HomeAssistantMain extends LitElement {
     }
     :host([modal]) {
       --ha-sidebar-width: unset;
-      --mdc-top-app-bar-width: unset;
+      --ha-top-app-bar-width: 100%;
       --safe-area-content-inset-left: var(--safe-area-inset-left);
     }
     :host([no-sidebar]) {
@@ -304,6 +372,7 @@ export class HomeAssistantMain extends LitElement {
     ha-sidebar {
       -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
     }
+<<<<<<< HEAD
 
     /* Hide the floating bottom navigation bar in portrait orientation. */
     @media (orientation: portrait) {
@@ -409,6 +478,20 @@ export class HomeAssistantMain extends LitElement {
       --logo-width: var(--logo-bottom-nav-width, 22px);
       --logo-height: var(--logo-bottom-nav-height, 22px);
       opacity: 0.8;
+=======
+    partial-panel-resolver {
+      display: block;
+      height: 100%;
+    }
+    partial-panel-resolver::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background: var(--ha-panel-background, var(--primary-background-color));
+      background-attachment: scroll !important;
+>>>>>>> dev
     }
   `;
 }

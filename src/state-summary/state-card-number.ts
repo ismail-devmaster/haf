@@ -1,18 +1,36 @@
 import type { HassEntity } from "home-assistant-js-websocket";
 import type { CSSResultGroup } from "lit";
 import { css, html, LitElement, nothing } from "lit";
-import { customElement, property } from "lit/decorators";
+import { customElement, property, state } from "lit/decorators";
 import { debounce } from "../common/util/debounce";
+import type { HASSDomTargetEvent } from "../common/dom/fire_event";
 import "../components/entity/state-info";
+import type { HaSlider } from "../components/ha-slider";
 import "../components/ha-slider";
+import type { HaInput } from "../components/input/ha-input";
 import "../components/input/ha-input";
 import { UNAVAILABLE } from "../data/entity/entity";
+import { showNumberSlider } from "../data/number";
 import { haStyle } from "../resources/styles";
-import type { HomeAssistant } from "../types";
+import { consume } from "../common/decorators/consume";
+import { transform } from "../common/decorators/transform";
+import { apiContext, formattersContext } from "../data/context";
+import type { HomeAssistantApi, HomeAssistantFormatters } from "../types";
 
 @customElement("state-card-number")
 class StateCardNumber extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
+  @state()
+  @consume({ context: formattersContext, subscribe: true })
+  @transform<
+    HomeAssistantFormatters,
+    HomeAssistantFormatters["formatEntityState"] | undefined
+  >({
+    transformer: (formatters) => formatters?.formatEntityState,
+  })
+  private _formatEntityState?: HomeAssistantFormatters["formatEntityState"];
+
+  @consume({ context: apiContext, subscribe: true })
+  private _api!: HomeAssistantApi;
 
   @property({ attribute: false }) public stateObj!: HassEntity;
 
@@ -46,51 +64,51 @@ class StateCardNumber extends LitElement {
   }
 
   protected render() {
-    const range = this.stateObj.attributes.max - this.stateObj.attributes.min;
-
     return html`
       <state-info
-        .hass=${this.hass}
         .stateObj=${this.stateObj}
         .inDialog=${this.inDialog}
       ></state-info>
-      ${this.stateObj.attributes.mode === "slider" ||
-      (this.stateObj.attributes.mode === "auto" && range <= 256)
-        ? html`
-            <div class="flex">
-              <ha-slider
-                labeled
+      ${
+        showNumberSlider(this.stateObj)
+          ? html`
+              <div class="flex">
+                <ha-slider
+                  labeled
+                  .disabled=${this.stateObj.state === UNAVAILABLE}
+                  .step=${Number(this.stateObj.attributes.step)}
+                  .min=${Number(this.stateObj.attributes.min)}
+                  .max=${Number(this.stateObj.attributes.max)}
+                  .value=${this.stateObj.state}
+                  @change=${this._selectedValueChanged}
+                >
+                </ha-slider>
+                <span class="state">
+                  ${this._formatEntityState?.(this.stateObj)}
+                </span>
+              </div>
+            `
+          : html` <div class="flex state">
+              <ha-input
                 .disabled=${this.stateObj.state === UNAVAILABLE}
+                pattern="[0-9]+([\\.][0-9]+)?"
                 .step=${Number(this.stateObj.attributes.step)}
                 .min=${Number(this.stateObj.attributes.min)}
                 .max=${Number(this.stateObj.attributes.max)}
-                .value=${this.stateObj.state}
+                .value=${Number(this.stateObj.state).toString()}
+                type="number"
                 @change=${this._selectedValueChanged}
               >
-              </ha-slider>
-              <span class="state">
-                ${this.hass.formatEntityState(this.stateObj)}
-              </span>
-            </div>
-          `
-        : html` <div class="flex state">
-            <ha-input
-              .disabled=${this.stateObj.state === UNAVAILABLE}
-              pattern="[0-9]+([\\.][0-9]+)?"
-              .step=${Number(this.stateObj.attributes.step)}
-              .min=${Number(this.stateObj.attributes.min)}
-              .max=${Number(this.stateObj.attributes.max)}
-              .value=${Number(this.stateObj.state).toString()}
-              type="number"
-              @change=${this._selectedValueChanged}
-            >
-              ${this.stateObj.attributes.unit_of_measurement
-                ? html`<span slot="end"
-                    >${this.stateObj.attributes.unit_of_measurement}</span
-                  >`
-                : nothing}
-            </ha-input>
-          </div>`}
+                ${
+                  this.stateObj.attributes.unit_of_measurement
+                    ? html`<span slot="end"
+                        >${this.stateObj.attributes.unit_of_measurement}</span
+                      >`
+                    : nothing
+                }
+              </ha-input>
+            </div>`
+      }
     `;
   }
 
@@ -122,12 +140,14 @@ class StateCardNumber extends LitElement {
     }
   }
 
-  private async _selectedValueChanged(ev: Event) {
-    const value = (ev.target as HTMLInputElement).value;
+  private async _selectedValueChanged(
+    ev: HASSDomTargetEvent<HaSlider | HaInput>
+  ) {
+    const value = String(ev.target.value);
     if (value === this.stateObj.state) {
       return;
     }
-    await this.hass.callService("number", "set_value", {
+    await this._api.callService("number", "set_value", {
       value: value,
       entity_id: this.stateObj.entity_id,
     });

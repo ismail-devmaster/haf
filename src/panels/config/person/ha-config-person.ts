@@ -5,9 +5,10 @@ import { customElement, property, state } from "lit/decorators";
 import { stringCompare } from "../../../common/string/compare";
 import "../../../components/ha-button";
 import "../../../components/ha-card";
-import "../../../components/ha-list";
-import "../../../components/ha-list-item";
 import "../../../components/ha-svg-icon";
+import "../../../components/item/ha-list-item-base";
+import "../../../components/item/ha-list-item-button";
+import "../../../components/list/ha-list-base";
 import "../../../components/user/ha-person-badge";
 import type { Person } from "../../../data/person";
 import {
@@ -27,7 +28,7 @@ import "../../../layouts/hass-tabs-subpage";
 import type { HomeAssistant, Route } from "../../../types";
 import { documentationUrl } from "../../../util/documentation-url";
 import "../ha-config-section";
-import { configSections } from "../ha-panel-config";
+import { configSections } from "../config-sections";
 import {
   loadPersonDetailDialog,
   showPersonDetailDialog,
@@ -38,8 +39,6 @@ export class HaConfigPerson extends LitElement {
   @property({ attribute: false }) public hass?: HomeAssistant;
 
   @property({ attribute: "is-wide", type: Boolean }) public isWide = false;
-
-  @property({ type: Boolean }) public narrow = false;
 
   @property({ attribute: false }) public route!: Route;
 
@@ -61,7 +60,6 @@ export class HaConfigPerson extends LitElement {
     return html`
       <hass-tabs-subpage
         .hass=${this.hass}
-        .narrow=${this.narrow}
         .route=${this.route}
         back-path="/config"
         .tabs=${configSections.persons}
@@ -73,15 +71,17 @@ export class HaConfigPerson extends LitElement {
           >
           <span slot="introduction">
             <p>${hass.localize("ui.panel.config.person.introduction")}</p>
-            ${this._configItems.length > 0
-              ? html`
-                  <p>
-                    ${hass.localize(
-                      "ui.panel.config.person.note_about_persons_configured_in_yaml"
-                    )}
-                  </p>
-                `
-              : ""}
+            ${
+              this._configItems.length > 0
+                ? html`
+                    <p>
+                      ${hass.localize(
+                        "ui.panel.config.person.note_about_persons_configured_in_yaml"
+                      )}
+                    </p>
+                  `
+                : ""
+            }
 
             <a
               href=${documentationUrl(this.hass, "/integrations/person/")}
@@ -93,66 +93,70 @@ export class HaConfigPerson extends LitElement {
           </span>
 
           <ha-card outlined class="storage">
-            <ha-list>
+            <ha-list-base>
               ${this._storageItems.map(
                 (entry) => html`
-                  <ha-list-item
-                    graphic="avatar"
+                  <ha-list-item-button
                     @click=${this._openEditEntry}
                     .entry=${entry}
                   >
                     <ha-person-badge
-                      .hass=${this.hass}
                       .person=${entry}
-                      slot="graphic"
+                      slot="start"
                     ></ha-person-badge>
-                    <span>${entry.name}</span>
-                  </ha-list-item>
+                    <span slot="headline">${entry.name}</span>
+                  </ha-list-item-button>
                 `
               )}
-            </ha-list>
-            ${this._storageItems.length === 0
-              ? html`
-                  <div class="empty">
-                    ${hass.localize(
-                      "ui.panel.config.person.no_persons_created_yet"
-                    )}
-                    <ha-button
-                      @click=${this._createPerson}
-                      appearance="filled"
-                      size="small"
-                    >
-                      <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
+            </ha-list-base>
+            ${
+              this._storageItems.length === 0
+                ? html`
+                    <div class="empty">
                       ${hass.localize(
-                        "ui.panel.config.person.create_person"
-                      )}</ha-button
-                    >
-                  </div>
-                `
-              : nothing}
+                        "ui.panel.config.person.no_persons_created_yet"
+                      )}
+                      <ha-button
+                        @click=${this._createPerson}
+                        appearance="filled"
+                        size="s"
+                      >
+                        <ha-svg-icon
+                          slot="start"
+                          .path=${mdiPlus}
+                        ></ha-svg-icon>
+                        ${hass.localize(
+                          "ui.panel.config.person.create_person"
+                        )}</ha-button
+                      >
+                    </div>
+                  `
+                : nothing
+            }
           </ha-card>
-          ${this._configItems.length > 0
-            ? html`
-                <ha-card outlined header="Configuration.yaml persons">
-                  <ha-list>
-                    ${this._configItems.map(
-                      (entry) => html`
-                        <ha-list-item graphic="avatar">
-                          <ha-person-badge
-                            .hass=${this.hass}
-                            .person=${entry}
-                            slot="graphic"
-                          ></ha-person-badge>
-                          <span>${entry.name}</span>
-                        </ha-list-item>
-                      `
-                    )}
-                  </ha-list>
-                </ha-card>
-              `
-            : nothing}
+          ${
+            this._configItems.length > 0
+              ? html`
+                  <ha-card outlined header="Configuration.yaml persons">
+                    <ha-list-base>
+                      ${this._configItems.map(
+                        (entry) => html`
+                          <ha-list-item-base>
+                            <ha-person-badge
+                              .person=${entry}
+                              slot="start"
+                            ></ha-person-badge>
+                            <span slot="headline">${entry.name}</span>
+                          </ha-list-item-base>
+                        `
+                      )}
+                    </ha-list-base>
+                  </ha-card>
+                `
+              : nothing
+          }
         </ha-config-section>
-        <ha-button slot="fab" size="large" @click=${this._createPerson}>
+        <ha-button slot="fab" size="l" @click=${this._createPerson}>
           <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
           ${hass.localize("ui.panel.config.person.add_person")}
         </ha-button>
@@ -167,7 +171,7 @@ export class HaConfigPerson extends LitElement {
   }
 
   private async _fetchData() {
-    this._usersLoad = fetchUsers(this.hass!);
+    this._usersLoad = fetchUsers(this.hass!.callWS);
     const personData = await fetchPersons(this.hass!);
 
     this._storageItems = personData.storage.sort((ent1, ent2) =>
@@ -275,7 +279,7 @@ export class HaConfigPerson extends LitElement {
         }
       },
       refreshUsers: () => {
-        this._usersLoad = fetchUsers(this.hass!);
+        this._usersLoad = fetchUsers(this.hass!.callWS);
       },
     });
   }
@@ -285,7 +289,7 @@ export class HaConfigPerson extends LitElement {
       color: var(--primary-color);
     }
     ha-card {
-      max-width: 600px;
+      max-width: var(--ha-content-width-narrow);
       margin: 16px auto;
       overflow: hidden;
     }
@@ -295,7 +299,7 @@ export class HaConfigPerson extends LitElement {
       align-items: center;
       justify-content: space-around;
     }
-    ha-list:has(+ .empty) {
+    ha-list-base:has(+ .empty) {
       display: none;
     }
   `;

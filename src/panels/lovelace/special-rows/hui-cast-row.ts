@@ -22,6 +22,21 @@ class HuiCastRow extends LitElement implements LovelaceRow {
 
   @state() private _noHTTPS = false;
 
+  private _removeCastListeners?: (() => void)[];
+
+  public connectedCallback() {
+    super.connectedCallback();
+    if (this._castManager) {
+      this._attachCastListeners(this._castManager);
+      this.requestUpdate();
+    }
+  }
+
+  public disconnectedCallback() {
+    super.disconnectedCallback();
+    this._detachCastListeners();
+  }
+
   public setConfig(config: CastConfig): void {
     this._config = {
       icon: "mdi:television",
@@ -50,28 +65,30 @@ class HuiCastRow extends LitElement implements LovelaceRow {
       <ha-icon .icon=${this._config.icon}></ha-icon>
       <div class="flex">
         <div class="name">${this._config.name}</div>
-        ${this._noHTTPS
-          ? html` Cast requires HTTPS `
-          : this._castManager === undefined
-            ? nothing
-            : this._castManager === null
-              ? html` Cast API unavailable `
-              : this._castManager.castState === "NO_DEVICES_AVAILABLE"
-                ? html` No devices found `
-                : html`
-                    <div class="controls">
-                      <google-cast-launcher></google-cast-launcher>
-                      <ha-button
-                        @click=${this._sendLovelace}
-                        class=${classMap({ inactive: !active })}
-                        appearance="plain"
-                        size="small"
-                        .disabled=${!this._castManager.status}
-                      >
-                        SHOW
-                      </ha-button>
-                    </div>
-                  `}
+        ${
+          this._noHTTPS
+            ? html` Cast requires HTTPS `
+            : this._castManager === undefined
+              ? nothing
+              : this._castManager === null
+                ? html` Cast API unavailable `
+                : this._castManager.castState === "NO_DEVICES_AVAILABLE"
+                  ? html` No devices found `
+                  : html`
+                      <div class="controls">
+                        <google-cast-launcher></google-cast-launcher>
+                        <ha-button
+                          @click=${this._sendLovelace}
+                          class=${classMap({ inactive: !active })}
+                          appearance="plain"
+                          size="s"
+                          .disabled=${!this._castManager.status}
+                        >
+                          SHOW
+                        </ha-button>
+                      </div>
+                    `
+        }
       </div>
     `;
   }
@@ -85,12 +102,9 @@ class HuiCastRow extends LitElement implements LovelaceRow {
       getCastManager(this.hass.auth).then(
         (mgr) => {
           this._castManager = mgr;
-          mgr.addEventListener("connection-changed", () => {
-            this.requestUpdate();
-          });
-          mgr.addEventListener("state-changed", () => {
-            this.requestUpdate();
-          });
+          if (this.isConnected) {
+            this._attachCastListeners(mgr);
+          }
         },
         () => {
           this._castManager = null;
@@ -108,6 +122,22 @@ class HuiCastRow extends LitElement implements LovelaceRow {
           ? "none"
           : "";
     }
+  }
+
+  private _attachCastListeners(mgr: CastManager) {
+    this._detachCastListeners();
+    const update = () => {
+      this.requestUpdate();
+    };
+    this._removeCastListeners = [
+      mgr.addEventListener("connection-changed", update),
+      mgr.addEventListener("state-changed", update),
+    ];
+  }
+
+  private _detachCastListeners() {
+    this._removeCastListeners?.forEach((remove) => remove());
+    this._removeCastListeners = undefined;
   }
 
   private async _sendLovelace() {

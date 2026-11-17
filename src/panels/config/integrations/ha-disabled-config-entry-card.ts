@@ -30,8 +30,9 @@ export class HaDisabledConfigEntryCard extends LitElement {
           {
             cause:
               this.hass.localize(
-                `ui.panel.config.integrations.config_entry.disable.disabled_by.${this
-                  .entry.disabled_by!}`
+                `ui.panel.config.integrations.config_entry.disable.disabled_by.${
+                  this.entry.disabled_by!
+                }`
               ) || this.entry.disabled_by,
           }
         )}
@@ -41,6 +42,7 @@ export class HaDisabledConfigEntryCard extends LitElement {
       >
         <ha-icon-button
           .path=${mdiCog}
+          .label=${this.hass.localize("ui.panel.config.integrations.details")}
           href=${`/config/integrations/integration/${this.entry.domain}`}
           slot="header-button"
         ></ha-icon-button>

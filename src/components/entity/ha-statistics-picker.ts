@@ -1,14 +1,13 @@
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property } from "lit/decorators";
 import { repeat } from "lit/directives/repeat";
-import { fireEvent } from "../../common/dom/fire_event";
-import type { ValueChangedEvent, HomeAssistant } from "../../types";
+import { type HASSDomEvent, fireEvent } from "../../common/dom/fire_event";
+import type { ValueChangedEvent } from "../../types";
 import "./ha-statistic-picker";
+import type { StatisticElementChangedEvent } from "./ha-statistic-picker";
 
 @customElement("ha-statistics-picker")
 class HaStatisticsPicker extends LitElement {
-  @property({ attribute: false }) public hass?: HomeAssistant;
-
   @property({ type: Array }) public value?: string[];
 
   @property({ attribute: false }) public statisticIds?: string[];
@@ -59,11 +58,9 @@ class HaStatisticsPicker extends LitElement {
   })
   public ignoreRestrictionsOnFirstStatistic = false;
 
-  protected render() {
-    if (!this.hass) {
-      return nothing;
-    }
+  @property({ attribute: "can-edit", type: Boolean }) public canEdit?;
 
+  protected render() {
     const ignoreRestriction =
       this.ignoreRestrictionsOnFirstStatistic &&
       this._currentStatistics.length <= 1;
@@ -90,7 +87,6 @@ class HaStatisticsPicker extends LitElement {
           <div>
             <ha-statistic-picker
               .curValue=${statisticId}
-              .hass=${this.hass}
               .includeStatisticsUnitOfMeasurement=${includeStatisticsUnitCurrent}
               .includeUnitClass=${includeUnitClassCurrent}
               .includeDeviceClass=${includeDeviceClassCurrent}
@@ -99,16 +95,18 @@ class HaStatisticsPicker extends LitElement {
               .statisticIds=${this.statisticIds}
               .excludeStatistics=${this.value}
               .allowCustomEntity=${this.allowCustomEntity}
+              .canEdit=${this.canEdit}
               @value-changed=${this._statisticChanged}
+              @edit-statistics-element=${this._editItem}
             ></ha-statistic-picker>
           </div>
         `
       )}
       <div>
         <ha-statistic-picker
-          .hass=${this.hass}
-          .includeStatisticsUnitOfMeasurement=${this
-            .includeStatisticsUnitOfMeasurement}
+          .includeStatisticsUnitOfMeasurement=${
+            this.includeStatisticsUnitOfMeasurement
+          }
           .includeUnitClass=${this.includeUnitClass}
           .includeDeviceClass=${this.includeDeviceClass}
           .statisticTypes=${this.statisticTypes}
@@ -120,6 +118,17 @@ class HaStatisticsPicker extends LitElement {
         ></ha-statistic-picker>
       </div>
     `;
+  }
+
+  private _editItem(ev: HASSDomEvent<StatisticElementChangedEvent>) {
+    const statisticId = ev.detail.statisticId;
+    const index = this._currentStatistics!.findIndex((e) => e === statisticId);
+    fireEvent(this, "edit-detail-element", {
+      subElementConfig: {
+        index,
+        type: "row",
+      },
+    });
   }
 
   private get _currentStatistics() {

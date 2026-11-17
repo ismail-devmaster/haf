@@ -1,5 +1,7 @@
 // @ts-check
 
+import { fileURLToPath } from "node:url";
+
 import unusedImports from "eslint-plugin-unused-imports";
 import globals from "globals";
 import js from "@eslint/js";
@@ -10,6 +12,14 @@ import { configs as wcConfigs } from "eslint-plugin-wc";
 import { configs as a11yConfigs } from "eslint-plugin-lit-a11y";
 import html from "@html-eslint/eslint-plugin";
 import importX from "eslint-plugin-import-x";
+import ha from "./build-scripts/eslint-rules/index.mjs";
+
+const rspackConfigPath = fileURLToPath(
+  new URL("./rspack.config.cjs", import.meta.url)
+);
+
+// Applies everywhere, including the files exempted from the history rule below.
+const restrictedSyntax = ["LabeledStatement", "WithStatement"];
 
 export default tseslint.config(
   {
@@ -29,6 +39,7 @@ export default tseslint.config(
   {
     plugins: {
       "unused-imports": unusedImports,
+      ha,
     },
 
     languageOptions: {
@@ -55,7 +66,7 @@ export default tseslint.config(
     settings: {
       "import-x/resolver": {
         webpack: {
-          config: "./rspack.config.cjs",
+          config: rspackConfigPath,
         },
       },
     },
@@ -110,7 +121,35 @@ export default tseslint.config(
       "no-bitwise": "error",
       "no-console": "error",
       "no-restricted-globals": [2, "event"],
-      "no-restricted-syntax": ["error", "LabeledStatement", "WithStatement"],
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@lit/context",
+              importNames: ["consume"],
+              message:
+                "Use consume from src/common/decorators/consume. The @lit/context version forces a host update on every context change, even for fields without @state().",
+            },
+            {
+              name: "@lit/context",
+              importNames: ["ContextConsumer"],
+              message:
+                "Use ContextSubscriptionController from src/common/decorators/consume. The @lit/context ContextConsumer forces a host update on every context change.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        ...restrictedSyntax,
+        {
+          selector:
+            "CallExpression[callee.property.name=/^(push|replace)State$/]",
+          message:
+            "Use navigate(), updateHistoryState() or replaceCurrentUrl() from common/navigate. History entries carry the app's own bookkeeping, which a raw pushState/replaceState drops.",
+        },
+      ],
       "wc/no-self-class": "off",
 
       // import-x rules
@@ -199,6 +238,10 @@ export default tseslint.config(
       ],
 
       "unused-imports/no-unused-imports": "error",
+      // Off because the existing backlog would fail lint:eslint's
+      // --max-warnings=0; run lint:element-imports to see it. Disable
+      // comments for it would be reported as unused, so none until it is on.
+      "ha/no-unused-element-import": "off",
       "lit/attribute-names": "error",
       "lit/attribute-value-entities": "off",
       "lit/no-template-map": "off",
@@ -222,6 +265,24 @@ export default tseslint.config(
     },
   },
   {
+    // These own history entries themselves: the navigation helpers, the dialog
+    // stack, the boot paths that run before the app has any state to keep, and
+    // the tests that fabricate entries to simulate a document load.
+    files: [
+      "src/common/navigate.ts",
+      "src/dialogs/make-dialog-manager.ts",
+      "src/state/url-sync-mixin.ts",
+      "src/panels/config/automation/add-automation-element-dialog.ts",
+      "src/entrypoints/core.ts",
+      "src/onboarding/**/*.ts",
+      "cast/**/*.ts",
+      "test/**/*.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": ["error", ...restrictedSyntax],
+    },
+  },
+  {
     files: ["src/util/recorder-worklet.js"],
     languageOptions: {
       globals: globals.audioWorklet,
@@ -231,6 +292,26 @@ export default tseslint.config(
     files: ["src/entrypoints/service-worker.ts"],
     languageOptions: {
       globals: globals.serviceworker,
+    },
+  },
+  {
+    files: ["test/e2e/*.mjs"],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
+    files: [".github/scripts/*.mts"],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
+    // Published as native ESM, where package subpath imports such as
+    // "lit/decorators.js" need their extension.
+    files: ["packages/*/src/**/*.ts"],
+    rules: {
+      "import-x/extensions": ["error", "ignorePackages", { ts: "never" }],
     },
   },
   {

@@ -15,27 +15,27 @@ import memoizeOne from "memoize-one";
 import { isComponentLoaded } from "../../common/config/is_component_loaded";
 import { storage } from "../../common/decorators/storage";
 import { fireEvent } from "../../common/dom/fire_event";
-import { computeStateName } from "../../common/entity/compute_state_name";
+import type { HASSDomCurrentTargetEvent } from "../../common/dom/fire_event";
 import { supportsFeature } from "../../common/entity/supports-feature";
 import { navigate } from "../../common/navigate";
 import { constructUrlCurrentPath } from "../../common/url/construct-url";
+import { extractSearchParamsObject } from "../../common/url/search-params";
 import {
-  createSearchParam,
-  extractSearchParam,
-  removeSearchParam,
-} from "../../common/url/search-params";
+  createTodoQueryString,
+  decodeTodoQueryParams,
+} from "../../common/url/todo-query-params";
 import "../../components/ha-button";
 import "../../components/ha-dropdown";
 import type { HaDropdownSelectEvent } from "../../components/ha-dropdown";
 import "../../components/ha-dropdown-item";
 import type { HaDropdownItem } from "../../components/ha-dropdown-item";
 import "../../components/ha-icon-button";
-import "../../components/ha-list";
-import "../../components/ha-list-item";
-import "../../components/ha-menu-button";
 import "../../components/ha-state-icon";
 import "../../components/ha-svg-icon";
 import "../../components/ha-two-pane-top-app-bar-fixed";
+import "../../components/item/ha-list-item-button";
+import type { HaListItemButton } from "../../components/item/ha-list-item-button";
+import "../../components/list/ha-list-base";
 import { deleteConfigEntry } from "../../data/config_entries";
 import { getExtendedEntityRegistryEntry } from "../../data/entity/entity_registry";
 import { fetchIntegrationManifest } from "../../data/integration";
@@ -84,13 +84,13 @@ class PanelTodo extends LitElement {
     this._mql = window.matchMedia(
       "(max-width: 450px), all and (max-height: 500px)"
     );
-    this._mql.addListener(this._setIsMobile);
+    this._mql.addEventListener("change", this._setIsMobile);
     this.mobile = this._mql.matches;
   }
 
   public disconnectedCallback() {
     super.disconnectedCallback();
-    this._mql?.removeListener(this._setIsMobile!);
+    this._mql?.removeEventListener("change", this._setIsMobile!);
     this._mql = undefined;
   }
 
@@ -104,16 +104,23 @@ class PanelTodo extends LitElement {
     if (!this.hasUpdated) {
       this.hass.loadFragmentTranslation("lovelace");
 
-      const urlEntityId = extractSearchParam("entity_id");
-      this._openAddItemFromUrl = extractSearchParam("add_item") === "true";
-      if (urlEntityId) {
-        this._entityId = urlEntityId;
+      const params = decodeTodoQueryParams(extractSearchParamsObject());
+      this._openAddItemFromUrl = params.add_item ?? false;
+
+      if (params.entity_id) {
+        this._entityId = params.entity_id;
       } else {
         if (this._entityId && !(this._entityId in this.hass.states)) {
           this._entityId = undefined;
         }
         if (!this._entityId) {
-          this._entityId = getTodoLists(this.hass, false)[0]?.entity_id;
+          this._entityId = getTodoLists(
+            this.hass.states,
+            this.hass.entities,
+            this.hass.formatEntityName,
+            this.hass.locale.language,
+            false
+          )[0]?.entity_id;
         }
       }
     }
@@ -127,9 +134,12 @@ class PanelTodo extends LitElement {
     }
 
     this._openAddItemFromUrl = false;
-    navigate(constructUrlCurrentPath(removeSearchParam("add_item")), {
-      replace: true,
-    });
+    navigate(
+      constructUrlCurrentPath(
+        createTodoQueryString({ entity_id: this._entityId })
+      ),
+      { replace: true }
+    );
     if (
       supportsFeature(
         this.hass.states[this._entityId],
@@ -146,7 +156,9 @@ class PanelTodo extends LitElement {
       return;
     }
     navigate(
-      constructUrlCurrentPath(createSearchParam({ entity_id: this._entityId })),
+      constructUrlCurrentPath(
+        createTodoQueryString({ entity_id: this._entityId })
+      ),
       { replace: true }
     );
   }
@@ -167,7 +179,14 @@ class PanelTodo extends LitElement {
       ? this.hass.states[this._entityId]
       : undefined;
     const showPane = this._showPaneController.value ?? !this.narrow;
-    const listItems = getTodoLists(this.hass, false).map(
+    const todoLists = getTodoLists(
+      this.hass.states,
+      this.hass.entities,
+      this.hass.formatEntityName,
+      this.hass.locale.language,
+      false
+    );
+    const listItems = todoLists.map(
       (list) =>
         html`<ha-dropdown-item
           @click=${this._setEntityId}
@@ -184,46 +203,72 @@ class PanelTodo extends LitElement {
         footer
         .narrow=${this.narrow}
       >
-        <ha-menu-button
-          slot="navigationIcon"
-          .hass=${this.hass}
-          .narrow=${this.narrow}
-        ></ha-menu-button>
         <div slot="title">
-          ${!showPane
-            ? html`<ha-dropdown class="lists">
-                <ha-button slot="trigger">
-                  <div>
-                    ${this._entityId
-                      ? entityState
-                        ? computeStateName(entityState)
-                        : this._entityId
-                      : nothing}
-                  </div>
-                  <ha-svg-icon slot="end" .path=${mdiChevronDown}></ha-svg-icon>
-                </ha-button>
-                ${listItems}
-                ${this.hass.user?.is_admin
-                  ? html`<wa-divider></wa-divider>
-                      <ha-dropdown-item @click=${this._addList}>
-                        <ha-svg-icon .path=${mdiPlus} slot="icon"></ha-svg-icon>
-                        ${this.hass.localize("ui.panel.todo.create_list")}
-                      </ha-dropdown-item>`
-                  : nothing}
-              </ha-dropdown>`
-            : this.hass.localize("panel.todo")}
+          ${
+            !showPane
+              ? html`<ha-dropdown class="lists">
+                  <ha-button slot="trigger">
+                    <div>
+                      ${
+                        this._entityId
+                          ? entityState
+                            ? this.hass.formatEntityName(entityState)
+                            : this._entityId
+                          : nothing
+                      }
+                    </div>
+                    <ha-svg-icon
+                      slot="end"
+                      .path=${mdiChevronDown}
+                    ></ha-svg-icon>
+                  </ha-button>
+                  ${listItems}
+                  ${
+                    this.hass.user?.is_admin
+                      ? html`<wa-divider></wa-divider>
+                          <ha-dropdown-item @click=${this._addList}>
+                            <ha-svg-icon
+                              .path=${mdiPlus}
+                              slot="icon"
+                            ></ha-svg-icon>
+                            ${this.hass.localize("ui.panel.todo.create_list")}
+                          </ha-dropdown-item>`
+                      : nothing
+                  }
+                </ha-dropdown>`
+              : this.hass.localize("panel.todo")
+          }
         </div>
-        <ha-list slot="pane" activatable>${listItems}</ha-list>
-        ${showPane && this.hass.user?.is_admin
-          ? html`<ha-list-item
-              graphic="icon"
-              slot="pane-footer"
-              @click=${this._addList}
-            >
-              <ha-svg-icon .path=${mdiPlus} slot="graphic"></ha-svg-icon>
-              ${this.hass.localize("ui.panel.todo.create_list")}
-            </ha-list-item>`
-          : nothing}
+        <ha-list-base
+          slot="pane"
+          aria-label=${this.hass.localize("panel.todo")}
+        >
+          ${todoLists.map(
+            (list) => html`
+              <ha-list-item-button
+                .entityId=${list.entity_id}
+                class=${list.entity_id === this._entityId ? "selected" : ""}
+                aria-current=${list.entity_id === this._entityId ? "true" : "false"}
+                @click=${this._setEntityIdFromRow}
+              >
+                <ha-state-icon slot="start" .stateObj=${list}></ha-state-icon>
+                <span slot="headline">${list.name}</span>
+              </ha-list-item-button>
+            `
+          )}
+        </ha-list-base>
+        ${
+          showPane && this.hass.user?.is_admin
+            ? html`<ha-button
+                slot="pane-footer"
+                appearance="filled"
+                @click=${this._addList}
+              >
+                <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
+                ${this.hass.localize("ui.panel.todo.create_list")}
+              </ha-button>`
+            : nothing
+        }
         <ha-dropdown
           slot="actionItems"
           @wa-select=${this._handleDropdownSelect}
@@ -233,51 +278,62 @@ class PanelTodo extends LitElement {
             .label=${""}
             .path=${mdiDotsVertical}
           ></ha-icon-button>
-          ${this._conversation(this.hass.config.components)
-            ? html`<ha-dropdown-item value="info" .disabled=${!this._entityId}>
-                <ha-svg-icon .path=${mdiInformationOutline} slot="icon">
-                </ha-svg-icon>
-                ${this.hass.localize("ui.panel.todo.information")}
-              </ha-dropdown-item>`
-            : nothing}
+          ${
+            this._conversation(this.hass.config.components)
+              ? html`<ha-dropdown-item
+                  value="info"
+                  .disabled=${!this._entityId}
+                >
+                  <ha-svg-icon .path=${mdiInformationOutline} slot="icon">
+                  </ha-svg-icon>
+                  ${this.hass.localize("ui.panel.todo.information")}
+                </ha-dropdown-item>`
+              : nothing
+          }
           <wa-divider></wa-divider>
           <ha-dropdown-item value="assist">
             <ha-svg-icon .path=${mdiCommentProcessingOutline} slot="icon">
             </ha-svg-icon>
             ${this.hass.localize("ui.panel.todo.assist")}
           </ha-dropdown-item>
-          ${entityRegistryEntry?.platform === "local_todo"
-            ? html` <wa-divider></wa-divider>
-                <ha-dropdown-item
-                  value="delete"
-                  variant="danger"
-                  .disabled=${!this._entityId}
-                >
-                  <ha-svg-icon .path=${mdiDelete} slot="icon" class="warning">
-                  </ha-svg-icon>
-                  ${this.hass.localize("ui.panel.todo.delete_list")}
-                </ha-dropdown-item>`
-            : nothing}
+          ${
+            entityRegistryEntry?.platform === "local_todo"
+              ? html` <wa-divider></wa-divider>
+                  <ha-dropdown-item
+                    value="delete"
+                    variant="danger"
+                    .disabled=${!this._entityId}
+                  >
+                    <ha-svg-icon .path=${mdiDelete} slot="icon" class="warning">
+                    </ha-svg-icon>
+                    ${this.hass.localize("ui.panel.todo.delete_list")}
+                  </ha-dropdown-item>`
+              : nothing
+          }
         </ha-dropdown>
         <div id="columns">
           <div class="column">
-            ${this._entityId
-              ? html`
-                  <hui-card
-                    .hass=${this.hass}
-                    .config=${this._cardConfig(this._entityId)}
-                  ></hui-card>
-                `
-              : nothing}
+            ${
+              this._entityId
+                ? html`
+                    <hui-card
+                      .hass=${this.hass}
+                      .config=${this._cardConfig(this._entityId)}
+                    ></hui-card>
+                  `
+                : nothing
+            }
           </div>
         </div>
-        ${entityState &&
-        supportsFeature(entityState, TodoListEntityFeature.CREATE_TODO_ITEM)
-          ? html`<ha-button class="fab" size="large" @click=${this._addItem}>
-              <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
-              ${this.hass.localize("ui.panel.todo.add_item")}
-            </ha-button>`
-          : nothing}
+        ${
+          entityState &&
+          supportsFeature(entityState, TodoListEntityFeature.CREATE_TODO_ITEM)
+            ? html`<ha-button class="fab" size="l" @click=${this._addItem}>
+                <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
+                ${this.hass.localize("ui.panel.todo.add_item")}
+              </ha-button>`
+            : nothing
+        }
       </ha-two-pane-top-app-bar-fixed>
     `;
   }
@@ -285,7 +341,6 @@ class PanelTodo extends LitElement {
   private async _addList(): Promise<void> {
     showConfigFlowDialog(this, {
       startFlowHandler: "local_todo",
-      showAdvanced: this.hass.userData?.showAdvanced,
       manifest: await fetchIntegrationManifest(this.hass, "local_todo"),
     });
   }
@@ -303,7 +358,7 @@ class PanelTodo extends LitElement {
     }
 
     const entityRegistryEntry = await getExtendedEntityRegistryEntry(
-      this.hass,
+      this.hass.callWS,
       this._entityId
     );
 
@@ -321,7 +376,7 @@ class PanelTodo extends LitElement {
       title: this.hass.localize("ui.panel.todo.delete_confirm_title", {
         name:
           this._entityId in this.hass.states
-            ? computeStateName(this.hass.states[this._entityId])
+            ? this.hass.formatEntityName(this.hass.states[this._entityId])
             : this._entityId,
       }),
       text: this.hass.localize("ui.panel.todo.delete_confirm_text"),
@@ -335,7 +390,13 @@ class PanelTodo extends LitElement {
     }
     const result = await deleteConfigEntry(this.hass, entryId);
 
-    this._entityId = getTodoLists(this.hass, false)[0]?.entity_id;
+    this._entityId = getTodoLists(
+      this.hass.states,
+      this.hass.entities,
+      this.hass.formatEntityName,
+      this.hass.locale.language,
+      false
+    )[0]?.entity_id;
 
     if (result.require_restart) {
       showAlertDialog(this, {
@@ -372,10 +433,16 @@ class PanelTodo extends LitElement {
     }
   }
 
-  private _setEntityId(ev: Event) {
-    const item = ev.currentTarget as HaDropdownItem;
+  private _setEntityId(ev: HASSDomCurrentTargetEvent<HaDropdownItem>) {
+    const item = ev.currentTarget;
 
     this._entityId = item.value;
+  }
+
+  private _setEntityIdFromRow(
+    ev: HASSDomCurrentTargetEvent<HaListItemButton & { entityId: string }>
+  ) {
+    this._entityId = ev.currentTarget.entityId;
   }
 
   static get styles(): CSSResultGroup {
@@ -420,8 +487,24 @@ class PanelTodo extends LitElement {
           --ha-button-box-shadow: var(--ha-box-shadow-l);
         }
 
+        ha-button[slot="pane-footer"] {
+          display: block;
+          width: fit-content;
+          margin: var(--ha-space-2) auto var(--ha-space-2);
+        }
+
         ha-dropdown.lists ha-dropdown-item {
           max-width: 80vw;
+        }
+
+        ha-list-item-button.selected {
+          --icon-primary-color: var(--primary-color);
+        }
+        ha-list-item-button.selected::part(base) {
+          background-color: var(--ha-color-fill-primary-quiet-resting);
+        }
+        ha-list-item-button.selected::part(headline) {
+          color: var(--primary-color);
         }
       `,
     ];

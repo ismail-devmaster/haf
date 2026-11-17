@@ -2,6 +2,7 @@ import { HasSlotController } from "@home-assistant/webawesome/dist/internal/slot
 import type { CSSResultGroup, TemplateResult } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
+import type { HASSDomTargetEvent } from "../../common/dom/fire_event";
 
 /**
  * @element ha-row-item
@@ -33,6 +34,8 @@ import { customElement, property, state } from "lit/decorators";
  *
  * @attr {string} headline - Primary text. Overridden by the `headline` slot.
  * @attr {string} supporting-text - Secondary text. Overridden by the `supporting-text` slot.
+ * @attr {boolean} wrap-headline - Wraps the headline onto multiple lines instead of truncating it.
+ * @attr {boolean} wrap-supporting-text - Wraps the supporting text onto multiple lines instead of truncating it.
  * @attr {boolean} disabled - Dims the row and blocks pointer events.
  */
 @customElement("ha-row-item")
@@ -41,6 +44,12 @@ export class HaRowItem extends LitElement {
 
   @property({ type: String, attribute: "supporting-text" })
   public supportingText?: string;
+
+  @property({ type: Boolean, reflect: true, attribute: "wrap-headline" })
+  public wrapHeadline = false;
+
+  @property({ type: Boolean, reflect: true, attribute: "wrap-supporting-text" })
+  public wrapSupportingText = false;
 
   @property({ type: Boolean, reflect: true }) public disabled = false;
 
@@ -56,7 +65,7 @@ export class HaRowItem extends LitElement {
   @state() private _hasEnd = false;
 
   private _onSlotChange(name: "start" | "end") {
-    return (ev: Event) => {
+    return (ev: HASSDomTargetEvent<HTMLSlotElement>) => {
       const slot = ev.target as HTMLSlotElement;
       const hasContent = slot
         .assignedNodes({ flatten: true })
@@ -83,21 +92,33 @@ export class HaRowItem extends LitElement {
   }
 
   protected _renderInner(): TemplateResult {
+    return html`
+      ${this._renderStart()}${this._renderContent()}${this._renderEnd()}
+    `;
+  }
+
+  protected _renderContent(): TemplateResult {
     const hasContent = this._slotController.test("content");
 
-    return html`
-      <div part="start" class="start" ?hidden=${!this._hasStart}>
-        <slot name="start" @slotchange=${this._onSlotChange("start")}></slot>
-      </div>
-      <div part="content" class="content">
-        ${hasContent
+    return html`<div part="content" class="content">
+      ${
+        hasContent
           ? html`<slot name="content"></slot>`
-          : this._renderDefaultContent()}
-      </div>
-      <div part="end" class="end" ?hidden=${!this._hasEnd}>
-        <slot name="end" @slotchange=${this._onSlotChange("end")}></slot>
-      </div>
-    `;
+          : this._renderDefaultContent()
+      }
+    </div>`;
+  }
+
+  protected _renderStart(): TemplateResult {
+    return html`<div part="start" class="start" ?hidden=${!this._hasStart}>
+      <slot name="start" @slotchange=${this._onSlotChange("start")}></slot>
+    </div>`;
+  }
+
+  protected _renderEnd(): TemplateResult {
+    return html`<div part="end" class="end" ?hidden=${!this._hasEnd}>
+      <slot name="end" @slotchange=${this._onSlotChange("end")}></slot>
+    </div>`;
   }
 
   protected _renderDefaultContent(): TemplateResult {
@@ -109,18 +130,22 @@ export class HaRowItem extends LitElement {
       hasSupportingSlot || this.supportingText !== undefined;
 
     return html`
-      ${showHeadline
-        ? html`<div part="headline" class="headline">
-            <slot name="headline">${this.headline ?? nothing}</slot>
-          </div>`
-        : nothing}
-      ${showSupporting
-        ? html`<div part="supporting-text" class="supporting">
-            <slot name="supporting-text"
-              >${this.supportingText ?? nothing}</slot
-            >
-          </div>`
-        : nothing}
+      ${
+        showHeadline
+          ? html`<div part="headline" class="headline">
+              <slot name="headline">${this.headline ?? nothing}</slot>
+            </div>`
+          : nothing
+      }
+      ${
+        showSupporting
+          ? html`<div part="supporting-text" class="supporting">
+              <slot name="supporting-text"
+                >${this.supportingText ?? nothing}</slot
+              >
+            </div>`
+          : nothing
+      }
     `;
   }
 
@@ -174,6 +199,10 @@ export class HaRowItem extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    :host([wrap-headline]) .headline,
+    :host([wrap-supporting-text]) .supporting {
+      white-space: normal;
     }
   `;
 }

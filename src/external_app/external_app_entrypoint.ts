@@ -5,6 +5,7 @@ in core bundle slows things down and causes duplicate registration.
 This is the entry point for providing external app stuff from app entrypoint.
 */
 
+import type { HASSDomEvent } from "../common/dom/fire_event";
 import { fireEvent } from "../common/dom/fire_event";
 import { mainWindow } from "../common/dom/get_main_window";
 import { navigate } from "../common/navigate";
@@ -15,13 +16,14 @@ import type {
   EMIncomingMessageBarCodeScanResult,
   EMIncomingMessageCommands,
   ImprovDiscoveredDevice,
+  MatterCommissionFinish,
+  WebRtcStreamStopped,
 } from "./external_messaging";
 
 const barCodeListeners = new Set<
   (
     msg:
-      | EMIncomingMessageBarCodeScanResult
-      | EMIncomingMessageBarCodeScanAborted
+      EMIncomingMessageBarCodeScanResult | EMIncomingMessageBarCodeScanAborted
   ) => boolean
 >();
 
@@ -41,8 +43,7 @@ export const attachExternalToApp = (hassMainEl: HomeAssistantMain) => {
 export const addExternalBarCodeListener = (
   listener: (
     msg:
-      | EMIncomingMessageBarCodeScanResult
-      | EMIncomingMessageBarCodeScanAborted
+      EMIncomingMessageBarCodeScanResult | EMIncomingMessageBarCodeScanAborted
   ) => boolean
 ) => {
   barCodeListeners.add(listener);
@@ -91,12 +92,16 @@ export const handleExternalMessage = (
     fireEvent(window, "improv-discovered-device", msg.payload);
   } else if (msg.command === "improv/device_setup_done") {
     fireEvent(window, "improv-device-setup-done");
+  } else if (msg.command === "matter/commission/finish") {
+    fireEvent(window, "matter-commission-finish", msg.payload);
   } else if (msg.command === "bar_code/scan_result") {
     barCodeListeners.forEach((listener) => listener(msg));
   } else if (msg.command === "bar_code/aborted") {
     barCodeListeners.forEach((listener) => listener(msg));
   } else if (msg.command === "kiosk_mode/set") {
     fireEvent(window, "hass-kiosk-mode", { enable: msg.payload.enable });
+  } else if (msg.command === "webrtc/stream/stopped") {
+    fireEvent(window, "webrtc-stream-stopped", msg.payload);
   } else {
     return false;
   }
@@ -115,5 +120,22 @@ declare global {
   interface HASSDomEvents {
     "improv-discovered-device": ImprovDiscoveredDevice;
     "improv-device-setup-done": undefined;
+    "matter-commission-finish": MatterCommissionFinish;
+    "webrtc-stream-stopped": WebRtcStreamStopped;
+  }
+
+  interface GlobalEventHandlersEventMap {
+    "improv-discovered-device": HASSDomEvent<
+      HASSDomEvents["improv-discovered-device"]
+    >;
+    "improv-device-setup-done": HASSDomEvent<
+      HASSDomEvents["improv-device-setup-done"]
+    >;
+    "matter-commission-finish": HASSDomEvent<
+      HASSDomEvents["matter-commission-finish"]
+    >;
+    "webrtc-stream-stopped": HASSDomEvent<
+      HASSDomEvents["webrtc-stream-stopped"]
+    >;
   }
 }

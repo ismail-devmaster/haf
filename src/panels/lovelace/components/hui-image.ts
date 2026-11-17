@@ -1,9 +1,14 @@
 import type { PropertyValues } from "lit";
 import { css, html, LitElement, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators";
+import { customElement, property, query, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
+import { live } from "lit/directives/live";
 import { styleMap } from "lit/directives/style-map";
 import { STATES_OFF } from "../../../common/const";
+import type {
+  HASSDomCurrentTargetEvent,
+  HASSDomTargetEvent,
+} from "../../../common/dom/fire_event";
 import { computeDomain } from "../../../common/entity/compute_domain";
 import parseAspectRatio from "../../../common/util/parse-aspect-ratio";
 import "../../../components/ha-camera-stream";
@@ -16,6 +21,7 @@ import type { ImageEntity } from "../../../data/image";
 import { computeImageUrl } from "../../../data/image";
 import {
   isMediaSourceContentId,
+  isStreamingMedia,
   resolveMediaSource,
 } from "../../../data/media_source";
 import type { HomeAssistant } from "../../../types";
@@ -59,13 +65,15 @@ export class HuiImage extends LitElement {
   @property({ attribute: false }) public darkModeFilter?: string;
 
   @property({ attribute: "fit-mode", type: String }) public fitMode?:
-    | "cover"
-    | "contain"
-    | "fill";
+    "cover" | "contain" | "fill";
 
   @state() private _imageVisible? = false;
 
   @state() private _loadState?: LoadState;
+
+  @query("#image") private _img?: HTMLImageElement;
+
+  private _reconnectImg = false;
 
   @state() private _cameraImageSrc?: string;
 
@@ -90,11 +98,14 @@ export class HuiImage extends LitElement {
 
   public connectedCallback(): void {
     super.connectedCallback();
+    if (this._reconnectImg) {
+      this.requestUpdate();
+    }
     if (this._loadState === undefined) {
       this._loadState = LoadState.Loading;
     }
     if (this.cameraImage && this.cameraView !== "live") {
-      this._startIntersectionObserverOrUpdates();
+      this._startIntersectionObserver();
     }
   }
 
@@ -103,6 +114,12 @@ export class HuiImage extends LitElement {
     this._stopUpdateCameraInterval();
     this._stopIntersectionObserver();
     this._imageVisible = undefined;
+    // A detached <img> keeps an MJPEG stream open, which can tie up the
+    // connection. Drop the source and set it again when reconnected.
+    if (isStreamingMedia(this._img?.getAttribute("src") || "")) {
+      this._reconnectImg = true;
+      this._img?.removeAttribute("src");
+    }
   }
 
   protected handleIntersectionCallback(entries: IntersectionObserverEntry[]) {
@@ -110,11 +127,14 @@ export class HuiImage extends LitElement {
   }
 
   public willUpdate(changedProps: PropertyValues): void {
+    if (this.isConnected) {
+      this._reconnectImg = false;
+    }
     if (changedProps.has("hass")) {
       const oldHass = changedProps.get("hass") as HomeAssistant | undefined;
 
       if (this._shouldStartCameraUpdates(oldHass)) {
-        this._startIntersectionObserverOrUpdates();
+        this._startIntersectionObserver();
       } else if (!this.hass!.connected) {
         this._stopUpdateCameraInterval();
         this._stopIntersectionObserver();
@@ -264,51 +284,41 @@ export class HuiImage extends LitElement {
           fill: this.fitMode === "fill",
         })}"
       >
-        ${this.cameraImage && this.cameraView === "live"
-          ? html`
-              <ha-camera-stream
-                muted
-                .hass=${this.hass}
-                .stateObj=${cameraObj}
-                .fitMode=${this.fitMode}
-                .aspectRatio=${this._ratio
-                  ? this._ratio.w / this._ratio.h
-                  : undefined}
-                @load=${this._onVideoLoad}
-              ></ha-camera-stream>
-            `
-          : imageSrc === undefined
-            ? nothing
-            : html`
-                <img
-                  id="image"
-                  src=${imageSrc}
-                  alt=${this.entity || ""}
-                  @error=${this._onImageError}
-                  @load=${this._onImageLoad}
-                  style=${styleMap({
-                    display:
-                      useRatio || this._loadState === LoadState.Loaded
-                        ? "block"
-                        : "none",
-                  })}
-                />
-              `}
-        ${this._loadState === LoadState.Error
-          ? html`<div
-              id="brokenImage"
-              style=${styleMap({
-                height: !useRatio
-                  ? this._lastImageHeight
-                    ? `${this._lastImageHeight}px`
-                    : "100%"
-                  : undefined,
-              })}
-            ></div>`
-          : this.cameraView !== "live" &&
-              (imageSrc === undefined || this._loadState === LoadState.Loading)
+        ${
+          this.cameraImage && this.cameraView === "live"
+            ? html`
+                <ha-camera-stream
+                  muted
+                  .stateObj=${cameraObj}
+                  .fitMode=${this.fitMode}
+                  .aspectRatio=${
+                    this._ratio ? this._ratio.w / this._ratio.h : undefined
+                  }
+                  @load=${this._onVideoLoad}
+                ></ha-camera-stream>
+              `
+            : imageSrc === undefined
+              ? nothing
+              : html`
+                  <img
+                    id="image"
+                    src=${this._reconnectImg ? nothing : live(imageSrc)}
+                    alt=${this.entity || ""}
+                    @error=${this._onImageError}
+                    @load=${this._onImageLoad}
+                    style=${styleMap({
+                      display:
+                        useRatio || this._loadState === LoadState.Loaded
+                          ? "block"
+                          : "none",
+                    })}
+                  />
+                `
+        }
+        ${
+          this._loadState === LoadState.Error
             ? html`<div
-                class="progress-container"
+                id="brokenImage"
                 style=${styleMap({
                   height: !useRatio
                     ? this._lastImageHeight
@@ -316,10 +326,24 @@ export class HuiImage extends LitElement {
                       : "100%"
                     : undefined,
                 })}
-              >
-                <ha-spinner class="render-spinner" size="small"></ha-spinner>
-              </div>`
-            : ""}
+              ></div>`
+            : this.cameraView !== "live" &&
+                (imageSrc === undefined ||
+                  this._loadState === LoadState.Loading)
+              ? html`<div
+                  class="progress-container"
+                  style=${styleMap({
+                    height: !useRatio
+                      ? this._lastImageHeight
+                        ? `${this._lastImageHeight}px`
+                        : "100%"
+                      : undefined,
+                  })}
+                >
+                  <ha-spinner class="render-spinner" size="small"></ha-spinner>
+                </div>`
+              : ""
+        }
       </div>
     `;
   }
@@ -332,20 +356,13 @@ export class HuiImage extends LitElement {
     );
   }
 
-  private _startIntersectionObserverOrUpdates(): void {
-    if ("IntersectionObserver" in window) {
-      if (!this._intersectionObserver) {
-        this._intersectionObserver = new IntersectionObserver(
-          this.handleIntersectionCallback.bind(this)
-        );
-      }
-      this._intersectionObserver.observe(this);
-    } else {
-      // No support for IntersectionObserver
-      // assume all images are visible
-      this._imageVisible = true;
-      this._startUpdateCameraInterval();
+  private _startIntersectionObserver(): void {
+    if (!this._intersectionObserver) {
+      this._intersectionObserver = new IntersectionObserver(
+        this.handleIntersectionCallback.bind(this)
+      );
     }
+    this._intersectionObserver.observe(this);
   }
 
   private _stopIntersectionObserver(): void {
@@ -376,9 +393,11 @@ export class HuiImage extends LitElement {
     this._loadState = LoadState.Error;
   }
 
-  private async _onImageLoad(ev: Event): Promise<void> {
+  private async _onImageLoad(
+    ev: HASSDomTargetEvent<HTMLImageElement>
+  ): Promise<void> {
     this._loadState = LoadState.Loaded;
-    const imgEl = ev.target as HTMLImageElement;
+    const imgEl = ev.target;
     if (this._ratio && this._ratio.w > 0 && this._ratio.h > 0) {
       this._loadedImageSrc = imgEl.src;
     }
@@ -386,9 +405,11 @@ export class HuiImage extends LitElement {
     this._lastImageHeight = imgEl.offsetHeight;
   }
 
-  private async _onVideoLoad(ev: Event): Promise<void> {
+  private async _onVideoLoad(
+    ev: HASSDomCurrentTargetEvent<HaCameraStream>
+  ): Promise<void> {
     this._loadState = LoadState.Loaded;
-    const videoEl = ev.currentTarget as HaCameraStream;
+    const videoEl = ev.currentTarget;
     await this.updateComplete;
     this._lastImageHeight = videoEl.offsetHeight;
   }
@@ -408,8 +429,7 @@ export class HuiImage extends LitElement {
     }
 
     const cameraState = this.hass.states[this.cameraImage] as
-      | CameraEntity
-      | undefined;
+      CameraEntity | undefined;
 
     if (!cameraState) {
       this._onImageError();

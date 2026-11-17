@@ -54,6 +54,9 @@ export class HaGridLayoutSlider extends LitElement {
   @property({ type: Number })
   public range?: number;
 
+  @property({ attribute: false })
+  public valueText?: string;
+
   @state()
   public pressed = false;
 
@@ -94,10 +97,13 @@ export class HaGridLayoutSlider extends LitElement {
 
   protected updated(changedProps: PropertyValues<this>) {
     super.updated(changedProps);
-    if (changedProps.has("value")) {
+    if (changedProps.has("value") || changedProps.has("valueText")) {
       const valuenow = this._steppedValue(this.value ?? 0);
       this.setAttribute("aria-valuenow", valuenow.toString());
-      this.setAttribute("aria-valuetext", valuenow.toString());
+      this.setAttribute(
+        "aria-valuetext",
+        this.valueText ?? valuenow.toString()
+      );
     }
     if (changedProps.has("min")) {
       this.setAttribute("aria-valuemin", this.min.toString());
@@ -328,9 +334,11 @@ export class HaGridLayoutSlider extends LitElement {
                 ></div>
               `;
             })}
-          ${this.value !== undefined
-            ? html`<div class="handle"></div>`
-            : nothing}
+          ${
+            this.value !== undefined
+              ? html`<div class="handle"></div>`
+              : nothing
+          }
           ${this._renderTooltip()}
         </div>
       </div>

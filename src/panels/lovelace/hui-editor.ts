@@ -1,4 +1,3 @@
-import { undoDepth } from "@codemirror/commands";
 import { mdiClose } from "@mdi/js";
 import type { CSSResultGroup, PropertyValues, TemplateResult } from "lit";
 import { css, html, LitElement } from "lit";
@@ -17,6 +16,9 @@ import {
   showAlertDialog,
   showConfirmationDialog,
 } from "../../dialogs/generic/show-dialog-box";
+import { DirtyStateProviderMixin } from "../../mixins/dirty-state-provider-mixin";
+import { KeyboardShortcutMixin } from "../../mixins/keyboard-shortcut-mixin";
+import { PreventUnsavedMixin } from "../../mixins/prevent-unsaved-mixin";
 import { haStyle } from "../../resources/styles";
 import type { HomeAssistant } from "../../types";
 import type { Lovelace } from "./types";
@@ -33,7 +35,9 @@ const strategyStruct = type({
 });
 
 @customElement("hui-editor")
-class LovelaceFullConfigEditor extends LitElement {
+class LovelaceFullConfigEditor extends DirtyStateProviderMixin<string>()(
+  PreventUnsavedMixin(KeyboardShortcutMixin(LitElement))
+) {
   @property({ type: Boolean }) public narrow = false;
 
   @property({ attribute: false }) public hass!: HomeAssistant;
@@ -43,8 +47,6 @@ class LovelaceFullConfigEditor extends LitElement {
   @property({ attribute: false }) public closeEditor?: () => void;
 
   @state() private _saving?: boolean;
-
-  @state() private _changed?: boolean;
 
   private _config?: LovelaceRawConfig;
 
@@ -66,26 +68,27 @@ class LovelaceFullConfigEditor extends LitElement {
           slot="actionItems"
           class="save-button
               ${classMap({
-            saved: this._saving === false || this._changed === true,
+            saved: this._saving === false || this.isDirtyState,
           })}"
         >
-          ${this._changed
-            ? this.hass!.localize(
-                "ui.panel.lovelace.editor.raw_editor.unsaved_changes"
-              )
-            : this.hass!.localize("ui.panel.lovelace.editor.raw_editor.saved")}
+          ${
+            this.isDirtyState
+              ? this.hass!.localize(
+                  "ui.panel.lovelace.editor.raw_editor.unsaved_changes"
+                )
+              : this.hass!.localize("ui.panel.lovelace.editor.raw_editor.saved")
+          }
         </div>
         <ha-button
           slot="actionItems"
           @click=${this._handleSave}
-          .disabled=${!this._changed}
+          .disabled=${!this.isDirtyState}
           >${this.hass!.localize(
             "ui.panel.lovelace.editor.raw_editor.save"
           )}</ha-button
         >
         <div class="content">
           <ha-yaml-editor
-            autofocus
             @value-changed=${this._yamlChanged}
             @editor-save=${this._handleSave}
             disable-fullscreen
@@ -98,10 +101,12 @@ class LovelaceFullConfigEditor extends LitElement {
 
   protected firstUpdated(changedProps: PropertyValues<this>) {
     super.firstUpdated(changedProps);
-    this.yamlEditor.setValue(this.lovelace!.rawConfig);
+    this._setValue();
+    this.yamlEditor.focus();
   }
 
   protected updated(changedProps: PropertyValues<this>) {
+    super.updated(changedProps);
     const oldLovelace = changedProps.get("lovelace") as Lovelace | undefined;
     if (
       !this._saving &&
@@ -110,8 +115,17 @@ class LovelaceFullConfigEditor extends LitElement {
       oldLovelace.rawConfig !== this.lovelace.rawConfig &&
       !deepEqual(oldLovelace.rawConfig, this.lovelace.rawConfig)
     ) {
-      this.yamlEditor.setValue(this.lovelace!.rawConfig);
+      this._setValue();
     }
+  }
+
+  private _setValue() {
+    this.yamlEditor.setValue(this.lovelace!.rawConfig);
+    // Baseline the dirty check against the loaded YAML so it resets on save.
+    this._initDirtyTracking(
+      { type: "custom", compare: (a, b) => a === b },
+      this.yamlEditor.yaml
+    );
   }
 
   static get styles(): CSSResultGroup {
@@ -136,7 +150,10 @@ class LovelaceFullConfigEditor extends LitElement {
         }
 
         ha-yaml-editor {
+          display: flex;
+          flex-direction: column;
           height: 100%;
+          min-height: 0;
         }
 
         .save-button {
@@ -155,18 +172,18 @@ class LovelaceFullConfigEditor extends LitElement {
   private _yamlChanged(ev: CustomEvent) {
     this._config = ev.detail.isValid ? ev.detail.value : undefined;
     this._yamlError = ev.detail.errorMsg;
-    this._changed = undoDepth(this.yamlEditor.codemirror!.state) > 0;
-    if (this._changed && !window.onbeforeunload) {
-      window.onbeforeunload = () => true;
-    } else if (!this._changed && window.onbeforeunload) {
-      window.onbeforeunload = null;
-    }
+    this._updateDirtyState(this.yamlEditor.yaml);
   }
 
-  private async _closeEditor() {
+  /**
+   * Also closes the editor: it is a panel state rather than a route, so leaving
+   * by a navigation never reaches `_closeEditor` and the panel can be cached.
+   */
+  private async _confirmDiscard(addHistory: boolean): Promise<boolean> {
     if (
-      this._changed &&
+      this.isDirtyState &&
       !(await showConfirmationDialog(this, {
+        addHistory,
         text: this.hass.localize(
           "ui.panel.lovelace.editor.raw_editor.confirm_unsaved_changes"
         ),
@@ -174,13 +191,24 @@ class LovelaceFullConfigEditor extends LitElement {
         confirmText: this.hass!.localize("ui.common.leave"),
       }))
     ) {
-      return;
+      return false;
     }
 
-    window.onbeforeunload = null;
-    if (this.closeEditor) {
-      this.closeEditor();
-    }
+    this._markDirtyStateClean();
+    this.closeEditor?.();
+    return true;
+  }
+
+  protected async promptDiscardChanges(): Promise<boolean> {
+    return this._confirmDiscard(false);
+  }
+
+  private async _closeEditor() {
+    await this._confirmDiscard(true);
+  }
+
+  protected supportedShortcutsInInput(): SupportedShortcuts {
+    return { Y: () => this._closeEditor() };
   }
 
   private async _resetConfig() {
@@ -195,7 +223,7 @@ class LovelaceFullConfigEditor extends LitElement {
       });
       return;
     }
-    window.onbeforeunload = null;
+    this._markDirtyStateClean();
     if (this.closeEditor) {
       this.closeEditor();
     }
@@ -275,8 +303,7 @@ class LovelaceFullConfigEditor extends LitElement {
         ),
       });
     }
-    window.onbeforeunload = null;
-    this._changed = false;
+    this._markDirtyStateClean();
     this._saving = false;
   }
 

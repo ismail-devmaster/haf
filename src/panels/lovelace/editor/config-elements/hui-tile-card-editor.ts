@@ -1,4 +1,4 @@
-import { mdiGestureTap, mdiListBox, mdiTextShort } from "@mdi/js";
+import { mdiListBox } from "@mdi/js";
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
@@ -30,8 +30,6 @@ import type {
   LovelaceCardFeatureConfig,
   LovelaceCardFeatureContext,
 } from "../../card-features/types";
-import { ACTION_RELATED_CONTEXT } from "../../components/hui-action-editor";
-import { getEntityDefaultTileIconAction } from "../../cards/hui-tile-card";
 import type { TileCardConfig } from "../../cards/types";
 import type { LovelaceCardEditor } from "../../types";
 import { actionConfigStruct } from "../structs/action-struct";
@@ -39,7 +37,15 @@ import { baseLovelaceCardConfig } from "../structs/base-card-struct";
 import { entityNameStruct } from "../structs/entity-name-struct";
 import type { EditDetailElementEvent, EditSubElementEvent } from "../types";
 import { configElementStyle } from "./config-elements-style";
+import {
+  tileContentConfigFromForm,
+  tileContentFormData,
+  tileContentSchema,
+} from "./content-schema";
 import { getSupportedFeaturesType } from "./hui-card-features-editor";
+import { tileInteractionsSchema } from "./interactions-schema";
+import { stateContentHasTimestamp } from "../../../../state-display/state-display";
+import { timeFormatConfigStruct } from "../../components/types";
 
 const cardConfigStruct = assign(
   baseLovelaceCardConfig,
@@ -60,6 +66,7 @@ const cardConfigStruct = assign(
     icon_double_tap_action: optional(actionConfigStruct),
     features: optional(array(any())),
     features_position: optional(enums(["bottom", "inline"])),
+    time_format: optional(timeFormatConfigStruct),
   })
 );
 
@@ -89,143 +96,12 @@ export class HuiTileCardEditor
     (
       localize: LocalizeFunc,
       entityId: string | undefined,
-      hideState: boolean
+      showTimeFormat: boolean
     ) =>
       [
         { name: "entity", selector: { entity: {} } },
-        {
-          name: "content",
-          flatten: true,
-          type: "expandable",
-          iconPath: mdiTextShort,
-          schema: [
-            {
-              name: "name",
-              selector: {
-                entity_name: {},
-              },
-              context: { entity: "entity" },
-            },
-            {
-              name: "",
-              type: "grid",
-              schema: [
-                {
-                  name: "icon",
-                  selector: {
-                    icon: {},
-                  },
-                  context: { icon_entity: "entity" },
-                },
-                {
-                  name: "color",
-                  selector: {
-                    ui_color: {
-                      default_color: "state",
-                      include_state: true,
-                    },
-                  },
-                },
-                {
-                  name: "show_entity_picture",
-                  selector: {
-                    boolean: {},
-                  },
-                },
-                {
-                  name: "hide_state",
-                  selector: {
-                    boolean: {},
-                  },
-                },
-              ],
-            },
-            ...(!hideState
-              ? ([
-                  {
-                    name: "state_content",
-                    selector: {
-                      ui_state_content: {
-                        allow_context: true,
-                      },
-                    },
-                    context: {
-                      filter_entity: "entity",
-                    },
-                  },
-                ] as const satisfies readonly HaFormSchema[])
-              : []),
-            {
-              name: "content_layout",
-              required: true,
-              selector: {
-                select: {
-                  mode: "box",
-                  options: ["horizontal", "vertical"].map((value) => ({
-                    label: localize(
-                      `ui.panel.lovelace.editor.card.tile.content_layout_options.${value}`
-                    ),
-                    value,
-                    image: {
-                      src: `/static/images/form/tile_content_layout_${value}.svg`,
-                      src_dark: `/static/images/form/tile_content_layout_${value}_dark.svg`,
-                      flip_rtl: true,
-                    },
-                  })),
-                },
-              },
-            },
-          ],
-        },
-        {
-          name: "interactions",
-          type: "expandable",
-          flatten: true,
-          iconPath: mdiGestureTap,
-          schema: [
-            {
-              name: "tap_action",
-              selector: {
-                ui_action: {
-                  default_action: "more-info",
-                },
-              },
-              context: ACTION_RELATED_CONTEXT,
-            },
-            {
-              name: "icon_tap_action",
-              selector: {
-                ui_action: {
-                  default_action: entityId
-                    ? getEntityDefaultTileIconAction(entityId)
-                    : "more-info",
-                },
-              },
-              context: ACTION_RELATED_CONTEXT,
-            },
-            {
-              name: "",
-              type: "optional_actions",
-              flatten: true,
-              schema: (
-                [
-                  "hold_action",
-                  "icon_hold_action",
-                  "double_tap_action",
-                  "icon_double_tap_action",
-                ] as const
-              ).map((action) => ({
-                name: action,
-                selector: {
-                  ui_action: {
-                    default_action: "none" as const,
-                  },
-                },
-                context: ACTION_RELATED_CONTEXT,
-              })),
-            },
-          ],
-        },
+        tileContentSchema(localize, showTimeFormat),
+        tileInteractionsSchema(entityId),
       ] as const satisfies readonly HaFormSchema[]
   );
 
@@ -271,20 +147,21 @@ export class HuiTileCardEditor
 
     const entityId = this._config!.entity;
 
-    const schema = this._schema(
-      this.hass.localize,
-      entityId,
-      this._config.hide_state ?? false
-    );
+    const showTimeFormat =
+      !this._config.hide_state &&
+      stateContentHasTimestamp(
+        entityId,
+        this.hass.states[entityId],
+        this._config.state_content
+      );
+
+    const schema = this._schema(this.hass.localize, entityId, showTimeFormat);
 
     const vertical = this._config.vertical ?? false;
 
     const featuresSchema = this._featuresSchema(this.hass.localize, vertical);
 
-    const data = {
-      ...this._config,
-      content_layout: vertical ? "vertical" : "horizontal",
-    };
+    const data = tileContentFormData(this._config);
 
     // Default features position to bottom and force it to bottom in vertical mode
     if (!data.features_position || vertical) {
@@ -319,19 +196,21 @@ export class HuiTileCardEditor
             @features-changed=${this._featuresChanged}
             @edit-detail-element=${this._editDetailElement}
           ></hui-card-features-editor>
-          ${hasCompatibleFeatures && hasFeatures
-            ? html`
-                <ha-form
-                  class="features-form"
-                  .hass=${this.hass}
-                  .data=${data}
-                  .schema=${featuresSchema}
-                  .computeLabel=${this._computeLabelCallback}
-                  .computeHelper=${this._computeHelperCallback}
-                  @value-changed=${this._valueChanged}
-                ></ha-form>
-              `
-            : nothing}
+          ${
+            hasCompatibleFeatures && hasFeatures
+              ? html`
+                  <ha-form
+                    class="features-form"
+                    .hass=${this.hass}
+                    .data=${data}
+                    .schema=${featuresSchema}
+                    .computeLabel=${this._computeLabelCallback}
+                    .computeHelper=${this._computeHelperCallback}
+                    @value-changed=${this._valueChanged}
+                  ></ha-form>
+                `
+              : nothing
+          }
         </div>
       </ha-expansion-panel>
     `;
@@ -345,24 +224,10 @@ export class HuiTileCardEditor
 
     const newConfig = ev.detail.value as TileCardConfig;
 
-    let config: TileCardConfig = {
+    let config: TileCardConfig = tileContentConfigFromForm({
       features: this._config.features,
       ...newConfig,
-    };
-
-    if (config.hide_state) {
-      delete config.state_content;
-    }
-
-    if (!config.state_content) {
-      delete config.state_content;
-    }
-
-    // Convert content_layout to vertical
-    if (config.content_layout) {
-      config.vertical = config.content_layout === "vertical";
-      delete config.content_layout;
-    }
+    });
 
     config = orderProperties(config, fieldOrder);
 

@@ -1,14 +1,19 @@
 import { ResizeController } from "@lit-labs/observers/resize-controller";
+import type { ContextType } from "@lit/context";
 import { mdiMinus, mdiPlus } from "@mdi/js";
 import type { TemplateResult } from "lit";
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, query } from "lit/decorators";
+import { customElement, property, query, state } from "lit/decorators";
 import { ifDefined } from "lit/directives/if-defined";
+import { consume } from "../common/decorators/consume";
 import { fireEvent } from "../common/dom/fire_event";
 import { conditionalClamp } from "../common/number/clamp";
 import { formatNumber } from "../common/number/format_number";
 import { blankBeforeUnit } from "../common/translations/blank_before_unit";
+import { internationalizationContext } from "../data/context";
+import { forwardHaptic } from "../data/haptics";
 import type { FrontendLocaleData } from "../data/translation";
+import "./ha-ripple";
 import "./ha-svg-icon";
 
 const A11Y_KEY_CODES = new Set([
@@ -45,6 +50,10 @@ export class HaControlNumberButton extends LitElement {
 
   @query("#input") _input!: HTMLDivElement;
 
+  @state()
+  @consume({ context: internationalizationContext, subscribe: true })
+  private _i18n?: ContextType<typeof internationalizationContext>;
+
   private _hideUnit = new ResizeController(this, {
     callback: (entries) => {
       const width = entries[0]?.contentRect.width;
@@ -53,8 +62,10 @@ export class HaControlNumberButton extends LitElement {
   });
 
   private _boundedValue(value: number) {
-    const clamped = conditionalClamp(value, this.min, this.max);
-    return Math.round(clamped / this._step) * this._step;
+    // Clamp after snapping: when the step does not divide the range evenly,
+    // snapping alone rounds past the bounds (min 1, max 99, step 10 → 0 / 100).
+    const stepped = Math.round(value / this._step) * this._step;
+    return conditionalClamp(stepped, this.min, this.max);
   }
 
   private get _step() {
@@ -67,20 +78,19 @@ export class HaControlNumberButton extends LitElement {
 
   private get _tenPercentStep() {
     if (this.max == null || this.min == null) return this._step;
-    const range = this.max - this.min / 10;
-
-    if (range <= this._step) return this._step;
-    return Math.max(range / 10);
+    return Math.max((this.max - this.min) / 10, this._step);
   }
 
   private _handlePlusButton() {
     this._increment();
+    forwardHaptic(this, "light");
     fireEvent(this, "value-changed", { value: this.value });
     this._input.focus();
   }
 
   private _handleMinusButton() {
     this._decrement();
+    forwardHaptic(this, "light");
     fireEvent(this, "value-changed", { value: this.value });
     this._input.focus();
   }
@@ -134,6 +144,10 @@ export class HaControlNumberButton extends LitElement {
     const unit = this.unit
       ? `${blankBeforeUnit(this.unit, this.locale)}${this.unit}`
       : "";
+    const minusDisabled =
+      this.disabled || (this.min != null && this._value <= this.min);
+    const plusDisabled =
+      this.disabled || (this.max != null && this._value >= this.max);
 
     return html`
       <div class="container">
@@ -151,31 +165,37 @@ export class HaControlNumberButton extends LitElement {
           @keydown=${this._handleKeyDown}
         >
           ${value}
-          ${unit && !this._hideUnit.value
-            ? html`<span class="unit">${unit}</span>`
-            : nothing}
+          ${
+            unit && !this._hideUnit.value
+              ? html`<span class="unit">${unit}</span>`
+              : nothing
+          }
         </div>
         <button
           class="button minus"
           type="button"
           tabindex="-1"
-          aria-label="decrement"
+          aria-label=${ifDefined(
+            this._i18n?.localize("ui.components.number-buttons.decrement")
+          )}
           @click=${this._handleMinusButton}
-          .disabled=${this.disabled ||
-          (this.min != null && this._value <= this.min)}
+          .disabled=${minusDisabled}
         >
           <ha-svg-icon .path=${mdiMinus}></ha-svg-icon>
+          <ha-ripple .disabled=${minusDisabled}></ha-ripple>
         </button>
         <button
           class="button plus"
           type="button"
           tabindex="-1"
-          aria-label="increment"
+          aria-label=${ifDefined(
+            this._i18n?.localize("ui.components.number-buttons.increment")
+          )}
           @click=${this._handlePlusButton}
-          .disabled=${this.disabled ||
-          (this.max != null && this._value >= this.max)}
+          .disabled=${plusDisabled}
         >
           <ha-svg-icon .path=${mdiPlus}></ha-svg-icon>
+          <ha-ripple .disabled=${plusDisabled}></ha-ripple>
         </button>
       </div>
     `;
@@ -188,6 +208,7 @@ export class HaControlNumberButton extends LitElement {
       --control-number-buttons-background-color: var(--disabled-color);
       --control-number-buttons-background-opacity: 0.2;
       --control-number-buttons-border-radius: var(--ha-border-radius-md);
+      --ha-ripple-color: var(--secondary-text-color);
       --mdc-icon-size: 16px;
       height: var(--feature-height);
       width: 100%;
@@ -256,6 +277,8 @@ export class HaControlNumberButton extends LitElement {
       width: 35px;
       height: 100%;
       border: none;
+      border-radius: var(--control-number-buttons-border-radius);
+      overflow: hidden;
       background: none;
       cursor: pointer;
       outline: none;

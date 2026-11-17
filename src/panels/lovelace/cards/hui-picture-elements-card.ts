@@ -1,21 +1,46 @@
 import type { PropertyValues } from "lit";
 import { css, html, LitElement, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators";
+import { customElement, property, query, state } from "lit/decorators";
+import { classMap } from "lit/directives/class-map";
 import { applyThemesOnElement } from "../../../common/dom/apply_themes_on_element";
 import { computeDomain } from "../../../common/entity/compute_domain";
 import "../../../components/ha-card";
 import type { ImageEntity } from "../../../data/image";
 import { computeImageUrl } from "../../../data/image";
+import type {
+  ActionHandlerOptions,
+  ActionHandlerResolution,
+} from "../../../data/lovelace/action_handler";
 import type { HomeAssistant } from "../../../types";
 import { findEntities } from "../common/find-entities";
+import { actionHandler } from "../common/directives/action-handler-directive";
 import type { LovelaceElement, LovelaceElementConfig } from "../elements/types";
 import type { LovelaceCard, LovelaceCardEditor } from "../types";
 import { createStyledHuiElement } from "./picture-elements/create-styled-hui-element";
-import {
-  PREVIEW_CLICK_CALLBACK,
-  type PictureElementsCardConfig,
-} from "./types";
+import { PICTURE_ELEMENTS_EDITOR_BRIDGE } from "./picture-elements/editor-bridge";
+import { PictureElementsEditorPreviewController } from "./picture-elements/editor-preview-controller";
+import type { HitTarget } from "./picture-elements/nearest-hit";
+import { pickNearestTarget } from "./picture-elements/nearest-hit";
+import type { PictureElementsCardConfig } from "./types";
 import type { PersonEntity } from "../../../data/person";
+
+// Point/text elements whose pointer gestures are routed to the nearest target
+// so that dead gaps between elements become tappable and overlapping hit areas
+// no longer steal each other's taps. These elements delegate their pointer
+// handling to the card (keeping keyboard activation for themselves) and expose
+// their visible hit target via getHitInfo(); the card binds the shared
+// action-handler on #root with a resolver, so routed gestures run on the same
+// engine (hold ripple, cancellation, timers) as every other card.
+// How far (px) a tap may sit from an icon seed and still be routed to it.
+const NEAREST_HIT_REACH = 24;
+
+// A routed target: `x1..x2 @ cy` is the seed used for the nearest test (icons
+// are a point, labels the horizontal text segment); `bx/by/bw/bh` is the
+// element's visible box, used to decide whether a tap lands directly on it.
+interface NearestSeed extends HitTarget {
+  element: LovelaceElement;
+  options: ActionHandlerOptions;
+}
 
 @customElement("hui-picture-elements-card")
 class HuiPictureElementsCard extends LitElement implements LovelaceCard {
@@ -29,6 +54,17 @@ class HuiPictureElementsCard extends LitElement implements LovelaceCard {
   @property({ type: Boolean }) public preview = false;
 
   @state() private _elements?: LovelaceElement[];
+
+  @query("#root") private _root?: HTMLElement;
+
+  private _editorPreview = new PictureElementsEditorPreviewController(
+    this,
+    () => ({
+      root: this._root,
+      elements: this._elements,
+      configs: this._config?.elements,
+    })
+  );
 
   public static getStubConfig(
     hass: HomeAssistant,
@@ -84,6 +120,7 @@ class HuiPictureElementsCard extends LitElement implements LovelaceCard {
     }
 
     this._config = config;
+    this._editorPreview.bridge = config[PICTURE_ELEMENTS_EDITOR_BRIDGE];
 
     this._elements = config.elements.map((element) => {
       const cardElement = this._createElement(element);
@@ -93,6 +130,7 @@ class HuiPictureElementsCard extends LitElement implements LovelaceCard {
 
   protected updated(changedProps: PropertyValues): void {
     super.updated(changedProps);
+
     if (!this._config || !this.hass) {
       return;
     }
@@ -111,8 +149,7 @@ class HuiPictureElementsCard extends LitElement implements LovelaceCard {
 
     const oldHass = changedProps.get("hass") as HomeAssistant | undefined;
     const oldConfig = changedProps.get("_config") as
-      | PictureElementsCardConfig
-      | undefined;
+      PictureElementsCardConfig | undefined;
 
     if (
       !oldHass ||
@@ -122,6 +159,97 @@ class HuiPictureElementsCard extends LitElement implements LovelaceCard {
     ) {
       applyThemesOnElement(this, this.hass.themes, this._config.theme);
     }
+  }
+
+  // Resolve a pointer gesture on #root to the routed element it belongs to.
+  // Geometry is read fresh from the rendered DOM at every gesture, so it can
+  // never go stale; the couple of rect reads per press are cheap.
+  private _resolveGesture = (
+    x: number,
+    y: number,
+    ev: Event
+  ): ActionHandlerResolution | null => {
+    const root = this._root;
+    // In the editor preview, clicks set element positions; don't route them.
+    if (!root || this.preview) {
+      return null;
+    }
+    // A non-primary or ctrl mouse press produces no click to complete a
+    // gesture and would leave the engine armed.
+    if (
+      ev.type === "mousedown" &&
+      ((ev as MouseEvent).button !== 0 || (ev as MouseEvent).ctrlKey)
+    ) {
+      return null;
+    }
+    // A press that an interactive non-routed element (a button, custom card,
+    // image element, or conditional child) catches natively is that element's
+    // own gesture; only presses on routed elements and the background route.
+    for (const node of ev.composedPath()) {
+      if (node === root) {
+        break;
+      }
+      if (
+        node instanceof HTMLElement &&
+        node.classList.contains("element") &&
+        !(node as LovelaceElement).delegatedActions
+      ) {
+        return null;
+      }
+    }
+    const rootRect = root.getBoundingClientRect();
+    const seeds = this._collectSeeds(rootRect);
+    if (!seeds.length) {
+      return null;
+    }
+    const seed = pickNearestTarget(
+      seeds,
+      x - rootRect.left,
+      y - rootRect.top,
+      NEAREST_HIT_REACH
+    );
+    return seed ? { target: seed.element, options: seed.options } : null;
+  };
+
+  private _collectSeeds(rootRect: DOMRect): NearestSeed[] {
+    const seeds: NearestSeed[] = [];
+    const root = this._root;
+    if (!root) {
+      return seeds;
+    }
+    // Routed targets can be nested (e.g. inside hui-conditional-element), so
+    // walk the rendered subtree rather than only the top-level elements.
+    for (const element of root.querySelectorAll<LovelaceElement>("*")) {
+      if (!element.delegatedActions || !element.getHitInfo) {
+        continue;
+      }
+      // A hidden element (display: none, visibility: hidden, …) must not
+      // become an invisible tap target.
+      if (element.checkVisibility && !element.checkVisibility()) {
+        continue;
+      }
+      const hit = element.getHitInfo();
+      if (!hit || hit.rect.width <= 0 || hit.rect.height <= 0) {
+        continue;
+      }
+      const bx = hit.rect.left - rootRect.left;
+      const by = hit.rect.top - rootRect.top;
+      const isIcon = !hit.isText;
+      const cx = bx + hit.rect.width / 2;
+      seeds.push({
+        element,
+        options: hit.options,
+        isIcon,
+        x1: isIcon ? cx : bx,
+        x2: isIcon ? cx : bx + hit.rect.width,
+        cy: by + hit.rect.height / 2,
+        bx,
+        by,
+        bw: hit.rect.width,
+        bh: hit.rect.height,
+      });
+    }
+    return seeds;
   }
 
   protected render() {
@@ -157,7 +285,27 @@ class HuiPictureElementsCard extends LitElement implements LovelaceCard {
 
     return html`
       <ha-card .header=${this._config.title}>
-        <div id="root">
+        <div
+          id="root"
+          class=${classMap({
+            editing: this._editorPreview.editing,
+            dragging: this._editorPreview.dragging,
+          })}
+          .actionHandler=${actionHandler({ resolve: this._resolveGesture })}
+          @pointerdown=${this._editorPreview.pointerDown}
+          @pointermove=${this._editorPreview.pointerMove}
+          @pointerup=${this._editorPreview.pointerUp}
+          @pointercancel=${this._editorPreview.pointerCancel}
+          @lostpointercapture=${this._editorPreview.pointerCancel}
+          @keydown=${this._editorPreview.keyDown}
+          @mousedown=${this._editorPreview.blockAction}
+          @click=${this._editorPreview.blockAction}
+          @dblclick=${this._editorPreview.blockAction}
+          @contextmenu=${this._editorPreview.blockAction}
+          @dragstart=${this._editorPreview.blockAction}
+          @touchstart=${this._editorPreview.blockTouch}
+          @touchend=${this._editorPreview.blockTouch}
+        >
           <hui-image
             .hass=${this.hass}
             .image=${image}
@@ -169,7 +317,6 @@ class HuiPictureElementsCard extends LitElement implements LovelaceCard {
             .aspectRatio=${this._config.aspect_ratio}
             .darkModeFilter=${this._config.dark_mode_filter}
             .darkModeImage=${darkModeImage}
-            @click=${this._handleImageClick}
           ></hui-image>
           ${this._elements}
         </div>
@@ -185,6 +332,32 @@ class HuiPictureElementsCard extends LitElement implements LovelaceCard {
     .element {
       position: absolute;
       transform: translate(-50%, -50%);
+    }
+
+    .editing .element {
+      cursor: pointer;
+    }
+
+    .editing .element.movable {
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .editing.dragging,
+    .editing.dragging .element {
+      cursor: grabbing;
+    }
+
+    @media (hover: hover) {
+      .editing .element:hover {
+        outline: 1px dashed var(--primary-color);
+      }
+    }
+
+    .editing .element.selected,
+    .editing .selected .element {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 2px;
     }
 
     ha-card {
@@ -224,19 +397,6 @@ class HuiPictureElementsCard extends LitElement implements LovelaceCard {
     this._elements = this._elements!.map((curCardEl) =>
       curCardEl === elToReplace ? newCardEl : curCardEl
     );
-  }
-
-  private _handleImageClick(ev: MouseEvent): void {
-    if (!this.preview || !this._config?.[PREVIEW_CLICK_CALLBACK]) {
-      return;
-    }
-
-    const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = ((ev.clientX - rect.left) / rect.width) * 100;
-    const y = ((ev.clientY - rect.top) / rect.height) * 100;
-
-    // only the edited card has this callback
-    this._config[PREVIEW_CLICK_CALLBACK](x, y);
   }
 }
 

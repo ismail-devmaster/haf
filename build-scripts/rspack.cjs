@@ -1,7 +1,14 @@
+<<<<<<< HEAD
 /* global require, module, __dirname */
 const { existsSync, writeFileSync } = require("fs");
+=======
+const fs = require("fs");
+
+const { existsSync } = fs;
+>>>>>>> dev
 const path = require("path");
 const rspack = require("@rspack/core");
+const browserslist = require("browserslist");
 // eslint-disable-next-line @typescript-eslint/naming-convention
 const { RsdoctorRspackPlugin } = require("@rsdoctor/rspack-plugin");
 // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -16,6 +23,119 @@ const log = require("fancy-log");
 const SafeWebpackBar = require("./safe-webpackbar.cjs");
 const paths = require("./paths.cjs");
 const bundle = require("./bundle.cjs");
+
+// Build-toolchain packages whose version changes the emitted bytes but which
+// are loader/compiler machinery, not modules in the build graph — so rspack's
+// node_modules snapshot cannot see them. Their versions are folded into the
+// persistent cache `version` so a toolchain upgrade invalidates the cache,
+// while ordinary runtime-dependency bumps (handled by the snapshot) do not.
+const TOOLCHAIN_PACKAGES = [
+  "@rspack/core",
+  "@babel/core",
+  "@babel/preset-env",
+  "babel-plugin-polyfill-corejs3",
+  "@babel/plugin-transform-runtime",
+  "@babel/plugin-transform-class-properties",
+  "@babel/plugin-transform-private-methods",
+  "@babel/runtime",
+  "babel-loader",
+  "core-js",
+  "terser",
+  "terser-webpack-plugin",
+  "browserslist",
+  "caniuse-lite",
+];
+
+// Not direct dependencies: read the copy the package that loads them uses.
+const TOOLCHAIN_PACKAGE_PARENTS = {
+  terser: "terser-webpack-plugin",
+  "caniuse-lite": "browserslist",
+};
+
+const toolchainVersion = (pkg) => {
+  const parent = TOOLCHAIN_PACKAGE_PARENTS[pkg];
+  const lookup = parent && [
+    path.dirname(require.resolve(`${parent}/package.json`)),
+  ];
+  return require(require.resolve(`${pkg}/package.json`, { paths: lookup }))
+    .version;
+};
+
+// Our own build logic — the config, loaders and babel plugins. Their contents
+// (not their paths) go into the cache version, so a change invalidates the
+// cache the same way `buildDependencies` would, but without tying validity to
+// absolute paths — rspack compares buildDependencies by path, which breaks a
+// cache reused on another machine/checkout (a different workspace path).
+const CONFIG_FILES = [
+  __filename,
+  path.join(__dirname, "bundle.cjs"),
+  path.join(__dirname, "minify-template-literals-loader.cjs"),
+  path.join(__dirname, "lit-disable-dev-mode-loader.cjs"),
+  path.join(__dirname, "babel-plugins", "custom-polyfill-plugin.js"),
+  path.join(__dirname, "babel-plugins", "inline-constants-plugin.cjs"),
+  // Its exports define the components source aliases below
+  path.join(__dirname, "..", "packages", "components", "package.json"),
+];
+
+// Resolve @home-assistant/components entry points to their sources, so the package
+// needs no build step during development. The entry points are read from the
+// "ha-source" export condition of the package; subpath patterns are expanded
+// for every element, i.e. every directory with a global.ts, like "card".
+const COMPONENTS_PACKAGE_DIR = path.join(
+  paths.root_dir,
+  "packages",
+  "components"
+);
+const COMPONENTS_SRC_DIR = path.join(
+  COMPONENTS_PACKAGE_DIR,
+  "src",
+  "components"
+);
+const componentElements = fs
+  .readdirSync(COMPONENTS_SRC_DIR, { recursive: true })
+  .filter((file) => path.basename(file) === "global.ts")
+  .map((file) => path.dirname(file).split(path.sep).join("/"));
+const componentsSourceAliases = Object.fromEntries(
+  Object.entries(require("../packages/components/package.json").exports)
+    .filter(([, target]) => target["ha-source"])
+    .flatMap(([subpath, target]) =>
+      (subpath.includes("*") ? componentElements : [undefined]).map((name) => [
+        `${path.posix.join("@home-assistant/components", name ? subpath.replaceAll("*", name) : subpath)}$`,
+        path.join(
+          COMPONENTS_PACKAGE_DIR,
+          name ? target["ha-source"].replaceAll("*", name) : target["ha-source"]
+        ),
+      ])
+    )
+);
+
+// Patches change a package's files but not its version, which is all the
+// node_modules snapshot checks, so their contents go into the version too.
+const PATCHES_DIR = path.join(paths.root_dir, "patches");
+
+// Content hash of the toolchain versions and our own build files, used as the
+// persistent cache `version`. Everything here is path-independent so the cache
+// stays valid when reused on a different machine or checkout path.
+const cacheVersion = () => {
+  const parts = [
+    ...TOOLCHAIN_PACKAGES.map((pkg) => `${pkg}@${toolchainVersion(pkg)}`),
+    ...CONFIG_FILES.map(
+      (file) => `${path.basename(file)}:${fs.readFileSync(file, "utf8")}`
+    ),
+    ...(existsSync(PATCHES_DIR) ? fs.readdirSync(PATCHES_DIR) : [])
+      .filter((file) => file.endsWith(".patch"))
+      .sort()
+      .map(
+        (file) =>
+          `${file}:${fs.readFileSync(path.join(PATCHES_DIR, file), "utf8")}`
+      ),
+  ];
+  return require("crypto")
+    .createHash("sha256")
+    .update(parts.join("\n"))
+    .digest("hex")
+    .slice(0, 16);
+};
 
 class LogStartCompilePlugin {
   ignoredFirst = false;
@@ -96,6 +216,15 @@ const createRspackConfig = ({
   }
   const isDomoluxBuild = name.startsWith("domolux-roles");
   const ignorePackages = bundle.ignorePackages({ latestBuild });
+  // pnpm links node_modules/lit-html into its store; rspack compares real paths
+  const litHtmlRoot = fs.realpathSync(
+    path.resolve(__dirname, "../node_modules/lit-html")
+  );
+  const litHtmlDevelopmentRoot = path.join(litHtmlRoot, "development");
+  const litDisableDevModeLoader = path.join(
+    __dirname,
+    "lit-disable-dev-mode-loader.cjs"
+  );
   return {
     name,
     mode: isProdBuild ? "production" : "development",
@@ -115,25 +244,55 @@ const createRspackConfig = ({
         {
           test: /\.m?js$|\.ts$/,
           exclude: /node_modules[\\/]core-js/,
-          use: (info) => [
-            {
-              loader: "babel-loader",
-              options: {
-                ...bundle.babelOptions({
-                  latestBuild,
-                  isProdBuild,
-                  isTestBuild,
-                  sw: info.issuerLayer === "sw",
-                }),
-                cacheDirectory: !isProdBuild,
-                cacheCompression: false,
+          use: (info) =>
+            [
+              {
+                loader: "babel-loader",
+                // Options are stored per loader identity, not per call. A
+                // file imported by both the page and a worker gets two
+                // modules but, without distinct idents, one set of options:
+                // whichever layer resolved it first. That handed the worker
+                // the page's transform, polyfills included, and the page the
+                // worker's.
+                ident: `babel-loader-${info.issuerLayer ?? "page"}`,
+                options: {
+                  ...bundle.babelOptions({
+                    latestBuild,
+                    isTestBuild,
+                    sw: info.issuerLayer === "sw",
+                    worker: info.issuerLayer === "worker",
+                  }),
+                  cacheDirectory: !isProdBuild,
+                  cacheCompression: false,
+                },
               },
-            },
-            {
-              loader: "builtin:swc-loader",
-              options: bundle.swcOptions(),
-            },
-          ],
+              // Minify lit html/svg/css tagged template literals for production.
+              // Must run after swc (TS/decorators stripped, but templates kept at
+              // ES2021) and before babel — otherwise the legacy build lowers
+              // html`` to _taggedTemplateLiteral() calls that can no longer be
+              // matched, leaving legacy templates unminified.
+              isProdBuild && {
+                loader: path.join(
+                  __dirname,
+                  "minify-template-literals-loader.cjs"
+                ),
+                options: {
+                  browserslistEnv: latestBuild
+                    ? "modern"
+                    : `legacy${info.issuerLayer === "sw" ? "-sw" : ""}`,
+                },
+              },
+              !latestBuild &&
+                info.resource.startsWith(
+                  `${litHtmlDevelopmentRoot}${path.sep}`
+                ) && {
+                  loader: litDisableDevModeLoader,
+                },
+              {
+                loader: "builtin:swc-loader",
+                options: bundle.swcOptions(),
+              },
+            ].filter(Boolean),
           resolve: {
             fullySpecified: false,
           },
@@ -142,10 +301,52 @@ const createRspackConfig = ({
           },
         },
         {
+          // MapLibre's worker loads ESM plugins through `import(url)`, which
+          // is never taken here: the RTL plugin is UMD. Rspack's stub for that
+          // fully dynamic request is exactly what should remain - rejecting,
+          // and free of syntax the legacy floor cannot parse - so the warning
+          // about it is noise. The page side builds a blob import from
+          // `new URL(url, import.meta.url)` for a worker on another origin,
+          // as in the demo embed. That is a URL, not an asset to bundle, and
+          // the worker URL is absolute, so leave it as it is.
+          test: /[\\/]maplibre-gl[\\/]dist[\\/]maplibre-gl(?:-worker)?\.mjs$/,
+          parser: {
+            exprContextCritical: false,
+            url: false,
+          },
+        },
+        {
           test: /\.css$/,
           type: "asset/source",
+          // Imported stylesheets skip the minifier that compiles css``
+          // templates, so legacy builds compile logical properties and :is()
+          // here
+          use: latestBuild
+            ? []
+            : [
+                {
+                  loader: "builtin:lightningcss-loader",
+                  options: {
+                    targets: browserslist.loadConfig({
+                      path: paths.root_dir,
+                      env: "legacy",
+                    }),
+                    // Keep rgba() instead of #rrggbbaa, see
+                    // minify-template-literals-loader.cjs
+                    include: { hexAlphaColors: true },
+                  },
+                },
+              ],
         },
-      ],
+        // The demo embed reads its own URL at runtime to find its files.
+        // Keep import.meta.url instead of replacing it with the source path.
+        // Development builds wrap modules in eval(), which rejects import.meta.
+        latestBuild &&
+          isProdBuild && {
+            test: path.resolve(paths.demo_dir, "src/embed/public-path.ts"),
+            parser: { importMeta: false },
+          },
+      ].filter(Boolean),
     },
     optimization: {
       minimizer: [
@@ -189,8 +390,54 @@ const createRspackConfig = ({
         // Only include the JS of entrypoints
         filter: (file) => file.isInitial && !file.name.endsWith(".map"),
       }),
+      // Babel can miscompile Lit's pre-minified runtime when downleveling to
+      // ES5. Compile lit-html from its development sources for legacy builds,
+      // then let the normal production minifier handle the final bundle.
+      !latestBuild &&
+        new rspack.NormalModuleReplacementPlugin(
+          /^(?:lit-html(?:\/.*)?|\.{1,2}\/.*\.js)$/,
+          (resource) => {
+            if (resource.request === "lit-html") {
+              resource.request = path.join(
+                litHtmlDevelopmentRoot,
+                "lit-html.js"
+              );
+              return;
+            }
+            if (resource.request.startsWith("lit-html/")) {
+              if (resource.request.startsWith("lit-html/development/")) {
+                return;
+              }
+              resource.request = path.join(
+                litHtmlDevelopmentRoot,
+                resource.request.slice("lit-html/".length)
+              );
+              return;
+            }
+            if (
+              resource.context.startsWith(`${litHtmlRoot}${path.sep}`) &&
+              resource.context !== litHtmlDevelopmentRoot &&
+              !resource.context.startsWith(
+                `${litHtmlDevelopmentRoot}${path.sep}`
+              )
+            ) {
+              resource.request = path.join(
+                litHtmlDevelopmentRoot,
+                path.relative(
+                  litHtmlRoot,
+                  path.resolve(resource.context, resource.request)
+                )
+              );
+            }
+          }
+        ),
       new rspack.DefinePlugin(
-        bundle.definedVars({ isProdBuild, latestBuild, defineOverlay })
+        bundle.definedVars({
+          isProdBuild,
+          latestBuild,
+          publicPath,
+          defineOverlay,
+        })
       ),
       new rspack.IgnorePlugin({
         checkResource(resource, context) {
@@ -206,12 +453,20 @@ const createRspackConfig = ({
           ) {
             return false;
           }
+          if (!ignorePackages.length) {
+            return false;
+          }
           let fullPath;
           try {
             fullPath = resource.startsWith(".")
               ? path.resolve(context, resource)
               : require.resolve(resource);
           } catch (err) {
+            // ESM-only packages have no CommonJS entry to resolve. The ignore
+            // list holds resolved CommonJS paths, so they can never match.
+            if (err.code === "ERR_PACKAGE_PATH_NOT_EXPORTED") {
+              return false;
+            }
             console.error(
               "Error in Home Assistant ignore plugin",
               resource,
@@ -264,6 +519,15 @@ const createRspackConfig = ({
     resolve: {
       extensions: [".ts", ".js", ".json"],
       alias: {
+        // @formatjs/bigdecimal uses BigInt (Safari 14, Chrome 67), which
+        // breaks the NumberFormat and PluralRules polyfills
+        ...(!latestBuild && {
+          "@formatjs/bigdecimal$": path.join(
+            paths.root_dir,
+            "src/resources/polyfills/bigdecimal.ts"
+          ),
+        }),
+        ...componentsSourceAliases,
         "lit/static-html$": "lit/static-html.js",
         "lit/decorators$": "lit/decorators.js",
         "lit/directive$": "lit/directive.js",
@@ -277,14 +541,9 @@ const createRspackConfig = ({
         "lit/directives/join$": "lit/directives/join.js",
         "lit/directives/repeat$": "lit/directives/repeat.js",
         "lit/directives/live$": "lit/directives/live.js",
-        "lit/directives/keyed$": latestBuild
-          ? "lit/directives/keyed.js"
-          : path.resolve(__dirname, "../src/common/lit/keyed-es5.ts"),
-        "lit/polyfill-support$": "lit/polyfill-support.js",
+        "lit/directives/keyed$": "lit/directives/keyed.js",
         "@lit-labs/virtualizer/layouts/grid":
           "@lit-labs/virtualizer/layouts/grid.js",
-        "@lit-labs/virtualizer/polyfills/resize-observer-polyfill/ResizeObserver":
-          "@lit-labs/virtualizer/polyfills/resize-observer-polyfill/ResizeObserver.js",
         "@lit-labs/observers/resize-controller":
           "@lit-labs/observers/resize-controller.js",
         "@formatjs/intl-durationformat/should-polyfill$":
@@ -328,6 +587,7 @@ const createRspackConfig = ({
     output: {
       module: latestBuild,
       filename: ({ chunk }) =>
+<<<<<<< HEAD
         !isProdBuild || isStatsBuild || dontHash.has(chunk.name)
           ? "[name].js"
           : "[name].[contenthash].js",
@@ -336,6 +596,16 @@ const createRspackConfig = ({
         : isProdBuild && !isStatsBuild
           ? "[name].[contenthash].js"
           : "[name].js",
+=======
+        // Versioned instead of hashed; MapLibre gets the URL at build time
+        chunk.name === bundle.mapWorkerName
+          ? bundle.mapWorkerFilename()
+          : !isProdBuild || isStatsBuild || dontHash.has(chunk.name)
+            ? "[name].js"
+            : "[name].[contenthash].js",
+      chunkFilename:
+        isProdBuild && !isStatsBuild ? "[name].[contenthash].js" : "[name].js",
+>>>>>>> dev
       assetModuleFilename:
         isProdBuild && !isStatsBuild ? "[id].[contenthash][ext]" : "[id][ext]",
       crossOriginLoading: "use-credentials",
@@ -368,6 +638,34 @@ const createRspackConfig = ({
         ])
       ),
     },
+    // Persistent filesystem cache for production builds, opt-in per environment
+    // via RSPACK_CACHE ("readwrite" writes it, "readonly" only reads a warm
+    // cache — e.g. CI reusing the nightly-written one). Unset (releases, local,
+    // tests) = no cache.
+    ...(isProdBuild && process.env.RSPACK_CACHE
+      ? {
+          cache: {
+            type: "persistent",
+            // `name` is already unique per variant (frontend-modern/-legacy).
+            name,
+            // Content-based version (node major + toolchain versions + our own
+            // build files + patches). Everything is path-independent, so
+            // the cache stays valid when reused on another machine/checkout.
+            // Runtime deps are deliberately absent — rspack's node_modules
+            // snapshot invalidates their modules per-package, so a single
+            // unrelated bump keeps the rest warm. buildDependencies is
+            // intentionally not used: rspack compares it by absolute path,
+            // which breaks cross-machine reuse.
+            version: `node${process.versions.node.split(".")[0]}-${cacheVersion()}`,
+            storage: {
+              type: "filesystem",
+              directory: path.resolve(paths.root_dir, ".rspack-cache"),
+            },
+            // CI reads the nightly-written cache but must not modify it.
+            readonly: process.env.RSPACK_CACHE === "readonly",
+          },
+        }
+      : {}),
     experiments: {
       outputModule: true,
     },
@@ -384,28 +682,43 @@ const createAppConfig = ({
     bundle.config.app({ isProdBuild, latestBuild, isStatsBuild, isTestBuild })
   );
 
-const createDemoConfig = ({ isProdBuild, latestBuild, isStatsBuild }) =>
-  createRspackConfig(
-    bundle.config.demo({ isProdBuild, latestBuild, isStatsBuild })
-  );
-
-const createCastConfig = ({ isProdBuild, latestBuild }) =>
-  createRspackConfig(bundle.config.cast({ isProdBuild, latestBuild }));
-
-const createGalleryConfig = ({ isProdBuild, latestBuild }) =>
-  createRspackConfig(bundle.config.gallery({ isProdBuild, latestBuild }));
-
-const createLandingPageConfig = ({ isProdBuild, latestBuild }) =>
-  createRspackConfig(bundle.config.landingPage({ isProdBuild, latestBuild }));
-
-const createDomoluxRolesConfig = ({
+const createDemoConfig = ({
   isProdBuild,
   latestBuild,
   isStatsBuild,
   isTestBuild,
 }) =>
   createRspackConfig(
+    bundle.config.demo({ isProdBuild, latestBuild, isStatsBuild, isTestBuild })
+  );
+
+const createCastConfig = ({ isProdBuild, latestBuild }) =>
+  createRspackConfig(bundle.config.cast({ isProdBuild, latestBuild }));
+
+const createGalleryConfig = ({ isProdBuild, latestBuild, isTestBuild }) =>
+  createRspackConfig(
+    bundle.config.gallery({ isProdBuild, latestBuild, isTestBuild })
+  );
+
+const createLandingPageConfig = ({ isProdBuild, latestBuild }) =>
+  createRspackConfig(bundle.config.landingPage({ isProdBuild, latestBuild }));
+
+<<<<<<< HEAD
+const createDomoluxRolesConfig = ({
+=======
+const createE2eTestAppConfig = ({
+>>>>>>> dev
+  isProdBuild,
+  latestBuild,
+  isStatsBuild,
+  isTestBuild,
+}) =>
+  createRspackConfig(
+<<<<<<< HEAD
     bundle.config.domoluxRoles({
+=======
+    bundle.config.e2eTestApp({
+>>>>>>> dev
       isProdBuild,
       latestBuild,
       isStatsBuild,
@@ -421,4 +734,5 @@ module.exports = {
   createGalleryConfig,
   createRspackConfig,
   createLandingPageConfig,
+  createE2eTestAppConfig,
 };

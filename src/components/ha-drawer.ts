@@ -95,6 +95,10 @@ export class HaDrawer extends LitElement {
   }
 
   private _handleAfterHide(ev: Event) {
+    // Ignore wa-after-hide from nested Web Awesome components (e.g. tooltips)
+    if (ev.target !== ev.currentTarget) {
+      return;
+    }
     ev.stopPropagation();
     this.open = false;
     fireEvent(this, "hass-drawer-closed");
@@ -294,6 +298,7 @@ export class HaDrawer extends LitElement {
       border-inline-end: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
       box-sizing: border-box;
       transition: width var(--ha-animation-duration-normal) ease;
+      z-index: 6;
     }
 
     .app-content {

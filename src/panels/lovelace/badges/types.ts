@@ -5,6 +5,7 @@ import type { LegacyStateFilter } from "../common/evaluate-filter";
 import type { Condition } from "../common/validate-condition";
 import type { EntityFilterEntityConfig } from "../entity-rows/types";
 import type { DisplayType } from "./hui-entity-badge";
+import type { TimestampRenderingFormat } from "../components/types";
 
 export interface EntityFilterBadgeConfig extends LovelaceBadgeConfig {
   type: "entity-filter";
@@ -23,7 +24,24 @@ export interface StateLabelBadgeConfig extends LovelaceBadgeConfig {
   name?: string;
   icon?: string;
   image?: string;
+  color?: string;
   show_name?: boolean;
+  tap_action?: ActionConfig;
+  hold_action?: ActionConfig;
+  double_tap_action?: ActionConfig;
+}
+
+export interface AlertBadgeConfig extends LovelaceBadgeConfig {
+  type: "alert";
+  entity: string;
+  name?: string | EntityNameItem | EntityNameItem[];
+  icon?: string;
+  alert_color?: string;
+  clear_color?: string;
+  pulse?: boolean;
+  show_name?: boolean;
+  show_state?: boolean;
+  show_icon?: boolean;
   tap_action?: ActionConfig;
   hold_action?: ActionConfig;
   double_tap_action?: ActionConfig;
@@ -52,6 +70,7 @@ export interface EntityBadgeConfig extends LovelaceBadgeConfig {
   tap_action?: ActionConfig;
   hold_action?: ActionConfig;
   double_tap_action?: ActionConfig;
+  time_format?: TimestampRenderingFormat;
   /**
    * @deprecated use `show_state`, `show_name`, `icon_type`
    */

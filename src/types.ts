@@ -36,22 +36,21 @@ declare global {
   var __BUILD__: "modern" | "legacy";
   var __VERSION__: string;
   var __STATIC_PATH__: string;
+  var __MAPLIBRE_WORKER_URL__: string;
   var __BACKWARDS_COMPAT__: boolean;
   var __HASS_URL__: string;
+  // Read by intl-polyfill before a polyfill replaces Intl.DateTimeFormat
+  var __haNativeTimeZone: string | undefined;
+  // Shared by every legacy entry bundle so the Intl polyfills load once
+  var __haIntlPolyfill: Promise<void> | undefined;
+  // Handshake between the app entry and the extra modules in index.html
+  var __haScopedRegistryReady: boolean | undefined;
+  var __haLoadExtraModules: (() => void) | undefined;
   /* eslint-enable @typescript-eslint/naming-convention */
 
   interface Window {
     // Custom panel entry point url
     customPanelJS: string;
-    ShadyCSS: {
-      nativeCss: boolean;
-      nativeShadow: boolean;
-      prepareTemplate(templateElement, elementName, elementExtension);
-      styleElement(element);
-      styleSubtree(element, overrideProperties);
-      styleDocument(overrideProperties);
-      getComputedStyleValue(element, propertyName);
-    };
   }
 
   // for fire event
@@ -154,10 +153,7 @@ export interface CalendarViewChanged {
 }
 
 export type FullCalendarView =
-  | "dayGridMonth"
-  | "dayGridWeek"
-  | "dayGridDay"
-  | "listWeek";
+  "dayGridMonth" | "dayGridWeek" | "dayGridDay" | "listWeek";
 
 export const THEME_MODES = ["auto", "light", "dark"] as const;
 export type ThemeMode = (typeof THEME_MODES)[number];
@@ -298,8 +294,8 @@ export interface DomoluxFormatters {
   formatEntityAttributeName(stateObj: HassEntity, attribute: string): string;
   formatEntityName(
     stateObj: HassEntity,
-    type: string | EntityNameItem | EntityNameItem[] | undefined,
-    separator?: EntityNameOptions
+    name?: string | EntityNameItem | EntityNameItem[],
+    options?: EntityNameOptions
   ): string;
 }
 
@@ -322,9 +318,19 @@ export interface DomoluxUI {
   suspendWhenHidden: boolean;
 }
 
+<<<<<<< HEAD
 export interface DomoluxConfig {
+=======
+export type LogFileDisabledReason = "environment";
+
+export interface HassLoggingConfig {
+  log_file_disabled_reason: LogFileDisabledReason | null;
+}
+
+export interface HomeAssistantConfig {
+>>>>>>> dev
   auth: Auth & { external?: ExternalMessaging };
-  config: HassConfig;
+  config: HassConfig & { logging?: HassLoggingConfig };
   user?: CurrentUser;
   userData?: CoreFrontendUserData;
   systemData?: CoreFrontendSystemData;

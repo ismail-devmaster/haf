@@ -1,3 +1,4 @@
+import { waitForMs } from "../common/util/wait";
 import type { HomeAssistant } from "../types";
 
 export interface BrandsOptions {
@@ -15,20 +16,43 @@ export interface HardwareBrandsOptions {
 
 let _brandsAccessToken: string | undefined;
 let _brandsRefreshInterval: ReturnType<typeof setInterval> | undefined;
+const _brandsAccessTokenListeners = new Set<
+  (token: string | undefined) => void
+>();
 
 // Token refreshes every 30 minutes and is valid for 1 hour.
 // Re-fetch every 30 minutes to always have a valid token.
 const TOKEN_REFRESH_MS = 30 * 60 * 1000;
 
-export const fetchAndScheduleBrandsAccessToken = (
+// Delays before each attempt. The first attempt fires immediately; subsequent
+// ones back off to ride through the window after a Home Assistant restart
+// where the WebSocket server accepts connections but the brands integration
+// hasn't registered its WS handler yet. On older backends without the command,
+// every attempt fails and we give up.
+const FETCH_DELAYS_MS = [0, 500, 1000, 2000, 5000, 10000, 15000];
+
+// Returns true if the cached token changed as a result of this call, so
+// callers can decide whether they need to trigger a re-render.
+export const fetchAndScheduleBrandsAccessToken = async (
   hass: HomeAssistant
-): Promise<void> =>
-  fetchBrandsAccessToken(hass).then(
-    () => scheduleBrandsTokenRefresh(hass),
-    () => {
-      // Ignore failures; older backends may not support this command
+): Promise<boolean> => {
+  const previousToken = _brandsAccessToken;
+  /* eslint-disable no-await-in-loop -- retries are intentionally sequential */
+  for (const delay of FETCH_DELAYS_MS) {
+    if (delay) {
+      await waitForMs(delay);
     }
-  );
+    try {
+      await fetchBrandsAccessToken(hass);
+      scheduleBrandsTokenRefresh(hass);
+      return _brandsAccessToken !== previousToken;
+    } catch {
+      // try next delay
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+  return false;
+};
 
 export const fetchBrandsAccessToken = async (
   hass: HomeAssistant
@@ -36,7 +60,23 @@ export const fetchBrandsAccessToken = async (
   const result = await hass.callWS<{ token: string }>({
     type: "brands/access_token",
   });
+  if (result.token === _brandsAccessToken) {
+    return;
+  }
   _brandsAccessToken = result.token;
+  _brandsAccessTokenListeners.forEach((listener) => listener(result.token));
+};
+
+// Calls the listener with the current token and again whenever it changes, so
+// brand images can re-render with a loadable URL (see brandsAccessTokenContext).
+export const subscribeBrandsAccessToken = (
+  listener: (token: string | undefined) => void
+): (() => void) => {
+  _brandsAccessTokenListeners.add(listener);
+  listener(_brandsAccessToken);
+  return () => {
+    _brandsAccessTokenListeners.delete(listener);
+  };
 };
 
 export const scheduleBrandsTokenRefresh = (hass: HomeAssistant): void => {
@@ -55,51 +95,94 @@ export const clearBrandsTokenRefresh = (): void => {
   }
 };
 
-export const brandsUrl = (options: BrandsOptions, hassUrl?: string): string => {
-  hassUrl = hassUrl ?? location.origin;
-  const base = `/api/brands/integration/${options.domain}/${
+const integrationBrandsUrl = (
+  category: "integration" | "marketplace",
+  options: BrandsOptions,
+  hassUrl?: string
+): string => {
+  const image = `${options.domain}/${
     options.darkOptimized ? "dark_" : ""
   }${options.type}.png`;
 
-  const url = new URL(base, hassUrl);
-  if (_brandsAccessToken) {
-    url.searchParams.set("token", _brandsAccessToken);
+  // In the demo there is no backend to serve the token-gated brands API, so
+  // load the images straight from the public brands CDN instead.
+  if (__DEMO__) {
+    return `https://brands.home-assistant.io/${image}`;
   }
+
+  // The brands API requires a token; without one the request 401s. Return an
+  // empty src so no request fires until the token is available. Components
+  // re-render once the token arrives (see connection-mixin and
+  // brandsAccessTokenContext) and recompute this.
+  if (!_brandsAccessToken) {
+    return "";
+  }
+  hassUrl = hassUrl ?? location.origin;
+
+  const url = new URL(`/api/brands/${category}/${image}`, hassUrl);
+  url.searchParams.set("token", _brandsAccessToken);
   return url.toString();
 };
+
+export const brandsUrl = (options: BrandsOptions, hassUrl?: string): string =>
+  integrationBrandsUrl("integration", options, hassUrl);
+
+// Like brandsUrl, but also finds the images an integration ships itself
+// before it is installed
+export const marketplaceBrandsUrl = (
+  options: BrandsOptions,
+  hassUrl?: string
+): string => integrationBrandsUrl("marketplace", options, hassUrl);
 
 export const hardwareBrandsUrl = (
   options: HardwareBrandsOptions,
   hassUrl?: string
 ): string => {
+  // In the demo, load hardware images from the public brands CDN (see brandsUrl).
+  if (__DEMO__) {
+    return `https://brands.home-assistant.io/hardware/${options.category}/${
+      options.darkOptimized ? "dark_" : ""
+    }${options.manufacturer}${options.model ? `_${options.model}` : ""}.png`;
+  }
+
+  // See brandsUrl: wait for the token before producing a loadable URL.
+  if (!_brandsAccessToken) {
+    return "";
+  }
   hassUrl = hassUrl ?? location.origin;
   const base = `/api/brands/hardware/${options.category}/${
     options.darkOptimized ? "dark_" : ""
   }${options.manufacturer}${options.model ? `_${options.model}` : ""}.png`;
 
   const url = new URL(base, hassUrl);
-  if (_brandsAccessToken) {
-    url.searchParams.set("token", _brandsAccessToken);
-  }
+  url.searchParams.set("token", _brandsAccessToken);
   return url.toString();
 };
 
 export const addBrandsAuth = (url: string, hassUrl?: string): string => {
   hassUrl = hassUrl ?? location.origin;
-  if (!_brandsAccessToken) {
-    return url;
-  }
 
+  let parsedUrl: URL;
   try {
-    const parsedUrl = new URL(url, hassUrl);
-    if (!parsedUrl.pathname.startsWith("/api/brands/")) {
-      return url;
-    }
-    parsedUrl.searchParams.set("token", _brandsAccessToken);
-    return parsedUrl.toString();
+    parsedUrl = new URL(url, hassUrl);
   } catch {
     return url;
   }
+
+  // Non-brands URLs (e.g. CDN brands.home-assistant.io or camera proxies) are
+  // returned unchanged; they don't use the brands token.
+  if (!parsedUrl.pathname.startsWith("/api/brands/")) {
+    return url;
+  }
+
+  // Brands API request without a token would 401; return an empty src so it
+  // doesn't fire until the token is available.
+  if (!_brandsAccessToken) {
+    return "";
+  }
+
+  parsedUrl.searchParams.set("token", _brandsAccessToken);
+  return parsedUrl.toString();
 };
 
 export const extractDomainFromBrandUrl = (url: string): string => {
@@ -130,3 +213,13 @@ export const isBrandUrl = (thumbnail: string | ""): boolean => {
     return false;
   }
 };
+
+// Point a brand image URL at its dark-optimized variant, e.g.
+// /api/brands/integration/{domain}/icon.png -> .../dark_icon.png. Everything
+// else in the URL (host, category, query such as the token) is kept. Both the
+// brands API and the CDN fall back to the light image when a brand has no dark
+// variant. Non-brand URLs and URLs that are already dark are returned unchanged.
+export const darkBrandUrl = (url: string): string =>
+  isBrandUrl(url)
+    ? url.replace(/\/(icon|logo)(@2x)?\.png(?=$|[?#])/, "/dark_$1$2.png")
+    : url;

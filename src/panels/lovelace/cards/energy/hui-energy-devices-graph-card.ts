@@ -1,7 +1,7 @@
-import type { UnsubscribeFunc } from "home-assistant-js-websocket";
+import type { HassEntities } from "home-assistant-js-websocket";
 import type { PropertyValues } from "lit";
 import { css, html, LitElement, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators";
+import { customElement, state } from "lit/decorators";
 import { mdiChartDonut, mdiChartBar } from "@mdi/js";
 import { classMap } from "lit/directives/class-map";
 import memoizeOne from "memoize-one";
@@ -9,48 +9,61 @@ import type { BarSeriesOption, PieSeriesOption } from "echarts/charts";
 import { PieChart } from "echarts/charts";
 import type { ECElementEvent } from "echarts/types/dist/shared";
 import type { PieDataItemOption } from "echarts/types/src/chart/pie/PieSeries";
-import { filterXSS } from "../../../../common/util/xss";
 import { getGraphColorByIndex } from "../../../../common/color/colors";
-import { formatNumber } from "../../../../common/number/format_number";
+import { consume } from "../../../../common/decorators/consume";
+import { formatNumberWithUnit } from "../../../../common/number/format_number";
 import "../../../../components/chart/ha-chart-base";
+import "../../../../components/chart/ha-chart-tooltip-marker";
+import {
+  formattersContext,
+  internationalizationContext,
+  registriesContext,
+  statesContext,
+  uiContext,
+} from "../../../../data/context";
 import type { EnergyData } from "../../../../data/energy";
 import {
   computeConsumptionData,
-  getEnergyDataCollection,
+  computeEnergyDeviceLabels,
+  computeEnergyStatisticArea,
   getSummedData,
   validateEnergyCollectionKey,
 } from "../../../../data/energy";
+import { EnergyCollectionController } from "../../../../data/energy-collection-controller";
+import { MobileAwareMixin } from "../../../../mixins/mobile-aware-mixin";
 import {
   calculateStatisticSumGrowth,
   getStatisticLabel,
   isExternalStatistic,
 } from "../../../../data/recorder";
-import { SubscribeMixin } from "../../../../mixins/subscribe-mixin";
-import type { HomeAssistant } from "../../../../types";
+import type {
+  HomeAssistant,
+  HomeAssistantFormatters,
+  HomeAssistantInternationalization,
+  HomeAssistantRegistries,
+  HomeAssistantUI,
+} from "../../../../types";
 import type { LovelaceCard } from "../../types";
 import type { EnergyDevicesGraphCardConfig } from "../types";
-import { hasConfigChanged } from "../../common/has-changed";
-import type { ECOption } from "../../../../resources/echarts/echarts";
+import type { HaECOption } from "../../../../resources/echarts/echarts";
 import "../../../../components/ha-card";
+import type { HASSDomEvent } from "../../../../common/dom/fire_event";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import { measureTextWidth } from "../../../../util/text";
 import "../../../../components/ha-icon-button";
 import { storage } from "../../../../common/decorators/storage";
-import { listenMediaQuery } from "../../../../common/dom/media_query";
 import { getEnergyColor } from "./common/color";
 import type { CustomLegendOption } from "../../../../components/chart/ha-chart-base";
 
 @customElement("hui-energy-devices-graph-card")
 export class HuiEnergyDevicesGraphCard
-  extends SubscribeMixin(LitElement)
+  extends MobileAwareMixin(LitElement)
   implements LovelaceCard
 {
   public static async getConfigElement() {
     await import("../../editor/config-elements/hui-energy-devices-card-editor");
     return document.createElement("hui-energy-devices-card-editor");
   }
-
-  @property({ attribute: false }) public hass!: HomeAssistant;
 
   @state() private _config?: EnergyDevicesGraphCardConfig;
 
@@ -86,27 +99,35 @@ export class HuiEnergyDevicesGraphCard
   })
   private _hiddenStats: string[] = [];
 
-  @state() private _isMobile = false;
-
   private _compoundStats: string[] = [];
 
-  protected hassSubscribeRequiredHostProps = ["_config"];
+  private _deviceLabels: Record<string, string> = {};
 
-  public hassSubscribe(): UnsubscribeFunc[] {
-    return [
-      getEnergyDataCollection(this.hass, {
-        key: this._config?.collection_key,
-      }).subscribe((data) => {
+  @state()
+  @consume({ context: internationalizationContext, subscribe: true })
+  private _i18n!: HomeAssistantInternationalization;
+
+  @consume({ context: statesContext, subscribe: true })
+  private _states!: HassEntities;
+
+  @consume({ context: formattersContext, subscribe: true })
+  private _formatters!: HomeAssistantFormatters;
+
+  @consume({ context: registriesContext, subscribe: true })
+  private _registries!: HomeAssistantRegistries;
+
+  @consume({ context: uiContext, subscribe: true })
+  private _ui!: HomeAssistantUI;
+
+  constructor() {
+    super();
+    new EnergyCollectionController(this, {
+      config: () => this._config,
+      onData: (data) => {
         this._data = data;
         this._getStatistics(data);
-      }),
-      listenMediaQuery(
-        "all and (max-width: 450px), all and (max-height: 500px)",
-        (matches) => {
-          this._isMobile = matches;
-        }
-      ),
-    ];
+      },
+    });
   }
 
   public getCardSize(): Promise<number> | number {
@@ -128,14 +149,6 @@ export class HuiEnergyDevicesGraphCard
     return this._config.modes;
   }
 
-  protected shouldUpdate(changedProps: PropertyValues<this>): boolean {
-    return (
-      hasConfigChanged(this, changedProps) ||
-      changedProps.size > 1 ||
-      !changedProps.has("hass")
-    );
-  }
-
   protected willUpdate(changedProps: PropertyValues): void {
     super.willUpdate(changedProps);
 
@@ -150,7 +163,7 @@ export class HuiEnergyDevicesGraphCard
   }
 
   protected render() {
-    if (!this.hass || !this._config || !this._chartType) {
+    if (!this._config || !this._chartType) {
       return nothing;
     }
 
@@ -160,19 +173,21 @@ export class HuiEnergyDevicesGraphCard
       <ha-card>
         <div class="card-header">
           <span>${this._config.title ? this._config.title : nothing}</span>
-          ${modes.length > 1
-            ? html`
-                <ha-icon-button
-                  .path=${this._chartType === "pie"
-                    ? mdiChartBar
-                    : mdiChartDonut}
-                  .label=${this.hass.localize(
-                    "ui.panel.lovelace.cards.energy.energy_devices_graph.change_chart_type"
-                  )}
-                  @click=${this._handleChartTypeChange}
-                ></ha-icon-button>
-              `
-            : nothing}
+          ${
+            modes.length > 1
+              ? html`
+                  <ha-icon-button
+                    .path=${
+                      this._chartType === "pie" ? mdiChartBar : mdiChartDonut
+                    }
+                    .label=${this._i18n.localize(
+                      "ui.panel.lovelace.cards.energy.energy_devices_graph.change_chart_type"
+                    )}
+                    @click=${this._handleChartTypeChange}
+                  ></ha-icon-button>
+                `
+              : nothing
+          }
         </div>
         <div
           class="content ${classMap({
@@ -180,7 +195,6 @@ export class HuiEnergyDevicesGraphCard
           })}"
         >
           <ha-chart-base
-            .hass=${this.hass}
             .data=${this._chartData}
             .options=${this._createOptions(
               this._chartData,
@@ -188,34 +202,62 @@ export class HuiEnergyDevicesGraphCard
               this._legendData
             )}
             .height=${`${Math.max(modes.includes("pie") ? 300 : 100, (this._legendData?.length || 0) * 28 + 50)}px`}
+            .sonificationLabelFormatter=${this._sonificationLabel}
             .extraComponents=${[PieChart]}
+            .expandLegend=${this._config.expand_legend}
+            click-label-for-more-info
             @chart-click=${this._handleChartClick}
             @dataset-hidden=${this._datasetHidden}
             @dataset-unhidden=${this._datasetUnhidden}
+            @legend-label-click=${this._handleLegendLabelClick}
           ></ha-chart-base>
         </div>
       </ha-card>
     `;
   }
 
-  private _renderTooltip(params: any) {
-    const deviceName = filterXSS(this._getDeviceName(params.name));
-    const title = `<h4 style="text-align: center; margin: 0;">${deviceName}</h4>`;
-    const value = `${formatNumber(
-      params.value[0] as number,
-      this.hass.locale,
-      params.value < 0.1 ? { maximumFractionDigits: 3 } : undefined
-    )} kWh ${params.percent ? `(${params.percent} %)` : ""}`;
-    return `${title}${params.marker} ${params.seriesName}: <div style="direction:ltr; display: inline;">${value}</div>`;
-  }
+  private _renderTooltip = (params: any) => {
+    const deviceName = this._getDeviceName(params.name);
+    const area = computeEnergyStatisticArea(this._registries, params.name);
+    const energy = params.value[0] as number;
+    const formatOptions =
+      energy < 0.1 ? { maximumFractionDigits: 3 } : undefined;
+    const formattedEnergy = formatNumberWithUnit(
+      energy,
+      "kWh",
+      this._i18n.locale,
+      formatOptions
+    );
+    const formattedPercent = params.percent
+      ? formatNumberWithUnit(params.percent, "%", this._i18n.locale)
+      : undefined;
+    const value = formattedPercent
+      ? `${formattedEnergy} (${formattedPercent})`
+      : formattedEnergy;
+    return html`<h4 style="text-align: center; margin: 0;">${deviceName}</h4>
+      ${
+        area
+          ? html`<div
+              style="text-align: center; color: var(--secondary-text-color);"
+            >
+              ${area}
+            </div>`
+          : nothing
+      }
+      <ha-chart-tooltip-marker
+        .color=${String(params.color ?? "")}
+      ></ha-chart-tooltip-marker>
+      ${params.seriesName}:
+      <div style="direction:ltr; display: inline;">${value}</div>`;
+  };
 
   private _createOptions = memoizeOne(
     (
       data: (BarSeriesOption | PieSeriesOption)[],
       chartType: "bar" | "pie",
       legendData: typeof this._legendData
-    ): ECOption => {
-      const options: ECOption = {
+    ): HaECOption => {
+      const options: HaECOption = {
         grid: {
           top: 5,
           left: 5,
@@ -225,7 +267,7 @@ export class HuiEnergyDevicesGraphCard
         },
         tooltip: {
           show: true,
-          formatter: this._renderTooltip.bind(this),
+          formatter: this._renderTooltip,
         },
         xAxis: { show: false },
         yAxis: { show: false },
@@ -253,7 +295,7 @@ export class HuiEnergyDevicesGraphCard
             fontSize: 12,
             margin: 5,
             width: Math.min(
-              this._isMobile ? 100 : 200,
+              this._isMobileSize ? 100 : 200,
               Math.max(
                 ...(data[0]?.data?.map(
                   (d: any) =>
@@ -280,16 +322,24 @@ export class HuiEnergyDevicesGraphCard
     }
   );
 
+  // The chart data is keyed on statistic ids, which is what Chart2Music would
+  // otherwise announce. Names that aren't statistics — the untracked slice —
+  // are already display text, so those stay as they are.
+  private _sonificationLabel = (label: string): string | undefined =>
+    this._deviceLabels[label] || this._data?.statsMetadata[label]
+      ? this._getDeviceName(label)
+      : undefined;
+
   private _getDeviceName(statisticId: string): string {
     const suffix = this._compoundStats.includes(statisticId)
-      ? ` (${this.hass.localize("ui.panel.lovelace.cards.energy.energy_devices_graph.untracked")})`
+      ? ` (${this._i18n.localize("ui.panel.lovelace.cards.energy.energy_devices_graph.untracked")})`
       : "";
     return (
-      (this._data?.prefs.device_consumption.find(
-        (d) => d.stat_consumption === statisticId
-      )?.name ||
+      // The untracked slice is not a statistic, so it has no label.
+      (this._deviceLabels[statisticId] ||
         getStatisticLabel(
-          this.hass,
+          this._states,
+          this._formatters.formatEntityName,
           statisticId,
           this._data?.statsMetadata[statisticId]
         )) + suffix
@@ -311,7 +361,7 @@ export class HuiEnergyDevicesGraphCard
         type: this._chartType,
         radius: [compareData ? "50%" : "40%", "70%"],
         universalTransition: true,
-        name: this.hass.localize(
+        name: this._i18n.localize(
           "ui.panel.lovelace.cards.energy.energy_devices_graph.energy_usage"
         ),
         itemStyle: {
@@ -326,7 +376,7 @@ export class HuiEnergyDevicesGraphCard
             ? {
                 formatter: ({ name }) => this._getDeviceName(name),
                 overflow: "break",
-                alignTo: this._isMobile ? "edge" : "none",
+                alignTo: this._isMobileSize ? "edge" : "none",
                 edgeDistance: 1,
               }
             : undefined,
@@ -341,7 +391,7 @@ export class HuiEnergyDevicesGraphCard
         type: this._chartType,
         radius: ["30%", "50%"],
         universalTransition: true,
-        name: this.hass.localize(
+        name: this._i18n.localize(
           "ui.panel.lovelace.cards.energy.energy_devices_graph.previous_energy_usage"
         ),
         itemStyle: {
@@ -366,6 +416,13 @@ export class HuiEnergyDevicesGraphCard
     this._compoundStats = energyData.prefs.device_consumption
       .map((d) => d.included_in_stat)
       .filter(Boolean) as string[];
+
+    this._deviceLabels = computeEnergyDeviceLabels(
+      this._states,
+      this._formatters.formatEntityName,
+      energyData.prefs.device_consumption,
+      energyData.statsMetadata
+    );
 
     const devices = energyData.prefs.device_consumption;
     const devicesTotals: Record<string, number> = {};
@@ -449,7 +506,8 @@ export class HuiEnergyDevicesGraphCard
       const showUntracked =
         "from_grid" in summedData ||
         "solar" in summedData ||
-        "from_battery" in summedData;
+        "from_battery" in summedData ||
+        "home" in summedData;
       const untracked = showUntracked
         ? totalUsed -
           pieChartData.reduce(
@@ -460,7 +518,7 @@ export class HuiEnergyDevicesGraphCard
       if (untracked > 0) {
         const color = getEnergyColor(
           computedStyle,
-          this.hass.themes.darkMode,
+          this._ui.themes.darkMode,
           false,
           false,
           "--history-unknown-color"
@@ -468,7 +526,7 @@ export class HuiEnergyDevicesGraphCard
         pieChartData.push({
           id: "untracked",
           value: [untracked, "untracked"] as any,
-          name: this.hass.localize(
+          name: this._i18n.localize(
             "ui.panel.lovelace.cards.energy.energy_devices_graph.untracked_consumption"
           ),
           itemStyle: {
@@ -487,7 +545,7 @@ export class HuiEnergyDevicesGraphCard
             chartDataCompare.push({
               id: "untracked",
               value: [compareUntracked, "untracked"] as any,
-              name: this.hass.localize(
+              name: this._i18n.localize(
                 "ui.panel.lovelace.cards.energy.energy_devices_graph.untracked_consumption"
               ),
               itemStyle: {
@@ -508,7 +566,7 @@ export class HuiEnergyDevicesGraphCard
       datasets.push({
         type: "pie",
         radius: ["0%", compareData ? "30%" : "40%"],
-        name: this.hass.localize(
+        name: this._i18n.localize(
           "ui.panel.lovelace.cards.energy.energy_devices_graph.total_energy_usage"
         ),
         data: [totalChart],
@@ -519,7 +577,7 @@ export class HuiEnergyDevicesGraphCard
           fontSize: computedStyle.getPropertyValue("--ha-font-size-m"),
           lineHeight: 24,
           fontWeight: "bold",
-          formatter: `{a}\n${formatNumber(totalChart, this.hass.locale)} kWh`,
+          formatter: `{a}\n${formatNumberWithUnit(totalChart, "kWh", this._i18n.locale)}`,
         },
         cursor: "default",
         itemStyle: {
@@ -539,11 +597,20 @@ export class HuiEnergyDevicesGraphCard
       chartData.splice(this._config.max_devices);
     }
 
-    this._legendData = chartData.map((d) => ({
-      ...d,
-      name: this._getDeviceName(d.name),
-      value: `${formatNumber(d.value[0], this.hass.locale)} kWh`,
-    }));
+    this._legendData = chartData.map((d) => {
+      const id = (d as any).id as string;
+      return {
+        ...d,
+        name: this._getDeviceName(d.name),
+        value: formatNumberWithUnit(d.value[0], "kWh", this._i18n.locale),
+        // Untracked is synthetic and external statistics aren't real entities,
+        // so their labels can't open more-info; fall back to toggling visibility.
+        noLabelClick:
+          id === "untracked" ||
+          isExternalStatistic(id) ||
+          !(id in this._states),
+      };
+    });
     // filter out hidden stats in place
     for (let i = chartData.length - 1; i >= 0; i--) {
       if (this._hiddenStats.includes((chartData[i] as any).id)) {
@@ -552,8 +619,11 @@ export class HuiEnergyDevicesGraphCard
     }
 
     if (compareData) {
+      const compareById = new Map(
+        chartDataCompare.map((d2) => [(d2 as any).id as string, d2] as const)
+      );
       datasets[1].data = chartData.map((d) =>
-        chartDataCompare.find((d2) => (d2 as any).id === d.id)
+        compareById.get(d.id)
       ) as typeof chartDataCompare;
     }
 
@@ -575,12 +645,22 @@ export class HuiEnergyDevicesGraphCard
       e.detail.event?.target?.type === "tspan" // label
     ) {
       const id = (e.detail.data as any).id as string;
-      if (id !== "untracked") {
+      if (id !== "untracked" && !isExternalStatistic(id) && this._states[id]) {
         fireEvent(this, "hass-more-info", {
           entityId: id,
         });
       }
     }
+  }
+
+  private _handleLegendLabelClick(
+    ev: HASSDomEvent<HASSDomEvents["legend-label-click"]>
+  ) {
+    const entityId = ev.detail.id;
+    if (isExternalStatistic(entityId) || !this._states[entityId]) {
+      return;
+    }
+    fireEvent(this, "hass-more-info", { entityId });
   }
 
   private _handleChartTypeChange(): void {

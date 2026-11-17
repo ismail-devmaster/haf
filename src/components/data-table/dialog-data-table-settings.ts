@@ -1,21 +1,22 @@
 import { mdiDragHorizontalVariant, mdiEye, mdiEyeOff } from "@mdi/js";
 import type { CSSResultGroup } from "lit";
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators";
+import { customElement, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
 import { repeat } from "lit/directives/repeat";
 import memoizeOne from "memoize-one";
+import { consumeLocalize } from "../../common/decorators/consume-context-entry";
 import { fireEvent } from "../../common/dom/fire_event";
+import type { LocalizeFunc } from "../../common/translations/localize";
 import { haStyleDialog } from "../../resources/styles";
-import type { HomeAssistant } from "../../types";
 import "../ha-button";
 import "../ha-dialog-footer";
 import "../ha-icon-button";
-import "../ha-list";
-import "../ha-list-item";
 import "../ha-sortable";
 import "../ha-svg-icon";
 import "../ha-dialog";
+import "../item/ha-list-item-base";
+import "../list/ha-list-base";
 import type {
   DataTableColumnContainer,
   DataTableColumnData,
@@ -24,7 +25,9 @@ import type { DataTableSettingsDialogParams } from "./show-dialog-data-table-set
 
 @customElement("dialog-data-table-settings")
 export class DialogDataTableSettings extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
 
   @state() private _params?: DataTableSettingsDialogParams;
 
@@ -63,15 +66,15 @@ export class DialogDataTableSettings extends LitElement {
   }
 
   private _preserveLastFixed(columnOrder) {
-    let strippedColumnOrder;
     const lastFixedCount = this._lastFixedCount();
-    if (lastFixedCount && columnOrder) {
-      strippedColumnOrder = [...columnOrder];
-      strippedColumnOrder.splice(
-        columnOrder.length - lastFixedCount,
-        lastFixedCount
-      );
+    if (!lastFixedCount || !columnOrder) {
+      return columnOrder;
     }
+    const strippedColumnOrder = [...columnOrder];
+    strippedColumnOrder.splice(
+      columnOrder.length - lastFixedCount,
+      lastFixedCount
+    );
     return strippedColumnOrder;
   }
 
@@ -117,7 +120,7 @@ export class DialogDataTableSettings extends LitElement {
       return nothing;
     }
 
-    const localize = this._params.localizeFunc || this.hass.localize;
+    const localize = this._localize;
 
     const columns = this._sortedColumns(
       this._params.columns,
@@ -136,7 +139,7 @@ export class DialogDataTableSettings extends LitElement {
           draggable-selector=".draggable"
           handle-selector=".handle"
         >
-          <ha-list>
+          <ha-list-base>
             ${repeat(
               columns,
               (col) => col.key,
@@ -149,40 +152,42 @@ export class DialogDataTableSettings extends LitElement {
                     col.defaultHidden)
                   : col.defaultHidden);
 
-                return html`<ha-list-item
-                  hasMeta
+                return html`<ha-list-item-base
                   class=${classMap({
                     hidden: !isVisible,
                     draggable: canMove && isVisible,
                   })}
-                  graphic="icon"
-                  noninteractive
-                  >${col.title || col.label || col.key}
-                  ${canMove && isVisible
-                    ? html`<ha-svg-icon
-                        class="handle"
-                        .path=${mdiDragHorizontalVariant}
-                        slot="graphic"
-                      ></ha-svg-icon>`
-                    : nothing}
+                >
+                  <span slot="headline"
+                    >${col.title || col.label || col.key}</span
+                  >
+                  ${
+                    canMove && isVisible
+                      ? html`<ha-svg-icon
+                          class="handle"
+                          .path=${mdiDragHorizontalVariant}
+                          slot="start"
+                        ></ha-svg-icon>`
+                      : html`<span class="handle-spacer" slot="start"></span>`
+                  }
                   <ha-icon-button
                     tabindex="0"
                     class="action"
                     .disabled=${!canHide}
                     .hidden=${!isVisible}
                     .path=${isVisible ? mdiEye : mdiEyeOff}
-                    slot="meta"
-                    .label=${this.hass!.localize(
+                    slot="end"
+                    .label=${localize(
                       `ui.components.data-table.settings.${isVisible ? "hide" : "show"}`,
                       { title: typeof col.title === "string" ? col.title : "" }
                     )}
                     .column=${col.key}
                     @click=${this._toggle}
                   ></ha-icon-button>
-                </ha-list-item>`;
+                </ha-list-item-base>`;
               }
             )}
-          </ha-list>
+          </ha-list-base>
         </ha-sortable>
         <ha-dialog-footer slot="footer">
           <ha-button
@@ -321,8 +326,8 @@ export class DialogDataTableSettings extends LitElement {
           --dialog-z-index: 10;
           --dialog-content-padding: 0 8px;
         }
-        ha-list-item {
-          --mdc-list-side-padding: 12px;
+        ha-list-item-base {
+          --ha-row-item-padding-inline: 12px;
           overflow: visible;
         }
         .hidden {
@@ -339,6 +344,11 @@ export class DialogDataTableSettings extends LitElement {
         ha-icon-button {
           display: block;
           margin: -12px;
+        }
+        .handle-spacer {
+          display: block;
+          width: 24px;
+          height: 24px;
         }
       `,
     ];

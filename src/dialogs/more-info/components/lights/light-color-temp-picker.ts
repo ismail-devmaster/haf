@@ -1,8 +1,10 @@
+import type { ContextType } from "@lit/context";
 import type { CSSResultGroup, PropertyValues } from "lit";
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { styleMap } from "lit/directives/style-map";
 import memoizeOne from "memoize-one";
+import { consume } from "../../../../common/decorators/consume";
 import { rgb2hex } from "../../../../common/color/convert-color";
 import {
   DEFAULT_MAX_KELVIN,
@@ -11,13 +13,17 @@ import {
 } from "../../../../common/color/convert-light-color";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import { stateColorCss } from "../../../../common/entity/state_color";
+import { PendingValueSync } from "../../../../common/util/pending-value-sync";
 import { throttle } from "../../../../common/util/throttle";
 import "../../../../components/ha-control-slider";
+import {
+  apiContext,
+  internationalizationContext,
+} from "../../../../data/context";
 import { UNAVAILABLE } from "../../../../data/entity/entity";
 import { DOMAIN_ATTRIBUTES_UNITS } from "../../../../data/entity/entity_attributes";
 import type { LightColor, LightEntity } from "../../../../data/light";
 import { LightColorMode } from "../../../../data/light";
-import type { HomeAssistant } from "../../../../types";
 
 declare global {
   interface HASSDomEvents {
@@ -47,13 +53,21 @@ export const generateColorTemperatureGradient = (min: number, max: number) => {
 
 @customElement("light-color-temp-picker")
 class LightColorTempPicker extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
+  @state()
+  @consume({ context: apiContext, subscribe: true })
+  private _api!: ContextType<typeof apiContext>;
+
+  @state()
+  @consume({ context: internationalizationContext, subscribe: true })
+  private _i18n!: ContextType<typeof internationalizationContext>;
 
   @property({ attribute: false }) public stateObj!: LightEntity;
 
   @state() private _ctPickerValue?: number;
 
   @state() private _isInteracting?: boolean;
+
+  private _pendingSync = new PendingValueSync();
 
   protected render() {
     if (!this.stateObj) {
@@ -79,7 +93,7 @@ class LightColorTempPicker extends LitElement {
         mode="cursor"
         @value-changed=${this._ctColorChanged}
         @slider-moved=${this._ctColorCursorMoved}
-        .label=${this.hass.localize(
+        .label=${this._i18n.localize(
           "ui.dialogs.more_info_control.light.color_temp"
         )}
         style=${styleMap({
@@ -88,7 +102,7 @@ class LightColorTempPicker extends LitElement {
         })}
         .disabled=${this.stateObj.state === UNAVAILABLE}
         .unit=${DOMAIN_ATTRIBUTES_UNITS.light.color_temp_kelvin}
-        .locale=${this.hass.locale}
+        .locale=${this._i18n.locale}
       >
       </ha-control-slider>
     `;
@@ -114,11 +128,19 @@ class LightColorTempPicker extends LitElement {
   public willUpdate(changedProps: PropertyValues<this>) {
     super.willUpdate(changedProps);
 
-    if (this._isInteracting || !changedProps.has("stateObj")) {
+    if (!changedProps.has("stateObj")) {
       return;
     }
 
-    this._updateSliderValues();
+    const oldStateObj = changedProps.get("stateObj");
+    if (oldStateObj?.entity_id !== this.stateObj?.entity_id) {
+      this._throttleUpdateColorTemp.cancel();
+      this._pendingSync.reset();
+      this._isInteracting = false;
+      this._updateSliderValues();
+    } else if (!this._isInteracting && this._pendingSync.shouldSync()) {
+      this._updateSliderValues();
+    }
   }
 
   private _ctColorCursorMoved(ev: CustomEvent) {
@@ -131,6 +153,7 @@ class LightColorTempPicker extends LitElement {
     }
 
     this._ctPickerValue = ct;
+    this._pendingSync.schedule();
 
     this._throttleUpdateColorTemp();
   }
@@ -142,7 +165,16 @@ class LightColorTempPicker extends LitElement {
   private _ctColorChanged(ev: CustomEvent) {
     const ct = ev.detail.value;
 
-    if (isNaN(ct) || this._ctPickerValue === ct) {
+    this._isInteracting = false;
+
+    // A pending throttled call would otherwise send an older value after the
+    // final one.
+    this._throttleUpdateColorTemp.cancel();
+
+    if (isNaN(ct)) {
+      // Nothing is sent, so stop blocking state updates.
+      this._pendingSync.reset();
+      this._updateSliderValues();
       return;
     }
 
@@ -159,11 +191,15 @@ class LightColorTempPicker extends LitElement {
 
   private _applyColor(color: LightColor, params?: Record<string, any>) {
     fireEvent(this, "color-changed", color);
-    this.hass.callService("light", "turn_on", {
-      entity_id: this.stateObj!.entity_id,
-      ...color,
-      ...params,
-    });
+    return this._pendingSync.run(
+      () =>
+        this._api.callService("light", "turn_on", {
+          entity_id: this.stateObj!.entity_id,
+          ...color,
+          ...params,
+        }),
+      () => this._updateSliderValues()
+    );
   }
 
   static get styles(): CSSResultGroup {
@@ -181,8 +217,8 @@ class LightColorTempPicker extends LitElement {
           --control-slider-thickness: 130px;
           --control-slider-border-radius: var(--ha-border-radius-6xl);
           --control-slider-color: var(--primary-color);
-          --control-slider-background: -webkit-linear-gradient(
-            top,
+          --control-slider-background: linear-gradient(
+            to bottom,
             var(--gradient)
           );
           --control-slider-tooltip-font-size: var(--ha-font-size-xl);

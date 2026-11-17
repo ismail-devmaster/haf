@@ -1,7 +1,10 @@
 import { ReactiveElement } from "lit";
 import { customElement } from "lit/decorators";
 import { floorDefaultIcon } from "../../../../components/ha-floor-icon";
-import { getAreaControlEntities } from "../../../../data/area/area_controls";
+import {
+  getAreaControlEntities,
+  getAreaEntityIds,
+} from "../../../../data/area/area_controls";
 import type { LovelaceSectionConfig } from "../../../../data/lovelace/config/section";
 import type { LovelaceViewConfig } from "../../../../data/lovelace/config/view";
 import type { HomeAssistant } from "../../../../types";
@@ -10,6 +13,7 @@ import {
   type AreaControlDomain,
 } from "../../card-features/types";
 import type { AreaCardConfig, HeadingCardConfig } from "../../cards/types";
+import type { LovelaceStrategyDependency } from "../types";
 import type { EntitiesDisplay } from "./area-view-strategy";
 import {
   computeAreaPath,
@@ -38,6 +42,13 @@ export interface AreasViewStrategyConfig {
 
 @customElement("areas-overview-view-strategy")
 export class AreasOverviewViewStrategy extends ReactiveElement {
+  static registryDependencies: readonly LovelaceStrategyDependency[] = [
+    "entities",
+    "devices",
+    "areas",
+    "floors",
+  ];
+
   static async generate(
     config: AreasViewStrategyConfig,
     hass: HomeAssistant
@@ -82,11 +93,20 @@ export class AreasOverviewViewStrategy extends ReactiveElement {
           const controls: AreaControlDomain[] = AREA_CONTROL_DOMAINS.filter(
             (a) => a !== "switch" // Exclude switches control for areas as we don't know what the switches control
           );
-          const controlEntities = getAreaControlEntities(
-            controls,
+          const areaEntities = getAreaEntityIds(
+            hass.entities,
+            hass.devices,
             area.area_id,
-            hiddenEntities,
-            hass
+            hiddenEntities
+          );
+          const controlEntities = getAreaControlEntities(
+            areaEntities,
+            hass.states,
+            hass.entities,
+            hass.devices,
+            hass.areas,
+            hass.floors,
+            controls
           );
 
           const filteredControls = controls.filter(

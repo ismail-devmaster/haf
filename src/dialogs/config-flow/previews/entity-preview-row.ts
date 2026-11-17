@@ -3,8 +3,6 @@ import type { HassEntity } from "home-assistant-js-websocket";
 import type { TemplateResult } from "lit";
 import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
-import { ifDefined } from "lit/directives/if-defined";
-import { computeStateName } from "../../../common/entity/compute_state_name";
 import "../../../components/entity/ha-entity-toggle";
 import "../../../components/entity/state-badge";
 import "../../../components/ha-button";
@@ -21,6 +19,7 @@ import { isTiltOnly } from "../../../data/cover";
 import { UNAVAILABLE, UNKNOWN } from "../../../data/entity/entity";
 import type { ImageEntity } from "../../../data/image";
 import { computeImageUrl } from "../../../data/image";
+import { showNumberSlider } from "../../../data/number";
 import "../../../panels/lovelace/components/hui-timestamp-display";
 import type { HomeAssistant } from "../../../types";
 import {
@@ -39,13 +38,9 @@ class EntityPreviewRow extends LitElement {
       return nothing;
     }
     const stateObj = this.stateObj;
-    return html`<state-badge
-        .hass=${this.hass}
-        .stateObj=${stateObj}
-        stateColor
-      ></state-badge>
-      <div class="name" .title=${computeStateName(stateObj)}>
-        ${computeStateName(stateObj)}
+    return html`<state-badge .stateObj=${stateObj} color="state"></state-badge>
+      <div class="name" .title=${this.hass.formatEntityName(stateObj)}>
+        ${this.hass.formatEntityName(stateObj)}
       </div>
       <div class="value">${this._renderEntityState(stateObj)}</div>`;
   }
@@ -106,7 +101,9 @@ class EntityPreviewRow extends LitElement {
     }
   `;
 
-  private _renderEntityState(stateObj: HassEntity): TemplateResult | string {
+  private _renderEntityState(
+    stateObj: HassEntity
+  ): TemplateResult | string | typeof nothing {
     const domain = stateObj.entity_id.split(".", 1)[0];
     const disabled = stateObj.state === UNAVAILABLE;
     const noValue =
@@ -114,7 +111,7 @@ class EntityPreviewRow extends LitElement {
 
     if (domain === "button") {
       return html`
-        <ha-button appearance="plain" size="small" .disabled=${disabled}>
+        <ha-button appearance="plain" size="s" .disabled=${disabled}>
           ${this.hass.localize("ui.card.button.press")}
         </ha-button>
       `;
@@ -123,26 +120,23 @@ class EntityPreviewRow extends LitElement {
     const climateDomains = ["climate", "water_heater"];
     if (climateDomains.includes(domain)) {
       return html`
-        <ha-climate-state .hass=${this.hass} .stateObj=${stateObj}>
-        </ha-climate-state>
+        <ha-climate-state .stateObj=${stateObj}> </ha-climate-state>
       `;
     }
 
     if (domain === "cover") {
       return html`
-        ${isTiltOnly(stateObj)
-          ? html`
-              <ha-cover-tilt-controls
-                .hass=${this.hass}
-                .stateObj=${stateObj}
-              ></ha-cover-tilt-controls>
-            `
-          : html`
-              <ha-cover-controls
-                .hass=${this.hass}
-                .stateObj=${stateObj}
-              ></ha-cover-controls>
-            `}
+        ${
+          isTiltOnly(stateObj)
+            ? html`
+                <ha-cover-tilt-controls
+                  .stateObj=${stateObj}
+                ></ha-cover-tilt-controls>
+              `
+            : html`
+                <ha-cover-controls .stateObj=${stateObj}></ha-cover-controls>
+              `
+        }
       `;
     }
 
@@ -164,7 +158,7 @@ class EntityPreviewRow extends LitElement {
       return html`
         <div class="datetimeflex">
           <ha-date-input
-            .label=${computeStateName(stateObj)}
+            .label=${this.hass.formatEntityName(stateObj)}
             .locale=${this.hass.locale}
             .value=${date}
             .disabled=${disabled}
@@ -182,18 +176,21 @@ class EntityPreviewRow extends LitElement {
     if (domain === "event") {
       return html`
         <div class="when">
-          ${noValue
-            ? this.hass.formatEntityState(stateObj)
-            : html`<hui-timestamp-display
-                .hass=${this.hass}
-                .ts=${new Date(stateObj.state)}
-                capitalize
-              ></hui-timestamp-display>`}
+          ${
+            noValue
+              ? this.hass.formatEntityState(stateObj)
+              : html`<hui-timestamp-display
+                  .ts=${new Date(stateObj.state)}
+                  capitalize
+                ></hui-timestamp-display>`
+          }
         </div>
         <div class="what">
-          ${noValue
-            ? nothing
-            : this.hass.formatEntityAttributeValue(stateObj, "event_type")}
+          ${
+            noValue
+              ? nothing
+              : this.hass.formatEntityAttributeValue(stateObj, "event_type")
+          }
         </div>
       `;
     }
@@ -203,29 +200,30 @@ class EntityPreviewRow extends LitElement {
       const showToggle =
         stateObj.state === "on" || stateObj.state === "off" || noValue;
       return html`
-        ${showToggle
-          ? html`
-              <ha-entity-toggle
-                .hass=${this.hass}
-                .stateObj=${stateObj}
-              ></ha-entity-toggle>
-            `
-          : this.hass.formatEntityState(stateObj)}
+        ${
+          showToggle
+            ? html`
+                <ha-entity-toggle .stateObj=${stateObj}></ha-entity-toggle>
+              `
+            : this.hass.formatEntityState(stateObj)
+        }
       `;
     }
 
     if (domain === "humidifier") {
       return html`
-        <ha-humidifier-state .hass=${this.hass} .stateObj=${stateObj}>
-        </ha-humidifier-state>
+        <ha-humidifier-state .stateObj=${stateObj}> </ha-humidifier-state>
       `;
     }
 
     if (domain === "image") {
-      const image: string = computeImageUrl(stateObj as ImageEntity);
+      const image = computeImageUrl(stateObj as ImageEntity);
+      if (!image) {
+        return nothing;
+      }
       return html`
         <img
-          alt=${ifDefined(stateObj?.attributes.friendly_name)}
+          alt=${this.hass.formatEntityName(stateObj)}
           src=${this.hass.hassUrl(image)}
         />
       `;
@@ -237,70 +235,72 @@ class EntityPreviewRow extends LitElement {
           .disabled=${disabled}
           class="text-content"
           appearance="plain"
-          size="small"
+          size="s"
         >
-          ${stateObj.state === "locked"
-            ? this.hass!.localize("ui.card.lock.unlock")
-            : this.hass!.localize("ui.card.lock.lock")}
+          ${
+            stateObj.state === "locked"
+              ? this.hass!.localize("ui.card.lock.unlock")
+              : this.hass!.localize("ui.card.lock.lock")
+          }
         </ha-button>
       `;
     }
 
     if (domain === "number") {
-      const showNumberSlider =
-        stateObj.attributes.mode === "slider" ||
-        (stateObj.attributes.mode === "auto" &&
-          (Number(stateObj.attributes.max) - Number(stateObj.attributes.min)) /
-            Number(stateObj.attributes.step) <=
-            256);
       return html`
-        ${showNumberSlider
-          ? html`
-              <div class="numberflex">
-                <ha-slider
-                  labeled
+        ${
+          showNumberSlider(stateObj)
+            ? html`
+                <div class="numberflex">
+                  <ha-slider
+                    labeled
+                    .disabled=${disabled}
+                    .step=${Number(stateObj.attributes.step)}
+                    .min=${Number(stateObj.attributes.min)}
+                    .max=${Number(stateObj.attributes.max)}
+                    .value=${Number(stateObj.state)}
+                  ></ha-slider>
+                  <span class="state">
+                    ${this.hass.formatEntityState(stateObj)}
+                  </span>
+                </div>
+              `
+            : html`<div class="numberflex numberstate">
+                <ha-input
+                  auto-validate
                   .disabled=${disabled}
+                  pattern="[0-9]+([\\.][0-9]+)?"
                   .step=${Number(stateObj.attributes.step)}
                   .min=${Number(stateObj.attributes.min)}
                   .max=${Number(stateObj.attributes.max)}
-                  .value=${Number(stateObj.state)}
-                ></ha-slider>
-                <span class="state">
-                  ${this.hass.formatEntityState(stateObj)}
-                </span>
-              </div>
-            `
-          : html`<div class="numberflex numberstate">
-              <ha-input
-                auto-validate
-                .disabled=${disabled}
-                pattern="[0-9]+([\\.][0-9]+)?"
-                .step=${Number(stateObj.attributes.step)}
-                .min=${Number(stateObj.attributes.min)}
-                .max=${Number(stateObj.attributes.max)}
-                .value=${stateObj.state}
-                type="number"
-              >
-                ${stateObj.attributes.unit_of_measurement
-                  ? html`<span slot="end"
-                      >${stateObj.attributes.unit_of_measurement}</span
-                    >`
-                  : nothing}
-              </ha-input>
-            </div>`}
+                  .value=${stateObj.state}
+                  type="number"
+                >
+                  ${
+                    stateObj.attributes.unit_of_measurement
+                      ? html`<span slot="end"
+                          >${stateObj.attributes.unit_of_measurement}</span
+                        >`
+                      : nothing
+                  }
+                </ha-input>
+              </div>`
+        }
       `;
     }
 
     if (domain === "select") {
       return html`
         <ha-select
-          .label=${computeStateName(stateObj)}
+          .label=${this.hass.formatEntityName(stateObj)}
           .value=${stateObj.state}
           .disabled=${disabled}
-          .options=${stateObj.attributes.options?.map((option) => ({
-            value: option,
-            label: this.hass!.formatEntityState(stateObj, option),
-          })) || []}
+          .options=${
+            stateObj.attributes.options?.map((option) => ({
+              value: option,
+              label: this.hass!.formatEntityState(stateObj, option),
+            })) || []
+          }
         >
         </ha-select>
       `;
@@ -312,26 +312,29 @@ class EntityPreviewRow extends LitElement {
           stateObj.attributes.device_class
         ) && !noValue;
       return html`
-        ${showSensor
-          ? html`
-              <hui-timestamp-display
-                .hass=${this.hass}
-                .ts=${new Date(stateObj.state)}
-                .format=${stateObj.attributes.device_class ===
-                SENSOR_DEVICE_CLASS_UPTIME
-                  ? "total"
-                  : undefined}
-                capitalize
-              ></hui-timestamp-display>
-            `
-          : this.hass.formatEntityState(stateObj)}
+        ${
+          showSensor
+            ? html`
+                <hui-timestamp-display
+                  .ts=${new Date(stateObj.state)}
+                  .format=${
+                    stateObj.attributes.device_class ===
+                    SENSOR_DEVICE_CLASS_UPTIME
+                      ? "total"
+                      : undefined
+                  }
+                  capitalize
+                ></hui-timestamp-display>
+              `
+            : this.hass.formatEntityState(stateObj)
+        }
       `;
     }
 
     if (domain === "text") {
       return html`
         <ha-input
-          .label=${computeStateName(stateObj)}
+          .label=${this.hass.formatEntityName(stateObj)}
           .disabled=${disabled}
           .value=${stateObj.state}
           .minlength=${stateObj.attributes.min}
@@ -357,11 +360,13 @@ class EntityPreviewRow extends LitElement {
     if (domain === "weather") {
       return html`
         <div>
-          ${noValue ||
-          stateObj.attributes.temperature === undefined ||
-          stateObj.attributes.temperature === null
-            ? this.hass.formatEntityState(stateObj)
-            : this.hass.formatEntityAttributeValue(stateObj, "temperature")}
+          ${
+            noValue ||
+            stateObj.attributes.temperature === undefined ||
+            stateObj.attributes.temperature === null
+              ? this.hass.formatEntityState(stateObj)
+              : this.hass.formatEntityAttributeValue(stateObj, "temperature")
+          }
         </div>
       `;
     }

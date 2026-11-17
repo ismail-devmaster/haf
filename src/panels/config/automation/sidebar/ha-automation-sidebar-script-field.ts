@@ -1,9 +1,4 @@
-import {
-  mdiAppleKeyboardCommand,
-  mdiCommentEditOutline,
-  mdiDelete,
-  mdiPlaylistEdit,
-} from "@mdi/js";
+import { mdiCommentEditOutline, mdiDelete, mdiPlaylistEdit } from "@mdi/js";
 import type { PropertyValues } from "lit";
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
@@ -11,14 +6,16 @@ import { keyed } from "lit/directives/keyed";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import type { HaDropdownSelectEvent } from "../../../../components/ha-dropdown";
 import "../../../../components/ha-dropdown-item";
+import { getRowNote } from "../../../../data/automation";
 import type { ScriptFieldSidebarConfig } from "../../../../data/automation";
 import type { HomeAssistant } from "../../../../types";
 import { isMac } from "../../../../util/is_mac";
 import "../../script/ha-script-field-editor";
 import type HaAutomationConditionEditor from "../action/ha-automation-action-editor";
-import "../ha-automation-comment";
+import "../ha-automation-note";
 import { overflowStyles, sidebarEditorStyles } from "../styles";
 import "./ha-automation-sidebar-card";
+import { renderCtrlOrCmd } from "../../../../common/keyboard/ctrl-or-cmd";
 
 @customElement("ha-automation-sidebar-script-field")
 export default class HaAutomationSidebarScriptField extends LitElement {
@@ -55,6 +52,7 @@ export default class HaAutomationSidebarScriptField extends LitElement {
   }
 
   protected render() {
+    const note = getRowNote(this.config.config.field.description);
     const title = this.hass.localize(
       "ui.panel.config.script.editor.field.label"
     );
@@ -68,11 +66,11 @@ export default class HaAutomationSidebarScriptField extends LitElement {
       @wa-select=${this._handleDropdownSelect}
     >
       <span slot="title">${title}</span>
-      <ha-dropdown-item slot="menu-items" value="edit_comment">
+      <ha-dropdown-item slot="menu-items" value="edit_note">
         <ha-svg-icon slot="icon" .path=${mdiCommentEditOutline}></ha-svg-icon>
         <div class="overflow-label">
           ${this.hass.localize(
-            `ui.panel.config.automation.editor.comment.${this.config.config.field.description ? "edit" : "add"}`
+            `ui.panel.config.automation.editor.note.${this.config.config.field.description ? "edit" : "add"}`
           )}
           <span class="shortcut-placeholder ${isMac ? "mac" : ""}"></span>
         </div>
@@ -80,14 +78,24 @@ export default class HaAutomationSidebarScriptField extends LitElement {
       <ha-dropdown-item
         slot="menu-items"
         value="toggle_yaml_mode"
-        .disabled=${!!this._warnings}
+        .disabled=${!this.canToggleYamlMode}
       >
         <ha-svg-icon slot="icon" .path=${mdiPlaylistEdit}></ha-svg-icon>
         <div class="overflow-label">
           ${this.hass.localize(
             `ui.panel.config.automation.editor.edit_${!this.yamlMode ? "yaml" : "ui"}`
           )}
-          <span class="shortcut-placeholder ${isMac ? "mac" : ""}"></span>
+          ${
+            !this.narrow
+              ? html`<span class="shortcut">
+                  <span>${renderCtrlOrCmd(this.hass.localize)}</span>
+                  <span>+</span>
+                  <span>Shift</span>
+                  <span>+</span>
+                  <span>Y</span>
+                </span>`
+              : nothing
+          }
         </div>
       </ha-dropdown-item>
       <ha-dropdown-item
@@ -101,25 +109,19 @@ export default class HaAutomationSidebarScriptField extends LitElement {
           ${this.hass.localize(
             "ui.panel.config.automation.editor.actions.delete"
           )}
-          ${!this.narrow
-            ? html`<span class="shortcut">
-                <span
-                  >${isMac
-                    ? html`<ha-svg-icon
-                        .path=${mdiAppleKeyboardCommand}
-                      ></ha-svg-icon>`
-                    : this.hass.localize(
-                        "ui.panel.config.automation.editor.ctrl"
-                      )}</span
-                >
-                <span>+</span>
-                <span
-                  >${this.hass.localize(
-                    "ui.panel.config.automation.editor.del"
-                  )}</span
-                >
-              </span>`
-            : nothing}
+          ${
+            !this.narrow
+              ? html`<span class="shortcut">
+                  <span>${renderCtrlOrCmd(this.hass.localize)}</span>
+                  <span>+</span>
+                  <span
+                    >${this.hass.localize(
+                      "ui.panel.config.automation.editor.del"
+                    )}</span
+                  >
+                </span>`
+              : nothing
+          }
         </div>
       </ha-dropdown-item>
       ${keyed(
@@ -136,12 +138,14 @@ export default class HaAutomationSidebarScriptField extends LitElement {
           @yaml-changed=${this._yamlChangedSidebar}
         ></ha-script-field-editor>`
       )}
-      ${this.config.config.field.description?.trim() && !this.yamlMode
-        ? html`<ha-automation-comment
-            @edit-comment=${this.config.editComment}
-            .comment=${this.config.config.field.description}
-          ></ha-automation-comment>`
-        : nothing}
+      ${
+        note && !this.yamlMode
+          ? html`<ha-automation-note
+              @edit-note=${this.config.editNote}
+              .note=${note}
+            ></ha-automation-note>`
+          : nothing
+      }
     </ha-automation-sidebar-card>`;
   }
 
@@ -174,9 +178,22 @@ export default class HaAutomationSidebarScriptField extends LitElement {
     this.config?.save?.(ev.detail.value);
   }
 
-  private _toggleYamlMode = () => {
+  public get canToggleYamlMode(): boolean {
+    return !this._warnings;
+  }
+
+  public toggleYamlMode() {
+    if (!this.canToggleYamlMode) {
+      return;
+    }
     fireEvent(this, "toggle-yaml-mode");
-  };
+  }
+
+  public async focusYamlEditor() {
+    await this.updateComplete;
+    await this.editor?.updateComplete;
+    this.editor?.yamlEditor?.focus();
+  }
 
   private _handleDropdownSelect(ev: HaDropdownSelectEvent) {
     const action = ev.detail?.item?.value;
@@ -187,10 +204,10 @@ export default class HaAutomationSidebarScriptField extends LitElement {
 
     switch (action) {
       case "toggle_yaml_mode":
-        this._toggleYamlMode();
+        this.toggleYamlMode();
         break;
-      case "edit_comment":
-        this.config.editComment();
+      case "edit_note":
+        this.config.editNote();
         break;
       case "delete":
         this.config.delete();

@@ -1,7 +1,14 @@
 import type { LitVirtualizer } from "@lit-labs/virtualizer";
 import { grid } from "@lit-labs/virtualizer/layouts/grid";
+import type { ContextType } from "@lit/context";
 
-import { mdiArrowUpRight, mdiKeyboard, mdiPlay, mdiPlus } from "@mdi/js";
+import {
+  mdiArrowUpRight,
+  mdiFilterVariant,
+  mdiKeyboard,
+  mdiPlay,
+  mdiPlus,
+} from "@mdi/js";
 import type { CSSResultGroup, PropertyValues, TemplateResult } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import {
@@ -12,11 +19,20 @@ import {
   state,
 } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
-import { styleMap } from "lit/directives/style-map";
-import { until } from "lit/directives/until";
+import { consume } from "../../common/decorators/consume";
+import { transform } from "../../common/decorators/transform";
 import { fireEvent } from "../../common/dom/fire_event";
+import { getShadowRootHost } from "../../common/dom/get-shadow-root-host";
+import { caseInsensitiveStringCompare } from "../../common/string/compare";
 import { slugify } from "../../common/string/slugify";
+import { stripDiacritics } from "../../common/string/strip-diacritics";
 import { debounce } from "../../common/util/debounce";
+import {
+  apiContext,
+  configContext,
+  internationalizationContext,
+  statesContext,
+} from "../../data/context";
 import { UNAVAILABLE } from "../../data/entity/entity";
 import type {
   MediaPickedEvent,
@@ -28,37 +44,50 @@ import {
   browseMediaPlayer,
   BROWSER_PLAYER,
   MediaClassBrowserSettings,
+  searchMediaPlayer,
 } from "../../data/media-player";
 import {
   browseLocalMediaPlayer,
   isManualMediaSourceContentId,
+  isMediaSourceContentId,
   MANUAL_MEDIA_SOURCE_PREFIX,
+  searchMedia,
 } from "../../data/media_source";
 import { isTTSMediaSource } from "../../data/tts";
 import { showAlertDialog } from "../../dialogs/generic/show-dialog-box";
+import { panelIsReady } from "../../layouts/panel-ready";
 import { haStyle, haStyleScrollbar } from "../../resources/styles";
 import { loadVirtualizer } from "../../resources/virtualizer";
-import type { HomeAssistant } from "../../types";
-import {
-  brandsUrl,
-  extractDomainFromBrandUrl,
-  isBrandUrl,
-} from "../../util/brands-url";
-import { documentationUrl } from "../../util/documentation-url";
+import type {
+  HomeAssistantConfig,
+  HomeAssistantInternationalization,
+} from "../../types";
+import { documentationUrlForVersion } from "../../util/documentation-url";
+import { getWsErrorMessage } from "../../util/ws-error";
 import "../entity/ha-entity-picker";
 import "../ha-alert";
 import "../ha-button";
 import "../ha-card";
+import "../ha-dropdown";
+import type { HaDropdownSelectEvent } from "../ha-dropdown";
+import "../ha-dropdown-item";
 import "../ha-icon-button";
-import "../ha-list";
-import "../ha-list-item";
 import "../ha-spinner";
 import "../ha-svg-icon";
 import "../ha-tooltip";
+import "../input/ha-input-search";
+import type { HaInputSearch } from "../input/ha-input-search";
+import "../list/ha-list-virtualized";
+import type {
+  HaListVirtualized,
+  HaListVirtualizedItem,
+} from "../list/ha-list-virtualized";
 import "./ha-browse-media-manual";
 import type { ManualMediaPickedEvent } from "./ha-browse-media-manual";
 import "./ha-browse-media-tts";
 import type { TtsMediaPickedEvent } from "./ha-browse-media-tts";
+import "./ha-media-browser-thumbnail";
+import "./ha-media-player-browse-list-item";
 
 declare global {
   interface HASSDomEvents {
@@ -79,7 +108,26 @@ export interface MediaPlayerItemId {
   media_content_type?: string | undefined;
 }
 
-const MANUAL_ITEM: MediaPlayerItem = {
+type MediaClass = MediaPlayerItem["media_class"];
+
+type MediaBrowseListRow =
+  | (HaListVirtualizedItem & {
+      type: "item";
+      item: MediaPlayerItem;
+    })
+  | (HaListVirtualizedItem & {
+      type: "not-shown";
+      count: number;
+    });
+
+/** Folders with at least this many items get a filter field when their source cannot search. */
+const FILTER_MIN_CHILDREN = 10;
+
+/** Case and accent insensitive, so "stefan" finds "Ștefan" and "DIGI" finds "Digi". */
+const normalizeForFilter = (value: string): string =>
+  stripDiacritics(value).toLowerCase().trim();
+
+const MANUAL_ITEM_BASE: Omit<MediaPlayerItem, "title"> = {
   can_expand: true,
   can_play: false,
   can_search: false,
@@ -88,13 +136,10 @@ const MANUAL_ITEM: MediaPlayerItem = {
   media_content_id: MANUAL_MEDIA_SOURCE_PREFIX,
   media_content_type: "",
   iconPath: mdiKeyboard,
-  title: "Manual entry",
 };
 
 @customElement("ha-media-player-browse")
 export class HaMediaPlayerBrowse extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property({ attribute: false }) public entityId?: string;
 
   @property() public action: MediaPlayerBrowseAction = "play";
@@ -128,11 +173,44 @@ export class HaMediaPlayerBrowse extends LitElement {
 
   @state() private _currentItem?: MediaPlayerItem;
 
+  @state() private _searchQuery = "";
+
+  @state() private _filterQuery = "";
+
+  @state() private _searchResults?: MediaPlayerItem[];
+
+  @state() private _searching = false;
+
+  @state() private _mediaClassFilter: MediaClass[] = [];
+
+  @state()
+  @consume({ context: internationalizationContext, subscribe: true })
+  private _i18n!: HomeAssistantInternationalization;
+
+  @state()
+  @consume({ context: configContext, subscribe: true })
+  @transform<HomeAssistantConfig, string | undefined>({
+    transformer: (value) => value?.config?.version,
+  })
+  private _haVersion?: string;
+
+  @consume({ context: apiContext, subscribe: true })
+  private _api!: ContextType<typeof apiContext>;
+
+  @consume({ context: statesContext, subscribe: true })
+  private _states?: ContextType<typeof statesContext>;
+
+  private _searchRequestId = 0;
+
   @query(".header") private _header?: HTMLDivElement;
 
   @query(".content") private _content?: HTMLDivElement;
 
   @query("lit-virtualizer") private _virtualizer?: LitVirtualizer;
+
+  @query("ha-list-virtualized") private _list?: HaListVirtualized;
+
+  private _listScroller?: HTMLElement;
 
   private _observed = false;
 
@@ -140,8 +218,13 @@ export class HaMediaPlayerBrowse extends LitElement {
 
   private _resizeObserver?: ResizeObserver;
 
+  private _initialReady = false;
+
   public connectedCallback(): void {
     super.connectedCallback();
+    if (this.hasUpdated) {
+      this._observeListScroll();
+    }
     this.updateComplete.then(() => this._attachResizeObserver());
   }
 
@@ -150,6 +233,8 @@ export class HaMediaPlayerBrowse extends LitElement {
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
     }
+    this._listScroller?.removeEventListener("scroll", this._listScrolled);
+    this._listScroller = undefined;
   }
 
   public async refresh() {
@@ -193,8 +278,7 @@ export class HaMediaPlayerBrowse extends LitElement {
     this._setError(undefined);
 
     const oldNavigateIds = changedProps.get("navigateIds") as
-      | this["navigateIds"]
-      | undefined;
+      this["navigateIds"] | undefined;
     const navigateIds = this.navigateIds;
 
     // We're navigating. Reset the shizzle.
@@ -204,6 +288,11 @@ export class HaMediaPlayerBrowse extends LitElement {
     const oldParentItem = this._parentItem;
     this._currentItem = undefined;
     this._parentItem = undefined;
+    this._abortSearch();
+    this._searchQuery = "";
+    this._searchResults = undefined;
+    this._mediaClassFilter = [];
+    this._filterQuery = "";
     const currentId = navigateIds[navigateIds.length - 1];
     const parentId =
       navigateIds.length > 1 ? navigateIds[navigateIds.length - 2] : undefined;
@@ -245,11 +334,12 @@ export class HaMediaPlayerBrowse extends LitElement {
       currentId.media_content_id &&
       isManualMediaSourceContentId(currentId.media_content_id)
     ) {
-      this._currentItem = MANUAL_ITEM;
+      this._currentItem = this._manualItem();
       fireEvent(this, "media-browsed", {
         ids: navigateIds,
         current: this._currentItem,
       });
+      this._signalInitialReady();
     } else {
       if (!currentProm) {
         currentProm = this._fetchData(
@@ -265,6 +355,7 @@ export class HaMediaPlayerBrowse extends LitElement {
             ids: navigateIds,
             current: item,
           });
+          this._signalInitialReady();
         },
         (err) => {
           // When we change entity ID, we will first try to see if the new entity is
@@ -290,16 +381,18 @@ export class HaMediaPlayerBrowse extends LitElement {
           } else if (
             err.code === "entity_not_found" &&
             this.entityId &&
-            this.hass.states[this.entityId]?.state === UNAVAILABLE
+            this._states?.[this.entityId]?.state === UNAVAILABLE
           ) {
             this._setError({
-              message: this.hass.localize(
+              message: this._i18n.localize(
                 `ui.components.media-browser.media_player_unavailable`
               ),
               code: "entity_not_found",
             });
+            this._signalInitialReady();
           } else {
             this._setError(err);
+            this._signalInitialReady();
           }
         }
       );
@@ -319,14 +412,6 @@ export class HaMediaPlayerBrowse extends LitElement {
     }
   }
 
-  protected shouldUpdate(changedProps: PropertyValues<this>): boolean {
-    if (changedProps.size > 1 || !changedProps.has("hass")) {
-      return true;
-    }
-    const oldHass = changedProps.get("hass") as this["hass"];
-    return oldHass === undefined || oldHass.localize !== this.hass.localize;
-  }
-
   protected firstUpdated(): void {
     this._measureCard();
     this._attachResizeObserver();
@@ -335,11 +420,16 @@ export class HaMediaPlayerBrowse extends LitElement {
   protected updated(changedProps: PropertyValues): void {
     super.updated(changedProps);
 
-    if (changedProps.has("_scrolled")) {
-      this._animateHeaderHeight();
-    } else if (changedProps.has("_currentItem")) {
-      this._setHeaderHeight();
+    this._observeListScroll();
 
+    if (changedProps.has("_scrolled") || changedProps.has("_currentItem")) {
+      // Re-measure across frames rather than once: the search input sizes
+      // asynchronously, so a single measurement can be too small and the
+      // content would clip under the header.
+      this._animateHeaderHeight();
+    }
+
+    if (changedProps.has("_currentItem")) {
       // This fixes a race condition for resizing of the cards using the grid layout
       if (this._observed) {
         return;
@@ -372,10 +462,15 @@ export class HaMediaPlayerBrowse extends LitElement {
 
     const currentItem = this._currentItem;
 
-    const subtitle = this.hass.localize(
+    const isSearching = this._searchResults !== undefined;
+
+    const subtitle = this._i18n.localize(
       `ui.components.media-browser.class.${currentItem.media_class}`
     );
-    let children = currentItem.children || [];
+    let children = isSearching
+      ? this._searchResults!
+      : currentItem.children || [];
+    const notShown = isSearching ? 0 : currentItem.not_shown || 0;
     const canPlayChildren = new Set<string>();
 
     // Filter children based on accept property if provided
@@ -406,95 +501,166 @@ export class HaMediaPlayerBrowse extends LitElement {
       });
     }
 
-    const mediaClass = MediaClassBrowserSettings[currentItem.media_class];
+    // Search and filter are available on non-root pages, aside from the
+    // manual-entry and TTS pseudo-sources.
+    const allowsSearchOrFilter =
+      this.navigateIds.length > 1 &&
+      !isManualMediaSourceContentId(currentItem.media_content_id) &&
+      !isTTSMediaSource(currentItem.media_content_id);
+    const showSearch = allowsSearchOrFilter && currentItem.can_search;
+    const showFilter =
+      allowsSearchOrFilter &&
+      !currentItem.can_search &&
+      children.length >= FILTER_MIN_CHILDREN;
+    const filterQuery = showFilter ? normalizeForFilter(this._filterQuery) : "";
+    const isFiltering = filterQuery !== "";
+    if (isFiltering) {
+      children = children.filter((child) =>
+        normalizeForFilter(child.title).includes(filterQuery)
+      );
+    }
+    // The backend reports which media classes are worth filtering by for this
+    // item; without them we still allow searching, just without the filter.
+    const mediaClassFilterOptions =
+      showSearch && currentItem.search_media_classes
+        ? [...currentItem.search_media_classes].sort((a, b) =>
+            caseInsensitiveStringCompare(
+              this._localizeMediaClass(a),
+              this._localizeMediaClass(b),
+              this._i18n.locale.language
+            )
+          )
+        : [];
+
     const childrenMediaClass = currentItem.children_media_class
       ? MediaClassBrowserSettings[currentItem.children_media_class]
       : MediaClassBrowserSettings.directory;
 
-    const backgroundImage = currentItem.thumbnail
-      ? this._getThumbnailURLorBase64(currentItem.thumbnail).then(
-          (value) => `url(${value})`
-        )
-      : "none";
+    const canPickCurrent =
+      currentItem?.can_play ||
+      (currentItem && this.accept?.includes("directory"));
+
+    const listRows: MediaBrowseListRow[] = children.map((item, index) => ({
+      id: `${index}:${item.media_content_id}`,
+      type: "item",
+      interactive: true,
+      item,
+    }));
+    if (notShown) {
+      listRows.push({
+        id: "not-shown",
+        type: "not-shown",
+        interactive: false,
+        count: notShown,
+      });
+    }
 
     return html`
               ${
-                currentItem.can_play
+                canPickCurrent || showSearch || showFilter
                   ? html`
                       <div
                         class="header ${classMap({
                           "no-img": !currentItem.thumbnail,
                           "no-dialog": !this.dialog,
+                          "search-only": !canPickCurrent,
                         })}"
                         @transitionend=${this._setHeaderHeight}
                       >
-                        <div class="header-content">
-                          ${currentItem.thumbnail
-                            ? html`
-                                <div
-                                  class="img"
-                                  style="background-image: ${until(
-                                    backgroundImage,
-                                    ""
-                                  )}"
-                                >
-                                  ${this.narrow &&
-                                  currentItem?.can_play &&
-                                  (!this.accept ||
-                                    canPlayChildren.has(
-                                      currentItem.media_content_id
-                                    ))
+                        ${
+                          showSearch
+                            ? this._renderSearchRow(
+                                currentItem,
+                                mediaClassFilterOptions
+                              )
+                            : showFilter
+                              ? this._renderFilterRow(currentItem)
+                              : nothing
+                        }
+                        ${
+                          canPickCurrent
+                            ? html`<div class="header-content">
+                                ${
+                                  currentItem.thumbnail
                                     ? html`
-                                        <ha-button
-                                          class="fab"
-                                          .item=${currentItem}
-                                          @click=${this._actionClicked}
-                                          .title=${this.hass.localize(
-                                            `ui.components.media-browser.${this.action}`
-                                          )}
-                                        >
-                                          <ha-svg-icon
-                                            .path=${this.action === "play"
-                                              ? mdiPlay
-                                              : mdiPlus}
-                                          ></ha-svg-icon>
-                                        </ha-button>
+                                        <div class="img">
+                                          <ha-media-browser-thumbnail
+                                            .url=${currentItem.thumbnail}
+                                          ></ha-media-browser-thumbnail>
+                                          ${
+                                            this.narrow &&
+                                            canPickCurrent &&
+                                            (!this.accept ||
+                                              canPlayChildren.has(
+                                                currentItem.media_content_id
+                                              ))
+                                              ? html`
+                                                  <ha-button
+                                                    class="fab"
+                                                    .item=${currentItem}
+                                                    @click=${this._actionClicked}
+                                                    .title=${this._i18n.localize(
+                                                      `ui.components.media-browser.${this.action}`
+                                                    )}
+                                                  >
+                                                    <ha-svg-icon
+                                                      .path=${
+                                                        this.action === "play"
+                                                          ? mdiPlay
+                                                          : mdiPlus
+                                                      }
+                                                    ></ha-svg-icon>
+                                                  </ha-button>
+                                                `
+                                              : ""
+                                          }
+                                        </div>
                                       `
-                                    : ""}
+                                    : nothing
+                                }
+                                <div class="header-info">
+                                  <div class="breadcrumb">
+                                    <h1 class="title">${currentItem.title}</h1>
+                                    ${
+                                      subtitle
+                                        ? html`
+                                            <h2 class="subtitle">
+                                              ${subtitle}
+                                            </h2>
+                                          `
+                                        : ""
+                                    }
+                                  </div>
+                                  ${
+                                    canPickCurrent &&
+                                    (!currentItem.thumbnail || !this.narrow)
+                                      ? html`
+                                          <ha-button
+                                            .item=${currentItem}
+                                            @click=${this._actionClicked}
+                                          >
+                                            <ha-svg-icon
+                                              .label=${this._i18n.localize(
+                                                `ui.components.media-browser.${this.action}-media`
+                                              )}
+                                              .path=${
+                                                this.action === "play"
+                                                  ? mdiPlay
+                                                  : mdiPlus
+                                              }
+                                              slot="start"
+                                            ></ha-svg-icon>
+                                            ${this._i18n.localize(
+                                              `ui.components.media-browser.${this.action}`
+                                            )}
+                                          </ha-button>
+                                        `
+                                      : ""
+                                  }
                                 </div>
-                              `
-                            : nothing}
-                          <div class="header-info">
-                            <div class="breadcrumb">
-                              <h1 class="title">${currentItem.title}</h1>
-                              ${subtitle
-                                ? html` <h2 class="subtitle">${subtitle}</h2> `
-                                : ""}
-                            </div>
-                            ${currentItem.can_play &&
-                            (!currentItem.thumbnail || !this.narrow)
-                              ? html`
-                                  <ha-button
-                                    .item=${currentItem}
-                                    @click=${this._actionClicked}
-                                  >
-                                    <ha-svg-icon
-                                      .label=${this.hass.localize(
-                                        `ui.components.media-browser.${this.action}-media`
-                                      )}
-                                      .path=${this.action === "play"
-                                        ? mdiPlay
-                                        : mdiPlus}
-                                      slot="start"
-                                    ></ha-svg-icon>
-                                    ${this.hass.localize(
-                                      `ui.components.media-browser.${this.action}`
-                                    )}
-                                  </ha-button>
-                                `
-                              : ""}
-                          </div>
-                        </div>
+                              </div>`
+                            : nothing
+                        }
                       </div>
                     `
                   : ""
@@ -505,12 +671,10 @@ export class HaMediaPlayerBrowse extends LitElement {
             @touchmove=${this._scroll}
           >
             ${
-              this._error
+              this._searching
                 ? html`
                     <div class="container">
-                      <ha-alert alert-type="error">
-                        ${this._renderError(this._error)}
-                      </ha-alert>
+                      <ha-spinner></ha-spinner>
                     </div>
                   `
                 : isManualMediaSourceContentId(currentItem.media_content_id)
@@ -519,7 +683,6 @@ export class HaMediaPlayerBrowse extends LitElement {
                         media_content_id: this.defaultId || "",
                         media_content_type: this.defaultType || "",
                       }}
-                      .hass=${this.hass}
                       .hideContentType=${this.hideContentType}
                       .contentIdHelper=${this.contentIdHelper}
                       @manual-media-picked=${this._manualPicked}
@@ -528,33 +691,42 @@ export class HaMediaPlayerBrowse extends LitElement {
                     ? html`
                         <ha-browse-media-tts
                           .item=${currentItem}
-                          .hass=${this.hass}
                           .action=${this.action}
                           @tts-picked=${this._ttsPicked}
                         ></ha-browse-media-tts>
                       `
-                    : !children.length && !currentItem.not_shown
+                    : !children.length && (!notShown || isFiltering)
                       ? html`
                           <div class="container no-items">
-                            ${currentItem.media_content_id ===
-                            "media-source://media_source/local/."
-                              ? html`
-                                  <div class="highlight-add-button">
-                                    <span>
-                                      <ha-svg-icon
-                                        .path=${mdiArrowUpRight}
-                                      ></ha-svg-icon>
-                                    </span>
-                                    <span>
-                                      ${this.hass.localize(
-                                        "ui.components.media-browser.file_management.highlight_button"
-                                      )}
-                                    </span>
-                                  </div>
-                                `
-                              : this.hass.localize(
-                                  "ui.components.media-browser.no_items"
-                                )}
+                            ${
+                              isSearching
+                                ? this._i18n.localize(
+                                    "ui.components.media-browser.search.no_results"
+                                  )
+                                : isFiltering
+                                  ? this._i18n.localize(
+                                      "ui.components.media-browser.filter.no_matches"
+                                    )
+                                  : currentItem.media_content_id ===
+                                      "media-source://media_source/local/."
+                                    ? html`
+                                        <div class="highlight-add-button">
+                                          <span>
+                                            <ha-svg-icon
+                                              .path=${mdiArrowUpRight}
+                                            ></ha-svg-icon>
+                                          </span>
+                                          <span>
+                                            ${this._i18n.localize(
+                                              "ui.components.media-browser.file_management.highlight_button"
+                                            )}
+                                          </span>
+                                        </div>
+                                      `
+                                    : this._i18n.localize(
+                                        "ui.components.media-browser.no_items"
+                                      )
+                            }
                           </div>
                         `
                       : this.preferredLayout === "grid" ||
@@ -583,52 +755,32 @@ export class HaMediaPlayerBrowse extends LitElement {
                                 portrait:
                                   childrenMediaClass.thumbnail_ratio ===
                                   "portrait",
-                                not_shown: !!currentItem.not_shown,
+                                not_shown: !!notShown,
                               })}"
                             ></lit-virtualizer>
-                            ${currentItem.not_shown
-                              ? html`
-                                  <div class="grid not-shown">
-                                    <div class="title">
-                                      ${this.hass.localize(
-                                        "ui.components.media-browser.not_shown",
-                                        { count: currentItem.not_shown }
-                                      )}
+                            ${
+                              notShown
+                                ? html`
+                                    <div class="grid not-shown">
+                                      <div class="title">
+                                        ${this._i18n.localize(
+                                          "ui.components.media-browser.not_shown",
+                                          { count: notShown }
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                `
-                              : ""}
+                                  `
+                                : ""
+                            }
                           `
                         : html`
-                            <ha-list>
-                              <lit-virtualizer
-                                scroller
-                                .items=${children}
-                                style=${styleMap({
-                                  height: `${children.length * 72 + 26}px`,
-                                })}
-                                class="ha-scrollbar"
-                                .renderItem=${this._renderListItem}
-                              ></lit-virtualizer>
-                              ${currentItem.not_shown
-                                ? html`
-                                    <ha-list-item
-                                      noninteractive
-                                      class="not-shown"
-                                      .graphic=${mediaClass.show_list_images
-                                        ? "medium"
-                                        : "avatar"}
-                                    >
-                                      <span class="title">
-                                        ${this.hass.localize(
-                                          "ui.components.media-browser.not_shown",
-                                          { count: currentItem.not_shown }
-                                        )}
-                                      </span>
-                                    </ha-list-item>
-                                  `
-                                : ""}
-                            </ha-list>
+                            <ha-list-virtualized
+                              .rows=${listRows}
+                              .rowRenderer=${this._renderListItem}
+                              @ha-list-visibility-changed=${
+                                this._observeListScroll
+                              }
+                            ></ha-list-virtualized>
                           `
             }
           </div>
@@ -637,57 +789,285 @@ export class HaMediaPlayerBrowse extends LitElement {
     `;
   }
 
-  private _renderGridItem = (child: MediaPlayerItem): TemplateResult => {
-    const backgroundImage = child.thumbnail
-      ? this._getThumbnailURLorBase64(child.thumbnail).then(
-          (value) => `url(${value})`
-        )
-      : "none";
+  private _renderSearchRow(
+    currentItem: MediaPlayerItem,
+    mediaClassFilterOptions: MediaClass[]
+  ): TemplateResult {
+    return html`
+      <div class="search-row">
+        ${
+          currentItem.can_search
+            ? html`
+                <ha-input-search
+                  class="search-input"
+                  appearance="outlined"
+                  .value=${this._searchQuery}
+                  .placeholder=${this._i18n.localize(
+                    "ui.components.media-browser.search.search_placeholder",
+                    { name: currentItem.title }
+                  )}
+                  @input=${this._handleSearchInput}
+                  @keydown=${this._handleSearchKeydown}
+                ></ha-input-search>
+                ${
+                  mediaClassFilterOptions.length
+                    ? this._renderMediaClassFilter(mediaClassFilterOptions)
+                    : nothing
+                }
+                <ha-button
+                  class="search-button"
+                  appearance="filled"
+                  .disabled=${!this._searchQuery.trim()}
+                  @click=${this._search}
+                >
+                  ${this._i18n.localize("ui.common.search")}
+                </ha-button>
+              `
+            : nothing
+        }
+      </div>
+    `;
+  }
 
+  private _renderFilterRow(currentItem: MediaPlayerItem): TemplateResult {
+    return html`
+      <div class="search-row">
+        <ha-input-search
+          class="search-input"
+          appearance="outlined"
+          .value=${this._filterQuery}
+          .placeholder=${this._i18n.localize(
+            "ui.components.media-browser.filter.filter_placeholder",
+            { name: currentItem.title }
+          )}
+          @input=${this._handleFilterInput}
+        ></ha-input-search>
+      </div>
+    `;
+  }
+
+  private _renderMediaClassFilter(
+    mediaClassFilterOptions: MediaClass[]
+  ): TemplateResult {
+    const selectedCount = this._mediaClassFilter.length;
+    return html`
+      <div class="media-class-filter">
+        <ha-dropdown
+          placement="bottom-end"
+          @wa-select=${this._toggleMediaClassFilter}
+        >
+          <ha-icon-button
+            slot="trigger"
+            class="filter-button ${classMap({ active: selectedCount > 0 })}"
+            .path=${mdiFilterVariant}
+            .label=${this._i18n.localize(
+              "ui.components.media-browser.filter_media_type"
+            )}
+          ></ha-icon-button>
+          ${mediaClassFilterOptions.map((mediaClass) => {
+            const selected = this._mediaClassFilter.includes(mediaClass);
+            return html`
+              <ha-dropdown-item
+                .value=${mediaClass}
+                .action=${selected ? "remove" : "add"}
+                type="checkbox"
+                .checked=${selected}
+              >
+                ${this._localizeMediaClass(mediaClass)}
+              </ha-dropdown-item>
+            `;
+          })}
+        </ha-dropdown>
+        ${
+          selectedCount
+            ? html`<div class="filter-badge">${selectedCount}</div>`
+            : nothing
+        }
+      </div>
+    `;
+  }
+
+  private _localizeMediaClass(mediaClass: MediaClass): string {
+    return (
+      this._i18n.localize(`ui.components.media-browser.class.${mediaClass}`) ||
+      mediaClass
+    );
+  }
+
+  private _toggleMediaClassFilter(ev: HaDropdownSelectEvent<MediaClass>): void {
+    ev.preventDefault(); // keep the dropdown open for multi-select
+    const value = ev.detail.item.value;
+    const action = (ev.detail.item as { action?: "add" | "remove" }).action;
+    this._mediaClassFilter =
+      action === "add"
+        ? [...this._mediaClassFilter, value]
+        : this._mediaClassFilter.filter((mediaClass) => mediaClass !== value);
+    // Only refine results already on screen; before a search has run, the
+    // filter is just staged for the next Enter/search-button submission.
+    if (this._searchResults !== undefined) {
+      this._search();
+    }
+  }
+
+  private _handleSearchInput(ev: InputEvent): void {
+    const value = (ev.target as HaInputSearch).value ?? "";
+    this._searchQuery = value;
+    // Searching is explicit (Enter or the search button). Emptying the field —
+    // e.g. via the clear button — returns to the browse view.
+    if (!value) {
+      this._clearSearch();
+    }
+  }
+
+  private _handleFilterInput(ev: InputEvent): void {
+    this._filterQuery = (ev.target as HaInputSearch).value ?? "";
+    this._virtualizer?.scrollTo(0, 0);
+    this._list?.scrollElement?.scrollTo(0, 0);
+    this._content?.scrollTo(0, 0);
+  }
+
+  private _handleSearchKeydown(ev: KeyboardEvent): void {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      this._search();
+    }
+  }
+
+  private _abortSearch(): void {
+    // Invalidate any in-flight search so a late response is ignored, and clear
+    // the loading state.
+    this._searchRequestId++;
+    this._searching = false;
+  }
+
+  private _clearSearch(): void {
+    this._abortSearch();
+    this._searchQuery = "";
+    this._searchResults = undefined;
+  }
+
+  private async _search(): Promise<void> {
+    const searchQuery = this._searchQuery.trim();
+    if (!searchQuery) {
+      // Nothing to search; drop any stale results but keep the input.
+      this._abortSearch();
+      this._searchResults = undefined;
+      return;
+    }
+
+    const navigateId = this.navigateIds[this.navigateIds.length - 1];
+    const requestId = ++this._searchRequestId;
+
+    this._searching = true;
+    // Clear previous results so stale data isn't shown while searching or on error
+    this._searchResults = undefined;
+    const mediaFilterClasses = this._mediaClassFilter.length
+      ? this._mediaClassFilter
+      : undefined;
+    // A player's tree can embed media sources, which resolve their own searches;
+    // everything else in it uses integration specific ids only the entity knows.
+    const searchEntityId =
+      this.entityId &&
+      this.entityId !== BROWSER_PLAYER &&
+      !isMediaSourceContentId(navigateId.media_content_id ?? "")
+        ? this.entityId
+        : undefined;
+
+    try {
+      const { result } = searchEntityId
+        ? await searchMediaPlayer(
+            this._api.callWS,
+            searchEntityId,
+            searchQuery,
+            navigateId.media_content_id,
+            navigateId.media_content_type,
+            mediaFilterClasses
+          )
+        : await searchMedia(
+            this._api.callWS,
+            navigateId.media_content_id,
+            searchQuery,
+            mediaFilterClasses
+          );
+      // Ignore the response if a newer search started or we navigated away
+      if (requestId !== this._searchRequestId) {
+        return;
+      }
+      this._searchResults = result;
+    } catch (err) {
+      // Ignore errors from superseded searches
+      if (requestId !== this._searchRequestId) {
+        return;
+      }
+      showAlertDialog(this, {
+        title: this._i18n.localize(
+          "ui.components.media-browser.media_browsing_error"
+        ),
+        text:
+          getWsErrorMessage(err) ??
+          this._i18n.localize("ui.common.unknown_error"),
+      });
+    } finally {
+      // Only the most recent search controls the loading state
+      if (requestId === this._searchRequestId) {
+        this._searching = false;
+      }
+    }
+  }
+
+  private _renderGridItem = (child: MediaPlayerItem): TemplateResult => {
     return html`
       <div class="child" .item=${child} @click=${this._childClicked}>
         <ha-card outlined>
           <div class="thumbnail">
-            ${child.thumbnail
-              ? html`
-                  <div
-                    class="${classMap({
-                      "centered-image": ["app", "directory"].includes(
-                        child.media_class
-                      ),
-                      "brand-image": isBrandUrl(child.thumbnail),
-                    })} image"
-                    style="background-image: ${until(backgroundImage, "")}"
-                  ></div>
-                `
-              : html`
-                  <div class="icon-holder image">
-                    <ha-svg-icon
-                      class=${child.iconPath ? "icon" : "folder"}
-                      .path=${child.iconPath ||
-                      MediaClassBrowserSettings[
-                        child.media_class === "directory"
-                          ? child.children_media_class || child.media_class
-                          : child.media_class
-                      ].icon}
-                    ></ha-svg-icon>
-                  </div>
-                `}
-            ${child.can_play
-              ? html`
-                  <ha-icon-button
-                    class="play ${classMap({
-                      can_expand: child.can_expand,
-                    })}"
-                    .item=${child}
-                    .label=${this.hass.localize(
-                      `ui.components.media-browser.${this.action}-media`
-                    )}
-                    .path=${this.action === "play" ? mdiPlay : mdiPlus}
-                    @click=${this._actionClicked}
-                  ></ha-icon-button>
-                `
-              : ""}
+            ${
+              child.thumbnail
+                ? html`
+                    <div
+                      class="${classMap({
+                        "centered-image": ["app", "directory"].includes(
+                          child.media_class
+                        ),
+                      })} image"
+                    >
+                      <ha-media-browser-thumbnail
+                        .url=${child.thumbnail}
+                      ></ha-media-browser-thumbnail>
+                    </div>
+                  `
+                : html`
+                    <div class="icon-holder image">
+                      <ha-svg-icon
+                        class=${child.iconPath ? "icon" : "folder"}
+                        .path=${
+                          child.iconPath ||
+                          MediaClassBrowserSettings[
+                            child.media_class === "directory"
+                              ? child.children_media_class || child.media_class
+                              : child.media_class
+                          ].icon
+                        }
+                      ></ha-svg-icon>
+                    </div>
+                  `
+            }
+            ${
+              child.can_play
+                ? html`
+                    <ha-icon-button
+                      class="play ${classMap({
+                        can_expand: child.can_expand,
+                      })}"
+                      .item=${child}
+                      .label=${this._i18n.localize(
+                        `ui.components.media-browser.${this.action}-media`
+                      )}
+                      .path=${this.action === "play" ? mdiPlay : mdiPlus}
+                      @click=${this._actionClicked}
+                    ></ha-icon-button>
+                  `
+                : ""
+            }
           </div>
           <ha-tooltip .for="grid-${slugify(child.title)}" distance="-4">
             ${child.title}
@@ -700,103 +1080,66 @@ export class HaMediaPlayerBrowse extends LitElement {
     `;
   };
 
-  private _renderListItem = (child: MediaPlayerItem): TemplateResult => {
-    const currentItem = this._currentItem;
-    const mediaClass = MediaClassBrowserSettings[currentItem!.media_class];
+  private _renderListItem = (row: HaListVirtualizedItem): TemplateResult => {
+    const listRow = row as MediaBrowseListRow;
+    const mediaClass =
+      MediaClassBrowserSettings[this._currentItem!.media_class];
+    const showImages = mediaClass.show_list_images === true;
 
-    const backgroundImage =
-      mediaClass.show_list_images && child.thumbnail
-        ? this._getThumbnailURLorBase64(child.thumbnail).then(
-            (value) => `url(${value})`
-          )
-        : "none";
+    if (listRow.type === "not-shown") {
+      return html`
+        <ha-media-player-browse-list-item
+          class=${classMap({ "not-shown": true, "show-images": showImages })}
+          .interactive=${false}
+        >
+          <span slot="headline" class="title">
+            ${this._i18n.localize("ui.components.media-browser.not_shown", {
+              count: listRow.count,
+            })}
+          </span>
+        </ha-media-player-browse-list-item>
+      `;
+    }
+
+    const child = listRow.item;
+    const showImage = showImages && !!child.thumbnail;
 
     return html`
-      <ha-list-item
+      <ha-media-player-browse-list-item
         @click=${this._childClicked}
         .item=${child}
-        .graphic=${mediaClass.show_list_images ? "medium" : "avatar"}
+        class=${classMap({ "show-images": showImages })}
+        .thumbnail=${showImage ? child.thumbnail : undefined}
       >
-        ${backgroundImage === "none" && !child.can_play
-          ? html`<ha-svg-icon
-              .path=${MediaClassBrowserSettings[
-                child.media_class === "directory"
-                  ? child.children_media_class || child.media_class
-                  : child.media_class
-              ].icon}
-              slot="graphic"
-            ></ha-svg-icon>`
-          : html`<div
-              class=${classMap({
-                graphic: true,
-                thumbnail: mediaClass.show_list_images === true,
-              })}
-              style="background-image: ${until(backgroundImage, "")}"
-              slot="graphic"
-            >
-              ${child.can_play
-                ? html`<ha-icon-button
-                    class="play ${classMap({
-                      show: !mediaClass.show_list_images || !child.thumbnail,
-                    })}"
-                    .item=${child}
-                    .label=${this.hass.localize(
-                      `ui.components.media-browser.${this.action}-media`
-                    )}
-                    .path=${this.action === "play" ? mdiPlay : mdiPlus}
-                    @click=${this._actionClicked}
-                  ></ha-icon-button>`
-                : nothing}
-            </div>`}
-        <span class="title">${child.title}</span>
-      </ha-list-item>
+        ${
+          child.can_play
+            ? html`<ha-icon-button
+                slot="start"
+                class=${classMap({ play: true, show: !showImage })}
+                .item=${child}
+                .label=${this._i18n.localize(
+                  `ui.components.media-browser.${this.action}-media`
+                )}
+                .path=${this.action === "play" ? mdiPlay : mdiPlus}
+                @click=${this._actionClicked}
+              ></ha-icon-button>`
+            : showImage
+              ? nothing
+              : html`<ha-svg-icon
+                  slot="start"
+                  .path=${
+                    MediaClassBrowserSettings[
+                      child.media_class === "directory"
+                        ? child.children_media_class || child.media_class
+                        : child.media_class
+                    ].icon
+                  }
+                ></ha-svg-icon>`
+        }
+        <span slot="headline" class="title">${child.title}</span>
+      </ha-media-player-browse-list-item>
     `;
   };
-
-  private async _getThumbnailURLorBase64(
-    thumbnailUrl: string | undefined
-  ): Promise<string> {
-    if (!thumbnailUrl) {
-      return "";
-    }
-
-    if (isBrandUrl(thumbnailUrl)) {
-      // The backend is not aware of the theme used by the users,
-      // so we rewrite the URL to show a proper icon
-      return brandsUrl(
-        {
-          domain: extractDomainFromBrandUrl(thumbnailUrl),
-          type: "icon",
-          darkOptimized: this.hass.themes?.darkMode,
-        },
-        this.hass.auth.data.hassUrl
-      );
-    }
-
-    if (thumbnailUrl.startsWith("/")) {
-      // Thumbnails served by local API require authentication
-      return new Promise((resolve, reject) => {
-        this.hass
-          .fetchWithAuth(thumbnailUrl!)
-          // Since we are fetching with an authorization header, we cannot just put the
-          // URL directly into the document; we need to embed the image. We could do this
-          // using blob URLs, but then we would need to keep track of them in order to
-          // release them properly. Instead, we embed the thumbnail using base64.
-          .then((response) => response.blob())
-          .then((blob) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const result = reader.result;
-              resolve(typeof result === "string" ? result : "");
-            };
-            reader.onerror = (e) => reject(e);
-            reader.readAsDataURL(blob);
-          });
-      });
-    }
-
-    return thumbnailUrl;
-  }
 
   private _actionClicked = (ev: MouseEvent): void => {
     ev.stopPropagation();
@@ -853,20 +1196,29 @@ export class HaMediaPlayerBrowse extends LitElement {
     const prom =
       entityId && entityId !== BROWSER_PLAYER
         ? browseMediaPlayer(
-            this.hass,
+            this._api.callWS,
             entityId,
             mediaContentId,
             mediaContentType
           )
-        : browseLocalMediaPlayer(this.hass, mediaContentId);
+        : browseLocalMediaPlayer(this._api.callWS, mediaContentId);
 
     return prom.then((item) => {
       if (!mediaContentId && this.action === "pick") {
         item.children = item.children || [];
-        item.children.push(MANUAL_ITEM);
+        item.children.push(this._manualItem());
       }
       return item;
     });
+  }
+
+  private _manualItem(): MediaPlayerItem {
+    return {
+      ...MANUAL_ITEM_BASE,
+      title: this._i18n.localize(
+        "ui.components.selectors.selector.types.manual"
+      ),
+    };
   }
 
   private _measureCard(): void {
@@ -887,6 +1239,16 @@ export class HaMediaPlayerBrowse extends LitElement {
     fireEvent(this, "close-dialog");
   }
 
+  private _signalInitialReady(): void {
+    if (this._initialReady) {
+      return;
+    }
+    this._initialReady = true;
+
+    const host = getShadowRootHost(this);
+    panelIsReady(host?.tagName.startsWith("HA-PANEL-") ? host : this);
+  }
+
   private _setError(error: any) {
     if (!this.dialog) {
       this._error = error;
@@ -899,7 +1261,7 @@ export class HaMediaPlayerBrowse extends LitElement {
 
     this._closeDialogAction();
     showAlertDialog(this, {
-      title: this.hass.localize(
+      title: this._i18n.localize(
         "ui.components.media-browser.media_browsing_error"
       ),
       text: this._renderError(error),
@@ -910,28 +1272,31 @@ export class HaMediaPlayerBrowse extends LitElement {
     if (err.message === "Media directory does not exist.") {
       return html`
         <h2>
-          ${this.hass.localize(
+          ${this._i18n.localize(
             "ui.components.media-browser.no_local_media_found"
           )}
         </h2>
         <p>
-          ${this.hass.localize("ui.components.media-browser.no_media_folder")}
+          ${this._i18n.localize("ui.components.media-browser.no_media_folder")}
           <br />
-          ${this.hass.localize("ui.components.media-browser.setup_local_help", {
-            documentation: html`<a
-              href=${documentationUrl(
-                this.hass,
-                "/more-info/local-media/setup-media"
-              )}
-              target="_blank"
-              rel="noreferrer"
-              >${this.hass.localize(
-                "ui.components.media-browser.documentation"
-              )}</a
-            >`,
-          })}
+          ${this._i18n.localize(
+            "ui.components.media-browser.setup_local_help",
+            {
+              documentation: html`<a
+                href=${documentationUrlForVersion(
+                  this._haVersion ?? "",
+                  "/more-info/local-media/setup-media"
+                )}
+                target="_blank"
+                rel="noreferrer"
+                >${this._i18n.localize(
+                  "ui.components.media-browser.documentation"
+                )}</a
+              >`,
+            }
+          )}
           <br />
-          ${this.hass.localize("ui.components.media-browser.local_media_files")}
+          ${this._i18n.localize("ui.components.media-browser.local_media_files")}
         </p>
       `;
     }
@@ -951,8 +1316,8 @@ export class HaMediaPlayerBrowse extends LitElement {
   }
 
   private _animateHeaderHeight() {
-    let start;
-    const animate = (time) => {
+    let start: number | undefined;
+    const animate = (time: number) => {
       if (start === undefined) {
         start = time;
       }
@@ -965,9 +1330,31 @@ export class HaMediaPlayerBrowse extends LitElement {
     requestAnimationFrame(animate);
   }
 
+  // The list scrolls inside its virtualizer, which only exists once the list
+  // has rendered its rows
+  private _observeListScroll(): void {
+    const scroller = this._list?.scrollElement;
+    if (scroller === this._listScroller) {
+      return;
+    }
+    this._listScroller?.removeEventListener("scroll", this._listScrolled);
+    scroller?.addEventListener("scroll", this._listScrolled, {
+      passive: true,
+    });
+    this._listScroller = scroller;
+    // The new scroller starts at the top, like the grid after the list
+    if (!scroller) {
+      this.scrolled = false;
+    }
+  }
+
+  private _listScrolled = (ev: Event): void => {
+    this._scroll(ev);
+  };
+
   @eventOptions({ passive: true })
   private _scroll(ev: Event): void {
-    const content = ev.currentTarget as HTMLDivElement;
+    const content = this._listScroller ?? (ev.currentTarget as HTMLElement);
     if (!this.scrolled && content.scrollTop > this._headerOffsetHeight) {
       this.scrolled = true;
     } else if (this.scrolled && content.scrollTop < this._headerOffsetHeight) {
@@ -1027,7 +1414,8 @@ export class HaMediaPlayerBrowse extends LitElement {
 
         .header {
           display: flex;
-          justify-content: space-between;
+          flex-direction: column;
+          gap: var(--ha-space-2);
           border-bottom: 1px solid var(--divider-color);
           background-color: var(--card-background-color);
           position: absolute;
@@ -1036,6 +1424,57 @@ export class HaMediaPlayerBrowse extends LitElement {
           left: 0;
           z-index: 3;
           padding: 16px;
+        }
+        .header.search-only {
+          padding: 8px 16px;
+        }
+        .search-row {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: var(--ha-space-2);
+        }
+        .search-input {
+          flex: 1;
+          min-width: 0;
+          --ha-input-padding-top: 0;
+          --ha-input-padding-bottom: 0;
+        }
+        .search-button {
+          flex: none;
+        }
+        :host([narrow]) .search-row {
+          box-sizing: border-box;
+          padding: 8px 16px;
+        }
+        .media-class-filter {
+          position: relative;
+          flex: none;
+        }
+        .filter-button {
+          --ha-icon-button-size: 40px;
+          color: var(--secondary-text-color);
+        }
+        .filter-button.active {
+          color: var(--primary-color);
+        }
+        .filter-badge {
+          position: absolute;
+          top: -4px;
+          right: -4px;
+          inset-inline-end: -4px;
+          inset-inline-start: initial;
+          min-width: 16px;
+          box-sizing: border-box;
+          border-radius: var(--ha-border-radius-circle);
+          font-size: var(--ha-font-size-xs);
+          font-weight: var(--ha-font-weight-normal);
+          background-color: var(--primary-color);
+          line-height: var(--ha-line-height-normal);
+          text-align: center;
+          padding: 0px 2px;
+          color: var(--text-primary-color);
+          pointer-events: none;
         }
         .header_button {
           position: relative;
@@ -1048,14 +1487,20 @@ export class HaMediaPlayerBrowse extends LitElement {
           align-items: flex-start;
         }
         .header-content .img {
+          position: relative;
           height: 175px;
           width: 175px;
           margin-right: 16px;
-          background-size: cover;
           border-radius: 2px;
+          overflow: hidden;
           transition:
             width 0.4s,
             height 0.4s;
+          --ha-media-browser-thumbnail-fit: cover;
+        }
+        .header-content .img ha-media-browser-thumbnail {
+          position: absolute;
+          inset: 0;
         }
         .header-info {
           display: flex;
@@ -1120,23 +1565,14 @@ export class HaMediaPlayerBrowse extends LitElement {
 
         /* ============= CHILDREN ============= */
 
-        ha-list {
-          --mdc-list-vertical-padding: 0;
-          --mdc-list-item-graphic-margin: 0;
-          --mdc-theme-text-icon-on-background: var(--secondary-text-color);
+        ha-list-virtualized {
+          height: calc(100% - 10px);
           margin-top: 10px;
         }
 
-        ha-list li:last-child {
-          display: none;
-        }
-
-        ha-list li[divider] {
-          border-bottom-color: var(--divider-color);
-        }
-
-        ha-list-item {
-          width: 100%;
+        ha-list-virtualized::part(base) {
+          gap: 0;
+          padding: 0;
         }
 
         div.children {
@@ -1191,18 +1627,12 @@ export class HaMediaPlayerBrowse extends LitElement {
           right: 0;
           left: 0;
           bottom: 0;
-          background-size: cover;
-          background-repeat: no-repeat;
-          background-position: center;
+          --ha-media-browser-thumbnail-fit: cover;
         }
 
         .centered-image {
           margin: 0 8px;
-          background-size: contain;
-        }
-
-        .brand-image {
-          background-size: 40%;
+          --ha-media-browser-thumbnail-fit: contain;
         }
 
         .children ha-card .icon-holder {
@@ -1275,41 +1705,6 @@ export class HaMediaPlayerBrowse extends LitElement {
         .child ha-card .title {
           margin-bottom: 16px;
           padding-left: 16px;
-        }
-
-        ha-list-item .graphic {
-          background-size: contain;
-          background-repeat: no-repeat;
-          background-position: center;
-          border-radius: var(--ha-border-radius-sm);
-          display: flex;
-          align-content: center;
-          align-items: center;
-          line-height: initial;
-        }
-
-        ha-list-item .graphic .play {
-          opacity: 0;
-          transition: all 0.5s;
-          background-color: rgba(var(--rgb-card-background-color), 0.5);
-          border-radius: var(--ha-border-radius-circle);
-          --ha-icon-button-size: 40px;
-        }
-
-        ha-list-item:hover .graphic .play {
-          opacity: 1;
-          color: var(--primary-text-color);
-        }
-
-        ha-list-item .graphic .play.show {
-          opacity: 1;
-          background-color: transparent;
-        }
-
-        ha-list-item .title {
-          margin-left: 16px;
-          margin-inline-start: 16px;
-          margin-inline-end: initial;
         }
 
         /* ============= Narrow ============= */

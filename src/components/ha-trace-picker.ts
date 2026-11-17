@@ -2,25 +2,40 @@ import {
   mdiAlertCircleOutline,
   mdiCheckCircleOutline,
   mdiChevronDown,
+  mdiCircleOffOutline,
   mdiHelpCircleOutline,
   mdiProgressClock,
   mdiProgressWrench,
   mdiStopCircleOutline,
 } from "@mdi/js";
+import type { ContextType } from "@lit/context";
+import type { HassConfig } from "home-assistant-js-websocket";
 import type { CSSResultGroup } from "lit";
 import { css, html, LitElement } from "lit";
-import { customElement, property, query } from "lit/decorators";
-import type { HomeAssistant } from "../types";
+import { customElement, property, query, state } from "lit/decorators";
+import { formatDateTimeWithSeconds } from "../common/datetime/format_date_time";
+import { consume } from "../common/decorators/consume";
+import { transform } from "../common/decorators/transform";
+import { configContext, internationalizationContext } from "../data/context";
 import type { Trace } from "../data/trace";
+import type { HomeAssistantConfig } from "../types";
 import "./ha-button";
 import "./ha-generic-picker";
 import type { HaGenericPicker } from "./ha-generic-picker";
-import { formatDateTimeWithSeconds } from "../common/datetime/format_date_time";
 import type { PickerComboBoxItem } from "./ha-picker-combo-box";
 
 @customElement("ha-trace-picker")
 class HaTracePicker extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
+  @state()
+  @consume({ context: internationalizationContext, subscribe: true })
+  private _i18n!: ContextType<typeof internationalizationContext>;
+
+  @state()
+  @consume({ context: configContext, subscribe: true })
+  @transform<HomeAssistantConfig, HassConfig>({
+    transformer: ({ config }) => config,
+  })
+  private _hassConfig!: HassConfig;
 
   @property({ attribute: false }) public traces!: Trace[];
 
@@ -31,8 +46,7 @@ class HaTracePicker extends LitElement {
   protected render() {
     return html` <ha-generic-picker
       name="trace"
-      .hass=${this.hass}
-      .label=${this.hass.localize(
+      .label=${this._i18n.localize(
         "ui.panel.config.automation.trace.select_trace"
       )}
       .value=${this.value}
@@ -43,7 +57,7 @@ class HaTracePicker extends LitElement {
         slot="field"
         appearance="filled"
         variant="neutral"
-        size="small"
+        size="s"
         @click=${this._openPicker}
       >
         ${this._renderTracePickerValue(this.value!)}
@@ -70,22 +84,27 @@ class HaTracePicker extends LitElement {
         id: trace.run_id,
         primary: formatDateTimeWithSeconds(
           new Date(trace.timestamp.start),
-          this.hass.locale,
-          this.hass.config
+          this._i18n.locale,
+          this._hassConfig
         ),
       };
       if (trace.state === "running") {
-        item.secondary = this.hass.localize(
+        item.secondary = this._i18n.localize(
           "ui.panel.config.automation.trace.picker.still_running"
         );
         item.icon_path = mdiProgressClock;
       } else if (trace.state === "debugged") {
-        item.secondary = this.hass.localize(
+        item.secondary = this._i18n.localize(
           "ui.panel.config.automation.trace.picker.debugged"
         );
         item.icon_path = mdiProgressWrench;
+      } else if (trace.not_triggered) {
+        item.secondary = this._i18n.localize(
+          "ui.panel.config.automation.trace.picker.not_triggered"
+        );
+        item.icon_path = mdiCircleOffOutline;
       } else if (trace.script_execution === "finished") {
-        item.secondary = this.hass.localize(
+        item.secondary = this._i18n.localize(
           "ui.panel.config.automation.trace.picker.finished",
           {
             executiontime: renderRuntime(),
@@ -93,7 +112,7 @@ class HaTracePicker extends LitElement {
         );
         item.icon_path = mdiCheckCircleOutline;
       } else if (trace.script_execution === "aborted") {
-        item.secondary = this.hass.localize(
+        item.secondary = this._i18n.localize(
           "ui.panel.config.automation.trace.picker.aborted",
           {
             executiontime: renderRuntime(),
@@ -101,7 +120,7 @@ class HaTracePicker extends LitElement {
         );
         item.icon_path = mdiAlertCircleOutline;
       } else if (trace.script_execution === "cancelled") {
-        item.secondary = this.hass.localize(
+        item.secondary = this._i18n.localize(
           "ui.panel.config.automation.trace.picker.cancelled",
           {
             executiontime: renderRuntime(),
@@ -141,7 +160,7 @@ class HaTracePicker extends LitElement {
             icon = mdiHelpCircleOutline;
         }
 
-        item.secondary = this.hass.localize(
+        item.secondary = this._i18n.localize(
           `ui.panel.config.automation.trace.picker.${message}`,
           {
             error,
@@ -155,13 +174,15 @@ class HaTracePicker extends LitElement {
 
   private _renderTracePickerValue = (runId: string) => {
     const trace = this.traces?.find((t) => t.run_id === runId);
-    return html`${trace
-      ? formatDateTimeWithSeconds(
-          new Date(trace.timestamp.start),
-          this.hass.locale,
-          this.hass.config
-        )
-      : runId}`;
+    return html`${
+      trace
+        ? formatDateTimeWithSeconds(
+            new Date(trace.timestamp.start),
+            this._i18n.locale,
+            this._hassConfig
+          )
+        : runId
+    }`;
   };
 
   static get styles(): CSSResultGroup {

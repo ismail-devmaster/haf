@@ -16,6 +16,8 @@ export const renderHumidifierBadge: RenderBadgeFunction = (stateObj, hass) => {
 
   return html`
     <ha-tile-badge
+      role="img"
+      aria-label=${hass.formatEntityAttributeValue(stateObj, "action")}
       style=${styleMap({
         "--tile-badge-background-color": stateColorCss(
           stateObj,
@@ -23,7 +25,7 @@ export const renderHumidifierBadge: RenderBadgeFunction = (stateObj, hass) => {
         ),
       })}
     >
-      <ha-attribute-icon .hass=${hass} .stateObj=${stateObj} attribute="action">
+      <ha-attribute-icon .stateObj=${stateObj} attribute="action">
       </ha-attribute-icon>
     </ha-tile-badge>
   `;

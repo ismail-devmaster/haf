@@ -22,7 +22,7 @@ import type { HomeAssistant } from "../../../../../types";
 
 const numericStateConditionStruct = object({
   alias: optional(string()),
-  comment: optional(string()),
+  note: optional(string()),
   condition: literal("numeric_state"),
   entity_id: optional(string()),
   attribute: optional(string()),
@@ -51,12 +51,26 @@ export default class HaNumericStateCondition extends LitElement {
     };
   }
 
+  public static checkUiSupport(
+    _localize: LocalizeFunc,
+    condition: NumericStateCondition
+  ): Error | undefined {
+    try {
+      assert(condition, numericStateConditionStruct);
+    } catch (err: any) {
+      return err;
+    }
+    return undefined;
+  }
+
   public shouldUpdate(changedProperties: PropertyValues<this>) {
     if (changedProperties.has("condition")) {
-      try {
-        assert(this.condition, numericStateConditionStruct);
-      } catch (e: any) {
-        fireEvent(this, "ui-mode-not-available", e);
+      const err = HaNumericStateCondition.checkUiSupport(
+        this.hass.localize,
+        this.condition
+      );
+      if (err) {
+        fireEvent(this, "ui-mode-not-available", err);
         return false;
       }
     }

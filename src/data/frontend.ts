@@ -1,11 +1,16 @@
 import type { Connection } from "home-assistant-js-websocket";
 import type { ShortcutItem } from "./home_shortcuts";
 
+export interface SurveyInteraction {
+  date: string;
+  action: "opened" | "dismissed";
+}
+
 export interface CoreFrontendUserData {
-  showAdvanced?: boolean;
   showEntityIdPicker?: boolean;
   default_panel?: string;
   apps_info_dismissed?: boolean;
+  dashboard_favorite_card_types?: string[];
 }
 
 export interface SidebarFrontendUserData {
@@ -13,10 +18,17 @@ export interface SidebarFrontendUserData {
   hiddenPanels?: string[];
 }
 
+export interface ESPHomeFrontendUserData {
+  setupDeferred?: string[];
+}
+
 export interface CoreFrontendSystemData {
   default_panel?: string;
   onboarded_version?: string;
   onboarded_date?: string;
+  surveys?: {
+    onboarding?: SurveyInteraction;
+  };
 }
 
 export interface HomeFrontendSystemData {
@@ -27,14 +39,36 @@ export interface HomeFrontendSystemData {
   shortcuts?: ShortcutItem[];
 }
 
+export type SecurityAlertSeverity = "alert" | "warning";
+
+export interface SecurityAlertEntityConfig {
+  entity: string;
+  severity?: SecurityAlertSeverity;
+}
+
+export interface SecurityFrontendSystemData {
+  alert_entities?: SecurityAlertEntityConfig[];
+  favorite_entities?: string[];
+}
+
+export interface EnergyFrontendSystemData {
+  // Stable "<view>.<card-type>" keys of energy dashboard cards the user has
+  // hidden. An absent key or array means nothing is hidden (all cards visible),
+  // so cards added in the future are shown by default.
+  hidden_cards?: string[];
+}
+
 declare global {
   interface FrontendUserData {
     core: CoreFrontendUserData;
     sidebar: SidebarFrontendUserData;
+    esphome: ESPHomeFrontendUserData;
   }
   interface FrontendSystemData {
     core: CoreFrontendSystemData;
     home: HomeFrontendSystemData;
+    energy: EnergyFrontendSystemData;
+    security: SecurityFrontendSystemData;
   }
 }
 

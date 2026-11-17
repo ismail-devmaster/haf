@@ -10,45 +10,81 @@ import type { CSSResultGroup, PropertyValues, TemplateResult } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
+import { consume } from "../common/decorators/consume";
+import { consumeLocalize } from "../common/decorators/consume-context-entry";
+import { transform } from "../common/decorators/transform";
 import { supportsFeature } from "../common/entity/supports-feature";
+import type { LocalizeFunc } from "../common/translations/localize";
+import {
+  createAssistMessageProcessor,
+  type AssistMessage,
+  type AssistMessageProcessor,
+} from "../data/assist_chat";
 import {
   runAssistPipeline,
   type AssistPipeline,
-  type ConversationChatLogAssistantDelta,
-  type ConversationChatLogToolResultDelta,
   type PipelineRunEvent,
 } from "../data/assist_pipeline";
+import {
+  configContext,
+  connectionContext,
+  internationalizationContext,
+  statesContext,
+} from "../data/context";
 import { ConversationEntityFeature } from "../data/conversation";
 import { showAlertDialog } from "../dialogs/generic/show-dialog-box";
 import { haStyleScrollbar } from "../resources/styles";
-import type { HomeAssistant } from "../types";
+import type {
+  HomeAssistant,
+  HomeAssistantConfig,
+  HomeAssistantConnection,
+  HomeAssistantInternationalization,
+} from "../types";
 import { AudioRecorder } from "../util/audio-recorder";
-import { documentationUrl } from "../util/documentation-url";
+import {
+  findAvailableLanguage,
+  getTranslation,
+} from "../util/common-translation";
+import {
+  documentationUrl,
+  SECURE_CONNECTION_DOCUMENTATION_PATH,
+} from "../util/documentation-url";
 import "./ha-alert";
 import "./ha-markdown";
 import "./input/ha-input";
 import type { HaInput } from "./input/ha-input";
 
-interface AssistMessage {
-  who: string;
-  text: string | TemplateResult;
-  thinking: string;
-  thinking_expanded?: boolean;
-  tool_calls: Record<
-    string,
-    {
-      tool_name: string;
-      tool_args: Record<string, unknown>;
-      result?: any;
-    }
-  >;
-  error?: boolean;
-}
+export const initialPromptToSubmit = (
+  prompt: string | undefined,
+  submit: boolean
+): string | undefined => (submit ? prompt?.trim() || undefined : undefined);
+
+export const assistPipelineChanged = (
+  previous: AssistPipeline | undefined,
+  current: AssistPipeline | undefined
+): boolean => previous?.id !== current?.id;
+
+export const greetingTranslationLanguage = (
+  pipelineLanguage: string | undefined,
+  interfaceLanguage: string | undefined
+): string | undefined => {
+  if (!pipelineLanguage || pipelineLanguage === interfaceLanguage) {
+    return undefined;
+  }
+  // A bare pipeline language ("zh") covers the interface's variant of it
+  // ("zh-Hans"), which a lookup of the bare language may not pick
+  if (
+    !pipelineLanguage.includes("-") &&
+    interfaceLanguage?.startsWith(`${pipelineLanguage}-`)
+  ) {
+    return undefined;
+  }
+  const language = findAvailableLanguage(pipelineLanguage);
+  return language && language !== interfaceLanguage ? language : undefined;
+};
 
 @customElement("ha-assist-chat")
 export class HaAssistChat extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property({ attribute: false }) public pipeline?: AssistPipeline;
 
   @property({ type: Boolean, attribute: "disable-speech" })
@@ -57,12 +93,18 @@ export class HaAssistChat extends LitElement {
   @property({ attribute: false })
   public startListening?: boolean;
 
+  @property({ attribute: false })
+  public initialPrompt?: string;
+
+  @property({ attribute: false })
+  public submitInitialPrompt = false;
+
   @query("#message-input") private _messageInput!: HaInput;
 
-  @query(".message:last-child")
-  private _lastChatMessage!: LitElement;
+  @query(".message-container:last-child .message")
+  private _lastChatMessage?: LitElement;
 
-  @query(".message:last-child img:last-of-type")
+  @query(".message-container:last-child img:last-of-type")
   private _lastChatMessageImage: HTMLImageElement | undefined;
 
   @state() private _conversation: AssistMessage[] = [];
@@ -71,7 +113,34 @@ export class HaAssistChat extends LitElement {
 
   @state() private _processing = false;
 
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
+
+  @state()
+  @consume({ context: internationalizationContext, subscribe: true })
+  @transform<HomeAssistantInternationalization, string>({
+    transformer: ({ language }) => language,
+  })
+  private _language!: string;
+
+  @state()
+  @consume({ context: statesContext, subscribe: true })
+  private _states!: HomeAssistant["states"];
+
+  @state()
+  @consume({ context: configContext, subscribe: true })
+  private _config!: HomeAssistantConfig;
+
+  @state()
+  @consume({ context: connectionContext, subscribe: true })
+  private _connection!: HomeAssistantConnection;
+
   private _conversationId: string | null = null;
+
+  private _greetingLoadToken = 0;
+
+  private _initialPromptSubmitted = false;
 
   private _audioRecorder?: AudioRecorder;
 
@@ -82,16 +151,47 @@ export class HaAssistChat extends LitElement {
   private _stt_binary_handler_id?: number | null;
 
   protected willUpdate(changedProperties: PropertyValues<this>): void {
-    if (!this.hasUpdated || changedProperties.has("pipeline")) {
-      this._conversation = [
-        {
-          who: "hass",
-          text: this.hass.localize("ui.dialogs.voice_command.how_can_i_help"),
-          thinking: "",
-          tool_calls: {},
-        },
-      ];
+    if (
+      !this.hasUpdated ||
+      (changedProperties.has("pipeline") &&
+        assistPipelineChanged(changedProperties.get("pipeline"), this.pipeline))
+    ) {
+      this._conversation = [];
+      this._loadGreeting();
     }
+  }
+
+  private async _loadGreeting(): Promise<void> {
+    const token = ++this._greetingLoadToken;
+    const language = greetingTranslationLanguage(
+      this.pipeline?.language,
+      this._language
+    );
+    let greeting: string | undefined;
+    if (language) {
+      try {
+        const result = await getTranslation(null, language, false);
+        if (result.language === language) {
+          greeting = result.data["ui.dialogs.voice_command.how_can_i_help"];
+        }
+      } catch (_err) {
+        // Translation failed to load; fall back to the interface language.
+      }
+    }
+    if (token !== this._greetingLoadToken) {
+      // The pipeline changed while loading; a newer load owns the greeting.
+      return;
+    }
+    this._conversation = [
+      {
+        who: "hass",
+        text:
+          greeting || this._localize("ui.dialogs.voice_command.how_can_i_help"),
+        thinking: "",
+        tool_calls: {},
+      },
+      ...this._conversation,
+    ];
   }
 
   protected firstUpdated(changedProperties: PropertyValues<this>): void {
@@ -109,8 +209,22 @@ export class HaAssistChat extends LitElement {
 
   protected updated(changedProps: PropertyValues) {
     super.updated(changedProps);
-    if (changedProps.has("_conversation")) {
+    if (changedProps.has("_conversation") && this._conversation.length) {
       this._scrollMessagesBottom();
+    }
+    if (
+      !this._initialPromptSubmitted &&
+      (changedProps.has("initialPrompt") ||
+        changedProps.has("submitInitialPrompt"))
+    ) {
+      const prompt = initialPromptToSubmit(
+        this.initialPrompt,
+        this.submitInitialPrompt
+      );
+      if (prompt) {
+        this._initialPromptSubmitted = true;
+        this._processText(prompt);
+      }
     }
   }
 
@@ -124,9 +238,9 @@ export class HaAssistChat extends LitElement {
     const controlHA = !this.pipeline
       ? false
       : this.pipeline.prefer_local_intents ||
-        (this.hass.states[this.pipeline.conversation_engine]
+        (this._states[this.pipeline.conversation_engine]
           ? supportsFeature(
-              this.hass.states[this.pipeline.conversation_engine],
+              this._states[this.pipeline.conversation_engine],
               ConversationEntityFeature.CONTROL
             )
           : true);
@@ -135,113 +249,134 @@ export class HaAssistChat extends LitElement {
 
     return html`
       <div class="messages ha-scrollbar">
-        ${controlHA
-          ? nothing
-          : html`
-              <ha-alert>
-                ${this.hass.localize(
-                  "ui.dialogs.voice_command.conversation_no_control"
-                )}
-              </ha-alert>
-            `}
+        ${
+          controlHA
+            ? nothing
+            : html`
+                <ha-alert>
+                  ${this._localize(
+                    "ui.dialogs.voice_command.conversation_no_control"
+                  )}
+                </ha-alert>
+              `
+        }
         <div class="spacer"></div>
         ${this._conversation!.map(
           (message, index) => html`
             <div class="message-container ${classMap({ [message.who]: true })}">
-              ${message.text ||
-              message.error ||
-              message.thinking ||
-              (message.tool_calls && Object.keys(message.tool_calls).length > 0)
-                ? html`
-                    <div
-                      class="message ${classMap({
-                        error: !!message.error,
-                        [message.who]: true,
-                      })}"
-                    >
-                      ${message.thinking ||
-                      (message.tool_calls &&
-                        Object.keys(message.tool_calls).length > 0)
-                        ? html`
-                            <div
-                              class="thinking-wrapper ${classMap({
-                                expanded: !!message.thinking_expanded,
-                              })}"
-                            >
-                              <button
-                                class="thinking-header"
-                                .index=${index}
-                                @click=${this._handleToggleThinking}
-                                aria-expanded=${message.thinking_expanded
-                                  ? "true"
-                                  : "false"}
-                              >
-                                <ha-svg-icon
-                                  .path=${mdiCommentProcessingOutline}
-                                ></ha-svg-icon>
-                                <span class="thinking-label">
-                                  ${this.hass.localize(
-                                    "ui.dialogs.voice_command.show_details"
-                                  )}
-                                </span>
-                                <ha-svg-icon
-                                  .path=${message.thinking_expanded
-                                    ? mdiChevronUp
-                                    : mdiChevronDown}
-                                ></ha-svg-icon>
-                              </button>
-                              <div class="thinking-content">
-                                ${message.thinking
-                                  ? html`<ha-markdown
-                                      .content=${message.thinking}
-                                    ></ha-markdown>`
-                                  : nothing}
-                                ${message.tool_calls &&
-                                Object.keys(message.tool_calls).length > 0
-                                  ? html`
-                                      <div class="tool-calls">
-                                        ${Object.values(message.tool_calls).map(
-                                          (toolCall) => html`
-                                            <div class="tool-call">
-                                              <div class="tool-name">
-                                                ${toolCall.tool_name}
-                                              </div>
-                                              <div class="tool-data">
-                                                <pre>
-${JSON.stringify(toolCall.tool_args, null, 2)}</pre
-                                                >
-                                              </div>
-                                              ${toolCall.result
-                                                ? html`
+              ${
+                message.text ||
+                message.error ||
+                message.thinking ||
+                (message.tool_calls &&
+                  Object.keys(message.tool_calls).length > 0)
+                  ? html`
+                      <div
+                        class="message ${classMap({
+                          error: !!message.error,
+                          [message.who]: true,
+                        })}"
+                      >
+                        ${
+                          message.thinking ||
+                          (message.tool_calls &&
+                            Object.keys(message.tool_calls).length > 0)
+                            ? html`
+                                <div
+                                  class="thinking-wrapper ${classMap({
+                                    expanded: !!message.thinking_expanded,
+                                  })}"
+                                >
+                                  <button
+                                    class="thinking-header"
+                                    .index=${index}
+                                    @click=${this._handleToggleThinking}
+                                    aria-expanded=${
+                                      message.thinking_expanded
+                                        ? "true"
+                                        : "false"
+                                    }
+                                  >
+                                    <ha-svg-icon
+                                      .path=${mdiCommentProcessingOutline}
+                                    ></ha-svg-icon>
+                                    <span class="thinking-label">
+                                      ${this._localize(
+                                        "ui.dialogs.voice_command.show_details"
+                                      )}
+                                    </span>
+                                    <ha-svg-icon
+                                      .path=${
+                                        message.thinking_expanded
+                                          ? mdiChevronUp
+                                          : mdiChevronDown
+                                      }
+                                    ></ha-svg-icon>
+                                  </button>
+                                  <div class="thinking-content">
+                                    ${
+                                      message.thinking
+                                        ? html`<ha-markdown
+                                            .content=${message.thinking}
+                                          ></ha-markdown>`
+                                        : nothing
+                                    }
+                                    ${
+                                      message.tool_calls &&
+                                      Object.keys(message.tool_calls).length > 0
+                                        ? html`
+                                            <div class="tool-calls">
+                                              ${Object.values(
+                                                message.tool_calls
+                                              ).map(
+                                                (toolCall) => html`
+                                                  <div class="tool-call">
+                                                    <div class="tool-name">
+                                                      ${toolCall.tool_name}
+                                                    </div>
                                                     <div class="tool-data">
                                                       <pre>
-${JSON.stringify(toolCall.result, null, 2)}</pre
-                                                      >
+${JSON.stringify(toolCall.tool_args, null, 2)}</pre>
                                                     </div>
-                                                  `
-                                                : nothing}
+                                                    ${
+                                                      toolCall.result
+                                                        ? html`
+                                                            <div
+                                                              class="tool-data"
+                                                            >
+                                                              <pre>
+${JSON.stringify(toolCall.result, null, 2)}</pre>
+                                                            </div>
+                                                          `
+                                                        : nothing
+                                                    }
+                                                  </div>
+                                                `
+                                              )}
                                             </div>
                                           `
-                                        )}
-                                      </div>
-                                    `
-                                  : nothing}
-                              </div>
-                            </div>
-                          `
-                        : nothing}
-                      ${message.text
-                        ? html`
-                            <ha-markdown
-                              breaks
-                              cache
-                              .content=${message.text}
-                            ></ha-markdown>
-                          `
-                        : nothing}
-                    </div>
-                  `
-                : nothing}
+                                        : nothing
+                                    }
+                                  </div>
+                                </div>
+                              `
+                            : nothing
+                        }
+                        ${
+                          message.text
+                            ? html`
+                                <ha-markdown
+                                  breaks
+                                  cache
+                                  .content=${message.text}
+                                ></ha-markdown>
+                              `
+                            : nothing
+                        }
+                      </div>
+                    `
+                  : nothing
+              }
             </div>
           `
         )}
@@ -251,52 +386,58 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
           id="message-input"
           @keyup=${this._handleKeyUp}
           @input=${this._handleInput}
-          .label=${this.hass.localize(`ui.dialogs.voice_command.input_label`)}
+          .label=${this._localize(`ui.dialogs.voice_command.input_label`)}
         >
           <div slot="end">
-            ${this._showSendButton || !supportsSTT
-              ? html`
-                  <ha-icon-button
-                    class="listening-icon"
-                    .path=${mdiSend}
-                    @click=${this._handleSendMessage}
-                    .disabled=${this._processing}
-                    .label=${this.hass.localize(
-                      "ui.dialogs.voice_command.send_text"
-                    )}
-                  >
-                  </ha-icon-button>
-                `
-              : html`
-                  ${this._audioRecorder?.active
-                    ? html`
-                        <div class="bouncer">
-                          <div class="double-bounce1"></div>
-                          <div class="double-bounce2"></div>
-                        </div>
-                      `
-                    : nothing}
-
-                  <div class="listening-icon">
+            ${
+              this._showSendButton || !supportsSTT
+                ? html`
                     <ha-icon-button
-                      .path=${mdiMicrophone}
-                      @click=${this._handleListeningButton}
+                      class="listening-icon"
+                      .path=${mdiSend}
+                      @click=${this._handleSendMessage}
                       .disabled=${this._processing}
-                      .label=${this.hass.localize(
-                        "ui.dialogs.voice_command.start_listening"
+                      .label=${this._localize(
+                        "ui.dialogs.voice_command.send_text"
                       )}
                     >
                     </ha-icon-button>
-                    ${!supportsMicrophone
-                      ? html`
-                          <ha-svg-icon
-                            .path=${mdiAlertCircle}
-                            class="unsupported"
-                          ></ha-svg-icon>
-                        `
-                      : null}
-                  </div>
-                `}
+                  `
+                : html`
+                    ${
+                      this._audioRecorder?.active
+                        ? html`
+                            <div class="bouncer">
+                              <div class="double-bounce1"></div>
+                              <div class="double-bounce2"></div>
+                            </div>
+                          `
+                        : nothing
+                    }
+
+                    <div class="listening-icon">
+                      <ha-icon-button
+                        .path=${mdiMicrophone}
+                        @click=${this._handleListeningButton}
+                        .disabled=${this._processing}
+                        .label=${this._localize(
+                          "ui.dialogs.voice_command.start_listening"
+                        )}
+                      >
+                      </ha-icon-button>
+                      ${
+                        !supportsMicrophone
+                          ? html`
+                              <ha-svg-icon
+                                .path=${mdiAlertCircle}
+                                class="unsupported"
+                              ></ha-svg-icon>
+                            `
+                          : null
+                      }
+                    </div>
+                  `
+            }
           </div>
         </ha-input>
       </div>
@@ -305,6 +446,9 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
 
   private async _scrollMessagesBottom() {
     const lastChatMessage = this._lastChatMessage;
+    if (!lastChatMessage) {
+      return;
+    }
     if (!lastChatMessage.hasUpdated) {
       await lastChatMessage.updateComplete;
     }
@@ -374,10 +518,12 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
 
   private _handleToggleThinking(ev: Event) {
     const index = (ev.currentTarget as any).index;
-    this._conversation[index] = {
-      ...this._conversation[index],
-      thinking_expanded: !this._conversation[index].thinking_expanded,
-    };
+    // Mutate the message in place rather than replacing it. The streaming
+    // processor keeps a reference to this same object and mutates it as deltas
+    // arrive; swapping in a new object would detach the in-flight message from
+    // the processor and freeze the chat (see #52501).
+    const message = this._conversation[index];
+    message.thinking_expanded = !message.thinking_expanded;
     this.requestUpdate("_conversation");
   }
 
@@ -385,31 +531,18 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
     this._conversation = [...this._conversation!, message];
   }
 
-  private async _showNotSupportedMessage() {
+  private _showNotSupportedMessage() {
+    const documentationLink = `[${this._localize(
+      "ui.components.secure_connection_required.documentation_link"
+    )}](${documentationUrl(this._config, SECURE_CONNECTION_DOCUMENTATION_PATH)})`;
     this._addMessage({
       who: "hass",
-      text:
-        // New lines matter for messages
-        // prettier-ignore
-        html`${this.hass.localize(
-          "ui.dialogs.voice_command.not_supported_microphone_browser"
-        )}
-
-        ${this.hass.localize(
-          "ui.dialogs.voice_command.not_supported_microphone_documentation",
-          {
-            documentation_link: html`<a
-                target="_blank"
-                rel="noopener noreferrer"
-                href=${documentationUrl(
-                  this.hass,
-                  "/docs/configuration/securing/#remote-access"
-                )}
-              >${this.hass.localize(
-                  "ui.dialogs.voice_command.not_supported_microphone_documentation_link"
-                )}</a>`,
-          }
-          )}`,
+      text: `${this._localize(
+        "ui.components.secure_connection_required.microphone"
+      )}\n\n${this._localize(
+        "ui.components.secure_connection_required.learn_more",
+        { documentation_link: documentationLink }
+      )}`,
       thinking: "",
       tool_calls: {},
     });
@@ -429,13 +562,31 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
     }
     this._stt_binary_handler_id = undefined;
     this._audioBuffer = [];
+
+    const microphoneError = await this._audioRecorder.start();
+
+    if (microphoneError) {
+      this._audioBuffer = undefined;
+      this._processing = false;
+      this._addMessage({
+        who: "hass",
+        text: this._localize(
+          `ui.dialogs.voice_command.microphone_${microphoneError}`
+        ),
+        thinking: "",
+        tool_calls: {},
+        error: true,
+      });
+
+      return;
+    }
+
     const userMessage: AssistMessage = {
       who: "user",
       text: "…",
       thinking: "",
       tool_calls: {},
     };
-    await this._audioRecorder.start();
 
     this._addMessage(userMessage);
 
@@ -443,12 +594,14 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
 
     try {
       const unsub = await runAssistPipeline(
-        this.hass,
+        this._connection,
         (event: PipelineRunEvent) => {
           if (event.type === "run-start") {
             this._stt_binary_handler_id =
               event.data.runner_data.stt_binary_handler_id;
-            this._audio = new Audio(event.data.tts_output!.url);
+            this._audio = new Audio(
+              this._connection.hassUrl(event.data.tts_output!.url)
+            );
             this._audio.play();
             this._audio.addEventListener("ended", () => {
               this._unloadAudio();
@@ -462,7 +615,11 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
             );
             this._audio.addEventListener("error", () => {
               this._unloadAudio();
-              showAlertDialog(this, { title: "Error playing audio." });
+              showAlertDialog(this, {
+                title: this._localize(
+                  "ui.dialogs.voice_command.error_playing_audio"
+                ),
+              });
             });
           }
 
@@ -485,6 +642,9 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
             hassMessageProcesser.addMessage();
           } else if (event.type.startsWith("intent-")) {
             hassMessageProcesser.processEvent(event);
+            if (event.type === "intent-end") {
+              this._conversationId = event.data.intent_output.conversation_id;
+            }
           } else if (event.type === "run-end") {
             this._stt_binary_handler_id = undefined;
             unsub();
@@ -512,7 +672,9 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
       );
     } catch (err: any) {
       await showAlertDialog(this, {
-        title: "Error starting pipeline",
+        title: this._localize(
+          "ui.dialogs.voice_command.error_starting_pipeline"
+        ),
         text: err.message || err,
       });
       this._stopListening();
@@ -539,7 +701,7 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
   }
 
   private _sendAudioChunk(chunk: Int16Array) {
-    this.hass.connection.socket!.binaryType = "arraybuffer";
+    this._connection.connection.socket!.binaryType = "arraybuffer";
 
     // eslint-disable-next-line eqeqeq
     if (this._stt_binary_handler_id == undefined) {
@@ -550,7 +712,7 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
     data[0] = this._stt_binary_handler_id;
     data.set(new Uint8Array(chunk.buffer), 1);
 
-    this.hass.connection.socket!.send(data);
+    this._connection.connection.socket!.send(data);
   }
 
   private _unloadAudio = () => {
@@ -570,10 +732,13 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
     hassMessageProcesser.addMessage();
     try {
       const unsub = await runAssistPipeline(
-        this.hass,
+        this._connection,
         (event) => {
           if (event.type.startsWith("intent-")) {
             hassMessageProcesser.processEvent(event);
+            if (event.type === "intent-end") {
+              this._conversationId = event.data.intent_output.conversation_id;
+            }
           }
           if (event.type === "intent-end") {
             unsub();
@@ -593,125 +758,18 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
       );
     } catch {
       hassMessageProcesser.setError(
-        this.hass.localize("ui.dialogs.voice_command.error")
+        this._localize("ui.dialogs.voice_command.error")
       );
     } finally {
       this._processing = false;
     }
   }
 
-  private _createAddHassMessageProcessor() {
-    let currentDeltaRole = "";
-
-    const progressToNextMessage = () => {
-      if (
-        progress.hassMessage.text === "…" &&
-        !progress.hassMessage.thinking &&
-        (!progress.hassMessage.tool_calls ||
-          Object.keys(progress.hassMessage.tool_calls).length === 0)
-      ) {
-        return;
-      }
-      if (progress.hassMessage.text?.endsWith("…")) {
-        progress.hassMessage.text = progress.hassMessage.text.slice(0, -1);
-      }
-
-      progress.hassMessage = {
-        who: "hass",
-        text: "…",
-        thinking: "",
-        tool_calls: {},
-        error: false,
-      };
-      this._addMessage(progress.hassMessage);
-    };
-
-    const isAssistantDelta = (
-      _delta: any
-    ): _delta is Partial<ConversationChatLogAssistantDelta> =>
-      currentDeltaRole === "assistant";
-
-    const isToolResult = (
-      _delta: any
-    ): _delta is ConversationChatLogToolResultDelta =>
-      currentDeltaRole === "tool_result";
-
-    const progress = {
-      continueConversation: false,
-      hassMessage: {
-        who: "hass",
-        text: "…",
-        thinking: "",
-        tool_calls: {},
-        error: false,
-      },
-      addMessage: () => {
-        this._addMessage(progress.hassMessage);
-      },
-      setError: (error: string) => {
-        progressToNextMessage();
-        progress.hassMessage.text = error;
-        progress.hassMessage.error = true;
-        this.requestUpdate("_conversation");
-      },
-      processEvent: (event: PipelineRunEvent) => {
-        if (event.type === "intent-progress" && event.data.chat_log_delta) {
-          const delta = event.data.chat_log_delta;
-
-          // new message
-          if (delta.role) {
-            currentDeltaRole = delta.role;
-          }
-
-          if (isAssistantDelta(delta)) {
-            if (delta.content) {
-              if (progress.hassMessage.text.endsWith("…")) {
-                progress.hassMessage.text =
-                  progress.hassMessage.text.substring(
-                    0,
-                    progress.hassMessage.text.length - 1
-                  ) +
-                  delta.content +
-                  "…";
-              } else {
-                progress.hassMessage.text += delta.content + "…";
-              }
-            }
-            if (delta.thinking_content) {
-              progress.hassMessage.thinking += delta.thinking_content;
-            }
-            if (delta.tool_calls) {
-              for (const toolCall of delta.tool_calls) {
-                progress.hassMessage.tool_calls[toolCall.id] = toolCall;
-              }
-            }
-            this.requestUpdate("_conversation");
-          } else if (isToolResult(delta)) {
-            if (progress.hassMessage.tool_calls[delta.tool_call_id]) {
-              progress.hassMessage.tool_calls[delta.tool_call_id].result =
-                delta.tool_result;
-              this.requestUpdate("_conversation");
-            }
-          }
-        } else if (event.type === "intent-end") {
-          this._conversationId = event.data.intent_output.conversation_id;
-          progress.continueConversation =
-            event.data.intent_output.continue_conversation;
-          const response =
-            event.data.intent_output.response.speech?.plain.speech;
-          if (!response) {
-            return;
-          }
-          if (event.data.intent_output.response.response_type === "error") {
-            progress.setError(response);
-          } else {
-            progress.hassMessage.text = response;
-            this.requestUpdate("_conversation");
-          }
-        }
-      },
-    };
-    return progress;
+  private _createAddHassMessageProcessor(): AssistMessageProcessor {
+    return createAssistMessageProcessor({
+      addMessage: (message) => this._addMessage(message),
+      requestUpdate: () => this.requestUpdate("_conversation"),
+    });
   }
 
   static get styles(): CSSResultGroup {
@@ -916,31 +974,18 @@ ${JSON.stringify(toolCall.result, null, 2)}</pre
           position: absolute;
           top: 0;
           left: 0;
-          -webkit-animation: sk-bounce 2s infinite ease-in-out;
           animation: sk-bounce 2s infinite ease-in-out;
         }
         .double-bounce2 {
-          -webkit-animation-delay: -1s;
           animation-delay: -1s;
-        }
-        @-webkit-keyframes sk-bounce {
-          0%,
-          100% {
-            -webkit-transform: scale(0);
-          }
-          50% {
-            -webkit-transform: scale(1);
-          }
         }
         @keyframes sk-bounce {
           0%,
           100% {
             transform: scale(0);
-            -webkit-transform: scale(0);
           }
           50% {
             transform: scale(1);
-            -webkit-transform: scale(1);
           }
         }
 

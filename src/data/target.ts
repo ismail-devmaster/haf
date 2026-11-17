@@ -7,10 +7,14 @@ import type { CallWS, HomeAssistant } from "../types";
 import type { AreaRegistryEntry } from "./area/area_registry";
 import type { FloorComboBoxItem } from "./area_floor_picker";
 import type { DevicePickerItem } from "./device/device_picker";
-import type { DeviceRegistryEntry } from "./device/device_registry";
+import {
+  devicesInEffectiveArea,
+  type DeviceRegistryEntry,
+} from "./device/device_registry";
 import type { HaEntityPickerEntityFilterFunc } from "./entity/entity";
 import type { EntityComboBoxItem } from "./entity/entity_picker";
 import type { EntityRegistryDisplayEntry } from "./entity/entity_registry";
+import { shareInFlightRequest } from "../common/util/share-in-flight-request";
 
 export const TARGET_SEPARATOR = "________";
 
@@ -21,6 +25,14 @@ export interface TargetItem {
   type: TargetType;
   id: string;
 }
+
+/**
+ * A target that can leave things out again. `exclude` has the shape of a
+ * target and is subtracted, as a whole, from everything the target resolves to.
+ */
+export type HassServiceTargetWithExclude = HassServiceTarget & {
+  exclude?: HassServiceTarget;
+};
 
 export interface SingleHassServiceTarget {
   entity_id?: string;
@@ -51,13 +63,85 @@ export const extractFromTarget = async (
   target: HassServiceTarget,
   expandGroup = false,
   primaryEntitiesOnly = true
-) =>
-  callWS<ExtractFromTargetResult>({
-    type: "extract_from_target",
+) => {
+  const request = {
+    type: "extract_from_target" as const,
     target,
     expand_group: expandGroup,
     primary_entities_only: primaryEntitiesOnly,
-  });
+  };
+
+  return shareInFlightRequest(callWS, JSON.stringify(request), () =>
+    callWS<ExtractFromTargetResult>(request)
+  );
+};
+
+export interface TargetItemEntities extends TargetItem {
+  entities: string[];
+}
+
+export interface TargetExcludeEffect extends TargetItem {
+  removed: TargetItemEntities[];
+}
+
+/**
+ * An included item with what it resolves to, and the areas and devices it
+ * reaches on the way, so the picker's filters can narrow it like its row.
+ */
+export interface TargetIncludeEntities extends TargetItemEntities {
+  referenced_areas: string[];
+  referenced_devices: string[];
+}
+
+export interface TargetExplanation {
+  includes: TargetIncludeEntities[];
+  excludes: TargetExcludeEffect[];
+}
+
+export const explainTarget = (
+  callWS: CallWS,
+  target: HassServiceTargetWithExclude,
+  expandGroup = true,
+  primaryEntitiesOnly = true
+) => {
+  const request = {
+    type: "explain_target" as const,
+    target,
+    expand_group: expandGroup,
+    primary_entities_only: primaryEntitiesOnly,
+  };
+
+  return shareInFlightRequest(callWS, JSON.stringify(request), () =>
+    callWS<TargetExplanation>(request)
+  );
+};
+
+/**
+ * What each item of an explained target is left with once every exclude is
+ * taken out of it, by its `type:id`.
+ */
+export const targetEntitiesAfterExclude = (
+  explanation: TargetExplanation
+): Record<string, string[]> => {
+  const removed: Record<string, Set<string>> = {};
+  explanation.excludes.forEach((exclude) =>
+    exclude.removed.forEach(({ type, id, entities }) => {
+      const key = `${type}:${id}`;
+      removed[key] ??= new Set();
+      entities.forEach((entityId) => removed[key].add(entityId));
+    })
+  );
+  return Object.fromEntries(
+    explanation.includes.map(({ type, id, entities }) => {
+      const key = `${type}:${id}`;
+      const out = removed[key];
+      return [
+        key,
+        out ? entities.filter((entityId) => !out.has(entityId)) : entities,
+      ];
+    })
+  );
+};
 
 export const getTargetEntityCount = (target?: HassServiceTarget): number => {
   const tempTarget = {
@@ -125,9 +209,7 @@ export const areaMeetsFilter = (
   entityFilter?: HaEntityPickerEntityFilterFunc,
   includeSecondary = false
 ): boolean => {
-  const areaDevices = Object.values(devices).filter(
-    (device) => device.area_id === area.area_id
-  );
+  const areaDevices = devicesInEffectiveArea(devices, area.area_id);
 
   if (
     areaDevices.some((device) =>
@@ -178,6 +260,9 @@ export const deviceMeetsFilter = (
   entityFilter?: HaEntityPickerEntityFilterFunc,
   includeSecondary = false
 ): boolean => {
+  // Only the device's own entities: child devices are targeted through the
+  // device itself (see core's target resolution), not by making a parent match
+  // on behalf of a child.
   const devEntities = Object.values(entities).filter(
     (entity) => entity.device_id === device.id
   );

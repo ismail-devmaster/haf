@@ -1,7 +1,7 @@
 import type {
   HassEntityAttributeBase,
   HassEntityBase,
-  HassServiceTarget,
+  HassServices,
 } from "home-assistant-js-websocket";
 import type { Describe } from "superstruct";
 import {
@@ -21,6 +21,7 @@ import { hasTemplate } from "../common/string/has-template";
 import { createSearchParam } from "../common/url/search-params";
 import type { HomeAssistant } from "../types";
 import type {
+  AutomationMigrationReport,
   Condition,
   ShorthandAndCondition,
   ShorthandNotCondition,
@@ -29,6 +30,7 @@ import type {
 } from "./automation";
 import { migrateAutomationTrigger } from "./automation";
 import type { BlueprintInput } from "./blueprint";
+import type { HassServiceTargetWithExclude } from "./target";
 
 export const MODES = ["single", "restart", "queued", "parallel"] as const;
 export const MODES_MAX = ["queued", "parallel"] as const;
@@ -36,17 +38,26 @@ export const isMaxMode = arrayLiteralIncludes(MODES_MAX);
 
 export const baseActionStruct = object({
   alias: optional(string()),
-  comment: optional(string()),
+  note: optional(string()),
   continue_on_error: optional(boolean()),
   enabled: optional(boolean()),
 });
 
-export const targetStruct = object({
+const targetIncludeFields = {
   entity_id: optional(union([string(), array(string())])),
   device_id: optional(union([string(), array(string())])),
   area_id: optional(union([string(), array(string())])),
   floor_id: optional(union([string(), array(string())])),
   label_id: optional(union([string(), array(string())])),
+};
+
+// A target without an exclude.
+const targetIncludeStruct = object(targetIncludeFields);
+
+export const targetStruct = object({
+  ...targetIncludeFields,
+  // Same shape as the target, without nesting another exclude.
+  exclude: optional(targetIncludeStruct),
 });
 
 export const serviceActionStruct: Describe<ServiceActionWithTemplate> = assign(
@@ -104,9 +115,12 @@ export interface Field {
   selector?: any;
 }
 
+const getScriptFields = (services: HassServices, entityId: string) =>
+  services.script[computeObjectId(entityId)]?.fields;
+
 interface BaseAction {
   alias?: string;
-  comment?: string;
+  note?: string;
   continue_on_error?: boolean;
   enabled?: boolean;
 }
@@ -121,14 +135,14 @@ export interface ServiceAction extends BaseAction {
   action?: string;
   service_template?: string;
   entity_id?: string;
-  target?: HassServiceTarget;
+  target?: HassServiceTargetWithExclude;
   data?: Record<string, unknown>;
   response_variable?: string;
   metadata?: Record<string, unknown>;
 }
 
 type ServiceActionWithTemplate = ServiceAction & {
-  target?: HassServiceTarget | string;
+  target?: HassServiceTargetWithExclude | string;
 };
 
 export type { ServiceActionWithTemplate };
@@ -137,7 +151,7 @@ export interface DeviceAction extends BaseAction {
   type: string;
   device_id: string;
   domain: string;
-  entity_id: string;
+  entity_id?: string;
 }
 
 export interface DelayActionParts extends BaseAction {
@@ -197,7 +211,7 @@ export interface ForEachRepeat extends BaseRepeat {
 
 export interface Option {
   alias?: string;
-  comment?: string;
+  note?: string;
   conditions: string | Condition[];
   sequence: Action | Action[];
 }
@@ -224,7 +238,7 @@ export interface StopAction extends BaseAction {
 }
 
 export interface SequenceAction extends BaseAction {
-  sequence: (ManualScriptConfig | Action)[];
+  sequence: (ManualScriptConfig | Action)[] | null;
   metadata?: {};
 }
 
@@ -392,30 +406,35 @@ export const isAction = (value: unknown): value is Action =>
   getActionType(value as Action) !== "unknown";
 
 export const hasScriptFields = (
-  hass: HomeAssistant,
+  services: HassServices,
   entityId: string
 ): boolean => {
-  const fields = hass.services.script[computeObjectId(entityId)]?.fields;
+  const fields = getScriptFields(services, entityId);
   return fields !== undefined && Object.keys(fields).length > 0;
 };
 
-export const hasRequiredScriptFields = (
-  hass: HomeAssistant,
+export const hasRequiredScriptFieldsForServices = (
+  services: HassServices,
   entityId: string
 ): boolean => {
-  const fields = hass.services.script[computeObjectId(entityId)]?.fields;
+  const fields = getScriptFields(services, entityId);
   return (
     fields !== undefined &&
     Object.values(fields).some((field) => field.required)
   );
 };
 
-export const requiredScriptFieldsFilled = (
+export const hasRequiredScriptFields = (
   hass: HomeAssistant,
+  entityId: string
+): boolean => hasRequiredScriptFieldsForServices(hass.services, entityId);
+
+export const requiredScriptFieldsFilledForServices = (
+  services: HassServices,
   entityId: string,
   data?: Record<string, any>
 ): boolean => {
-  const fields = hass.services.script[computeObjectId(entityId)]?.fields;
+  const fields = getScriptFields(services, entityId);
   if (fields === undefined || Object.keys(fields).length === 0) {
     return true;
   }
@@ -430,18 +449,26 @@ export const requiredScriptFieldsFilled = (
   });
 };
 
+export const requiredScriptFieldsFilled = (
+  hass: HomeAssistant,
+  entityId: string,
+  data?: Record<string, any>
+): boolean =>
+  requiredScriptFieldsFilledForServices(hass.services, entityId, data);
+
 export const migrateAutomationAction = (
-  action: Action | Action[]
+  action: Action | Action[],
+  report?: AutomationMigrationReport
 ): Action | Action[] => {
-  if (!action) {
+  if (!action || typeof action !== "object") {
     return action;
   }
 
   if (Array.isArray(action)) {
-    return action.map(migrateAutomationAction) as Action[];
+    return action.map((a) => migrateAutomationAction(a, report)) as Action[];
   }
 
-  if (typeof action === "object" && action !== null && "service" in action) {
+  if ("service" in action) {
     if (!("action" in action)) {
       action.action = action.service;
     }
@@ -449,7 +476,7 @@ export const migrateAutomationAction = (
   }
 
   // legacy scene (scene: scene_name)
-  if (typeof action === "object" && action !== null && "scene" in action) {
+  if ("scene" in action) {
     action.action = "scene.turn_on";
     action.target = {
       entity_id: action.scene,
@@ -459,8 +486,6 @@ export const migrateAutomationAction = (
 
   // legacy play media
   if (
-    typeof action === "object" &&
-    action !== null &&
     "action" in action &&
     action.action === "media_player.play_media" &&
     "data" in action &&
@@ -482,56 +507,60 @@ export const migrateAutomationAction = (
     };
   }
 
-  if (typeof action === "object" && action !== null && "sequence" in action) {
+  if ("sequence" in action) {
     delete (action as SequenceAction).metadata;
-    for (const sequenceAction of (action as SequenceAction).sequence) {
-      migrateAutomationAction(sequenceAction);
-    }
+    migrateAutomationAction(
+      (action as SequenceAction).sequence as Action[],
+      report
+    );
   }
 
   const actionType = getActionType(action);
 
   if (actionType === "parallel") {
     const _action = action as ParallelAction;
-    migrateAutomationAction(_action.parallel);
+    migrateAutomationAction(_action.parallel, report);
   }
 
   if (actionType === "choose") {
     const _action = action as ChooseAction;
     if (Array.isArray(_action.choose)) {
       for (const choice of _action.choose) {
-        migrateAutomationAction(choice.sequence);
+        migrateAutomationAction(choice?.sequence, report);
       }
     } else if (_action.choose) {
-      migrateAutomationAction(_action.choose.sequence);
+      migrateAutomationAction(_action.choose.sequence, report);
     }
     if (_action.default) {
-      migrateAutomationAction(_action.default);
+      migrateAutomationAction(_action.default, report);
     }
   }
 
   if (actionType === "repeat") {
     const _action = action as RepeatAction;
-    migrateAutomationAction(_action.repeat.sequence);
+    migrateAutomationAction(_action.repeat?.sequence, report);
   }
 
   if (actionType === "if") {
     const _action = action as IfAction;
-    migrateAutomationAction(_action.then);
+    migrateAutomationAction(_action.then, report);
     if (_action.else) {
-      migrateAutomationAction(_action.else);
+      migrateAutomationAction(_action.else, report);
     }
   }
 
   if (actionType === "wait_for_trigger") {
     const _action = action as WaitForTriggerAction;
-    migrateAutomationTrigger(_action.wait_for_trigger);
+    migrateAutomationTrigger(_action.wait_for_trigger, report);
   }
 
   return action;
 };
 
-export const normalizeScriptConfig = (config: ScriptConfig): ScriptConfig => {
+export const normalizeScriptConfig = (
+  config: ScriptConfig,
+  report?: AutomationMigrationReport
+): ScriptConfig => {
   // Normalize data: ensure sequence is a list
   // Happens when people copy paste their scripts into the config
   const value = config.sequence;
@@ -539,7 +568,7 @@ export const normalizeScriptConfig = (config: ScriptConfig): ScriptConfig => {
     config.sequence = [value];
   }
   if (config.sequence) {
-    config.sequence = migrateAutomationAction(config.sequence);
+    config.sequence = migrateAutomationAction(config.sequence, report);
   }
   return config;
 };

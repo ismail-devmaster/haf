@@ -37,15 +37,26 @@ declare global {
 }
 
 const clearUrlParams = () => {
+  const searchParams = new URLSearchParams(location.search);
+  let changed = false;
   // Clear auth data from url if we have been able to establish a connection
   if (location.search.includes("auth_callback=1")) {
-    const searchParams = new URLSearchParams(location.search);
     // https://github.com/home-assistant/home-assistant-js-websocket/blob/master/lib/auth.ts
     // Remove all data from QueryCallbackData type
     searchParams.delete("auth_callback");
     searchParams.delete("code");
     searchParams.delete("state");
     searchParams.delete("storeToken");
+    changed = true;
+  }
+  // Remove the cache-busting param added by the stale-index recovery guard in
+  // index.html once we have booted successfully, so it doesn't linger in the
+  // URL (and stops acting as the guard's one-shot loop marker).
+  if (searchParams.has("ha_cache_bust")) {
+    searchParams.delete("ha_cache_bust");
+    changed = true;
+  }
+  if (changed) {
     const search = searchParams.toString();
     history.replaceState(
       null,
@@ -129,11 +140,15 @@ window.hassConnection.then(({ conn }) => {
   const preloadWindow = window as WindowWithPreloads;
   preloadWindow.recorderInfoProm = getRecorderInfo(conn);
 
-  if (location.pathname === "/" || location.pathname.startsWith("/lovelace/")) {
-    preloadWindow.llConfProm = fetchConfig(conn, null, false);
+  // "/" opens the default panel, which is not known yet, so only preload the
+  // config when the "lovelace" dashboard is opened directly.
+  if (location.pathname.startsWith("/lovelace/")) {
+    preloadWindow.llConfProm = fetchConfig(conn, "lovelace", false);
     preloadWindow.llConfProm.catch(() => {
       // Ignore it, it is handled by Lovelace panel.
     });
+  }
+  if (location.pathname === "/" || location.pathname.startsWith("/lovelace/")) {
     preloadWindow.llResProm = fetchResources(conn);
   }
 });

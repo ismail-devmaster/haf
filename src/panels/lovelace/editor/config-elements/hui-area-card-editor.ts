@@ -26,7 +26,7 @@ import type {
   SchemaUnion,
 } from "../../../../components/ha-form/types";
 import type { SelectOption } from "../../../../data/selector";
-import { getSensorNumericDeviceClasses } from "../../../../data/sensor";
+import { SENSOR_NUMERIC_DEVICE_CLASSES } from "../../../../data/sensor_entity_constants";
 import type { HomeAssistant } from "../../../../types";
 import type {
   LovelaceCardFeatureConfig,
@@ -76,8 +76,6 @@ export class HuiAreaCardEditor
   @property({ attribute: false }) public hass?: HomeAssistant;
 
   @state() private _config?: AreaCardConfig;
-
-  @state() private _numericDeviceClasses?: string[];
 
   @state() private _featureContext: AreaCardFeatureContext = {};
 
@@ -238,11 +236,18 @@ export class HuiAreaCardEditor
         return [];
       }
 
-      const binarySensorFilter = generateEntityFilter(this.hass!, {
-        domain: "binary_sensor",
-        area,
-        entity_category: "none",
-      });
+      const binarySensorFilter = generateEntityFilter(
+        this.hass!.states,
+        this.hass!.entities,
+        this.hass!.devices,
+        this.hass!.areas,
+        this.hass!.floors,
+        {
+          domain: "binary_sensor",
+          area,
+          entity_category: "none",
+        }
+      );
 
       const classes = Object.keys(this.hass!.entities)
         .filter(
@@ -265,12 +270,19 @@ export class HuiAreaCardEditor
         return [];
       }
 
-      const sensorFilter = generateEntityFilter(this.hass!, {
-        domain: "sensor",
-        area,
-        device_class: numericDeviceClasses,
-        entity_category: "none",
-      });
+      const sensorFilter = generateEntityFilter(
+        this.hass!.states,
+        this.hass!.entities,
+        this.hass!.devices,
+        this.hass!.areas,
+        this.hass!.floors,
+        {
+          domain: "sensor",
+          area,
+          device_class: numericDeviceClasses,
+          entity_category: "none",
+        }
+      );
 
       const classes = Object.keys(this.hass!.entities)
         .filter((id) => sensorFilter(id) && !excludeEntities?.includes(id))
@@ -344,14 +356,6 @@ export class HuiAreaCardEditor
     };
   }
 
-  protected async updated() {
-    if (this.hass && !this._numericDeviceClasses) {
-      const { numeric_device_classes: sensorNumericDeviceClasses } =
-        await getSensorNumericDeviceClasses(this.hass);
-      this._numericDeviceClasses = sensorNumericDeviceClasses;
-    }
-  }
-
   private _featuresSchema = memoizeOne(
     (localize: LocalizeFunc, vertical: boolean) =>
       [
@@ -399,7 +403,7 @@ export class HuiAreaCardEditor
     const possibleSensorClasses = this._sensorClassesForArea(
       this._config.area,
       this._config.exclude_entities,
-      this._numericDeviceClasses
+      SENSOR_NUMERIC_DEVICE_CLASSES
     );
     const binarySelectOptions = this._buildBinaryOptions(
       possibleBinaryClasses,
@@ -471,18 +475,20 @@ export class HuiAreaCardEditor
           )}
         </h3>
         <div class="content">
-          ${hasCompatibleFeatures
-            ? html`
-                <ha-form
-                  class="features-form"
-                  .hass=${this.hass}
-                  .data=${data}
-                  .schema=${featuresSchema}
-                  .computeLabel=${this._computeLabelCallback}
-                  @value-changed=${this._valueChanged}
-                ></ha-form>
-              `
-            : nothing}
+          ${
+            hasCompatibleFeatures
+              ? html`
+                  <ha-form
+                    class="features-form"
+                    .hass=${this.hass}
+                    .data=${data}
+                    .schema=${featuresSchema}
+                    .computeLabel=${this._computeLabelCallback}
+                    @value-changed=${this._valueChanged}
+                  ></ha-form>
+                `
+              : nothing
+          }
           <hui-card-features-editor
             .hass=${this.hass}
             .context=${this._featureContext}

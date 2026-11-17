@@ -1,12 +1,20 @@
 import type { PropertyValues, TemplateResult } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
-import { LOCAL_TIME_ZONE } from "../common/datetime/resolve-time-zone";
+import memoizeOne from "memoize-one";
+import {
+  HAS_RESOLVED_IANA_TIME_ZONE,
+  LOCAL_TIME_ZONE,
+} from "../common/datetime/resolve-time-zone";
+import { consumeLocalize } from "../common/decorators/consume-context-entry";
 import { fireEvent } from "../common/dom/fire_event";
 import type { LocalizeFunc } from "../common/translations/localize";
 import "../components/ha-alert";
 import "../components/ha-button";
 import { COUNTRIES } from "../components/ha-country-picker";
+import "../components/ha-form/ha-form";
+import type { HaForm } from "../components/ha-form/ha-form";
+import type { HaFormSchema } from "../components/ha-form/types";
 import "../components/ha-spinner";
 import type { ConfigUpdateValues } from "../data/core";
 import { saveCoreConfig } from "../data/core";
@@ -20,7 +28,9 @@ import "./onboarding-location";
 class OnboardingCoreConfig extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
-  @property({ attribute: false }) public onboardingLocalize!: LocalizeFunc;
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
 
   @state() private _working = false;
 
@@ -28,7 +38,9 @@ class OnboardingCoreConfig extends LitElement {
 
   private _elevation = "0";
 
-  private _timeZone: ConfigUpdateValues["time_zone"] = LOCAL_TIME_ZONE;
+  @state() private _timeZone: ConfigUpdateValues["time_zone"] = LOCAL_TIME_ZONE;
+
+  @state() private _timeZoneDetected = HAS_RESOLVED_IANA_TIME_ZONE;
 
   private _language: ConfigUpdateValues["language"] = getLocalLanguage();
 
@@ -42,13 +54,34 @@ class OnboardingCoreConfig extends LitElement {
 
   @state() private _skipCore = false;
 
-  @query("ha-country-picker") private _countryPicker?: HTMLElement;
+  @query("ha-form") private _form?: HaForm;
+
+  private _schema = memoizeOne((includeTimeZone: boolean): HaFormSchema[] => [
+    {
+      name: "country",
+      required: true,
+      selector: { country: null },
+    },
+    ...(includeTimeZone
+      ? ([
+          {
+            name: "time_zone",
+            required: true,
+            selector: { timezone: null },
+          },
+        ] satisfies HaFormSchema[])
+      : []),
+  ]);
+
+  private _computeLabel = (schema: HaFormSchema) =>
+    this.hass.localize(
+      `ui.panel.config.core.section.core.core_config.${schema.name}` as any
+    );
 
   protected render(): TemplateResult {
     if (!this._location) {
       return html`<onboarding-location
         .hass=${this.hass}
-        .onboardingLocalize=${this.onboardingLocalize}
         @value-changed=${this._locationChanged}
       ></onboarding-location>`;
     }
@@ -58,33 +91,31 @@ class OnboardingCoreConfig extends LitElement {
       </div>`;
     }
     return html`
-      ${this._error
-        ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
-        : nothing}
+      ${
+        this._error
+          ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
+          : nothing
+      }
 
       <p>
-        ${this.onboardingLocalize(
-          "ui.panel.page-onboarding.core-config.country_intro"
-        )}
+        ${this._localize("ui.panel.page-onboarding.core-config.country_intro")}
       </p>
 
-      <ha-country-picker
-        class="flex"
+      <ha-form
         .hass=${this.hass}
-        .label=${this.hass.localize(
-          "ui.panel.config.core.section.core.core_config.country"
-        ) || "Country"}
-        required
+        .data=${{
+          country: this._country ?? "",
+          time_zone: this._timeZone,
+        }}
+        .schema=${this._schema(!this._timeZoneDetected)}
+        .computeLabel=${this._computeLabel}
         .disabled=${this._working}
-        .value=${this._countryValue}
-        @value-changed=${this._handleCountryChanged}
-      ></ha-country-picker>
+        @value-changed=${this._handleFormChanged}
+      ></ha-form>
 
       <div class="footer">
         <ha-button @click=${this._save} .disabled=${this._working}>
-          ${this.onboardingLocalize(
-            "ui.panel.page-onboarding.core-config.finish"
-          )}
+          ${this._localize("ui.panel.page-onboarding.core-config.finish")}
         </ha-button>
       </div>
     `;
@@ -99,12 +130,14 @@ class OnboardingCoreConfig extends LitElement {
     });
   }
 
-  private get _countryValue() {
-    return this._country || "";
-  }
-
-  private _handleCountryChanged(ev: ValueChangedEvent<string>) {
-    this._country = ev.detail.value;
+  private _handleFormChanged(
+    ev: ValueChangedEvent<{ country?: string; time_zone?: string }>
+  ) {
+    const value = ev.detail.value as { country?: string; time_zone?: string };
+    this._country = value.country || undefined;
+    if (value.time_zone) {
+      this._timeZone = value.time_zone;
+    }
   }
 
   private async _locationChanged(ev) {
@@ -121,13 +154,14 @@ class OnboardingCoreConfig extends LitElement {
     if (ev.detail.value.language) {
       this._language = ev.detail.value.language;
     }
-    if (ev.detail.value.timezone) {
-      this._timeZone = ev.detail.value.timezone;
+    if (ev.detail.value.time_zone) {
+      this._timeZone = ev.detail.value.time_zone;
+      this._timeZoneDetected = true;
     }
     if (ev.detail.value.unit_system) {
       this._unitSystem = ev.detail.value.unit_system;
     }
-    if (this._country) {
+    if (this._country && this._timeZoneDetected) {
       this._skipCore = true;
       this._save(ev);
       return;
@@ -141,32 +175,33 @@ class OnboardingCoreConfig extends LitElement {
         suggested = lang;
       }
     }
-    this._country = suggested;
+    this._country ??= suggested;
 
     fireEvent(this, "onboarding-progress", { increase: 0.5 });
     await this.updateComplete;
-    setTimeout(() => this._countryPicker!.focus(), 100);
+    setTimeout(() => this._form?.focus(), 100);
   }
 
   private async _save(ev) {
-    if (!this._location || !this._country) {
+    if (!this._location || !this._country || !this._timeZone) {
       return;
     }
     ev.preventDefault();
     this._working = true;
     try {
       await saveCoreConfig(this.hass, {
-        location_name: this.onboardingLocalize(
+        location_name: this._localize(
           "ui.panel.page-onboarding.core-config.location_name_default"
         ),
         latitude: this._location[0],
         longitude: this._location[1],
         elevation: Number(this._elevation),
         unit_system:
-          this._unitSystem || ["US", "MM", "LR"].includes(this._country)
+          this._unitSystem ||
+          (["US", "MM", "LR"].includes(this._country)
             ? "us_customary"
-            : "metric",
-        time_zone: this._timeZone || "UTC",
+            : "metric"),
+        time_zone: this._timeZone,
         currency: this._currency || countryCurrency[this._country] || "EUR",
         country: this._country,
         language: this._language,

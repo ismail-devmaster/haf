@@ -16,13 +16,17 @@ class HuiGroupEntityRow extends LitElement implements LovelaceRow {
 
   @state() private _config?: EntityConfig;
 
-  private _computeCanToggle(hass: HomeAssistant, entityIds: string[]): boolean {
-    return entityIds.some((entityId) => {
+  private _computeCanToggle(
+    hass: HomeAssistant,
+    entityIds: string[] | undefined
+  ): boolean {
+    // Nested groups may not exist
+    return (entityIds ?? []).some((entityId) => {
       const domain = computeDomain(entityId);
       if (domain === "group") {
         return this._computeCanToggle(
           hass,
-          this.hass?.states[entityId].attributes.entity_id
+          hass.states[entityId]?.attributes.entity_id
         );
       }
       return DOMAINS_TOGGLE.has(domain);
@@ -49,26 +53,25 @@ class HuiGroupEntityRow extends LitElement implements LovelaceRow {
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this._config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this.hass.localize, this.hass.config)}
         </hui-warning>
       `;
     }
 
     return html`
       <hui-generic-entity-row .hass=${this.hass} .config=${this._config}>
-        ${this._computeCanToggle(this.hass, stateObj.attributes.entity_id)
-          ? html`
-              <ha-entity-toggle
-                .hass=${this.hass}
-                .stateObj=${stateObj}
-              ></ha-entity-toggle>
-            `
-          : html`
-              <div class="text-content">
-                ${this.hass.formatEntityState(stateObj)}
-              </div>
-            `}
+        ${
+          this._computeCanToggle(this.hass, stateObj.attributes.entity_id)
+            ? html`
+                <ha-entity-toggle .stateObj=${stateObj}></ha-entity-toggle>
+              `
+            : html`
+                <div class="text-content">
+                  ${this.hass.formatEntityState(stateObj)}
+                </div>
+              `
+        }
       </hui-generic-entity-row>
     `;
   }

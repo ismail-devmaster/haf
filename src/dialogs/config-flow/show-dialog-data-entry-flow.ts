@@ -81,7 +81,8 @@ export interface FlowConfig {
   renderShowFormStepFieldLocalizeValue(
     hass: HomeAssistant,
     step: DataEntryFlowStepForm,
-    key: string
+    key: string,
+    values?: Record<string, string>
   ): string;
 
   renderShowFormStepSubmitButton(
@@ -152,9 +153,20 @@ export interface FlowConfig {
 }
 
 export type LoadingReason =
-  | "loading_handlers"
-  | "loading_flow"
-  | "loading_step";
+  "loading_handlers" | "loading_flow" | "loading_step";
+
+/**
+ * Load the translations a step resolves against when it points at another
+ * integration, which owns strings shared between integrations.
+ */
+export const loadFlowStepTranslations = async (
+  hass: HomeAssistant,
+  step: DataEntryFlowStep
+): Promise<void> => {
+  if ("translation_domain" in step && step.translation_domain) {
+    await hass.loadBackendTranslation("config", step.translation_domain);
+  }
+};
 
 export interface DataEntryFlowDialogParams {
   startFlowHandler?: string;
@@ -167,7 +179,6 @@ export interface DataEntryFlowDialogParams {
     entryId?: string;
   }) => void;
   flowConfig: FlowConfig;
-  showAdvanced?: boolean;
   dialogParentElement?: HTMLElement;
   navigateToResult?: boolean;
   carryOverDevices?: string[];

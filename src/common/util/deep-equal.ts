@@ -4,6 +4,8 @@
 interface DeepEqualOptions {
   /** Compare Symbol properties in addition to string keys */
   compareSymbols?: boolean;
+  /** Treat objects with the same keys in a different order as not equal */
+  compareKeyOrder?: boolean;
 }
 
 export const deepEqual = (
@@ -27,7 +29,7 @@ export const deepEqual = (
       if (length !== b.length) {
         return false;
       }
-      for (i = length; i-- !== 0; ) {
+      for (i = length; i-- !== 0;) {
         if (!deepEqual(a[i], b[i], options)) {
           return false;
         }
@@ -71,7 +73,7 @@ export const deepEqual = (
       if (length !== b.length) {
         return false;
       }
-      for (i = length; i-- !== 0; ) {
+      for (i = length; i-- !== 0;) {
         if (a[i] !== b[i]) {
           return false;
         }
@@ -90,17 +92,25 @@ export const deepEqual = (
     }
 
     const keys = Object.keys(a);
+    const keysB = Object.keys(b);
     length = keys.length;
-    if (length !== Object.keys(b).length) {
+    if (length !== keysB.length) {
       return false;
     }
-    for (i = length; i-- !== 0; ) {
+    if (options?.compareKeyOrder) {
+      for (i = length; i-- !== 0;) {
+        if (keys[i] !== keysB[i]) {
+          return false;
+        }
+      }
+    }
+    for (i = length; i-- !== 0;) {
       if (!Object.prototype.hasOwnProperty.call(b, keys[i])) {
         return false;
       }
     }
 
-    for (i = length; i-- !== 0; ) {
+    for (i = length; i-- !== 0;) {
       const key = keys[i];
 
       if (!deepEqual(a[key], b[key], options)) {

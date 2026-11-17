@@ -1,5 +1,7 @@
 import { dump } from "js-yaml";
 import type { AITaskStructure, GenDataTaskResult } from "../../../data/ai_task";
+import type { RoomType } from "../../../data/area_icon_suggestions";
+import { isRoomType, ROOM_TYPES } from "../../../data/area_icon_suggestions";
 import type { HomeAssistant } from "../../../types";
 import type { SuggestWithAIGenerateTask } from "../../../components/ha-suggest-with-ai-button";
 import {
@@ -14,13 +16,11 @@ export interface MetadataSuggestionResult {
   category?: string;
   labels?: string[];
   floor?: string;
+  room?: RoomType;
 }
 
 export type MetadataSuggestionDomain =
-  | "automation"
-  | "script"
-  | "scene"
-  | "area";
+  "automation" | "script" | "scene" | "area";
 
 export interface MetadataSuggestionInclude {
   name: boolean;
@@ -28,6 +28,7 @@ export interface MetadataSuggestionInclude {
   categories?: boolean;
   labels?: boolean;
   floor?: boolean;
+  room?: boolean;
 }
 
 export const SUGGESTION_INCLUDE_DEFAULT: MetadataSuggestionInclude = {
@@ -69,6 +70,28 @@ export async function generateMetadataSuggestionTask<T>(
     include.floor ? fetchFloors(connection) : Promise.resolve(undefined),
   ]);
 
+  // Offer the names (not the internal IDs) to the model. The model has no idea
+  // what an ID means, and processMetadataSuggestion maps the chosen name back
+  // to its ID.
+  const categoryOptions = categories
+    ? Object.values(categories).map((name) => ({
+        value: name,
+        label: name,
+      }))
+    : [];
+  const floorOptions = floors
+    ? Object.values(floors).map((floor) => ({
+        value: floor.name,
+        label: floor.name,
+      }))
+    : [];
+
+  // Only offer the select fields when there is at least one option. Some AI
+  // providers reject a select/enum schema with an empty options list.
+  const includeCategories = categoryOptions.length > 0;
+  const includeFloor = floorOptions.length > 0;
+  const includeRoom = Boolean(include.room) && domain === "area";
+
   const structure: AITaskStructure = {
     ...(include.name && {
       name: {
@@ -99,50 +122,57 @@ export async function generateMetadataSuggestionTask<T>(
         },
       },
     }),
-    ...(include.categories &&
-      categories && {
-        category: {
-          description: `The category of the ${domain}`,
-          required: false,
-          selector: {
-            select: {
-              options: Object.entries(categories).map(([id, name]) => ({
-                value: id,
-                label: name,
-              })),
-            },
+    ...(includeCategories && {
+      category: {
+        description: `The category of the ${domain}`,
+        required: false,
+        selector: {
+          select: {
+            options: categoryOptions,
           },
         },
-      }),
-    ...(include.floor &&
-      floors && {
-        floor: {
-          description: `The floor of the ${domain}`,
-          required: false,
-          selector: {
-            select: {
-              options: Object.values(floors).map((floor) => ({
-                value: floor.floor_id,
-                label: floor.name,
-              })),
-            },
+      },
+    }),
+    ...(includeFloor && {
+      floor: {
+        description: `The floor of the ${domain}`,
+        required: false,
+        selector: {
+          select: {
+            options: floorOptions,
           },
         },
-      }),
+      },
+    }),
+    ...(includeRoom && {
+      room: {
+        description: `The type of room that best matches the ${domain}`,
+        required: false,
+        selector: {
+          select: {
+            options: ROOM_TYPES.map((room) => ({
+              value: room,
+              label: room.replace(/_/g, " "),
+            })),
+          },
+        },
+      },
+    }),
   };
 
   const requestedParts = [
     include.name ? "a name" : null,
     include.description ? "a description" : null,
-    include.categories ? "a category" : null,
+    includeCategories ? "a category" : null,
     include.labels ? "labels" : null,
-    include.floor ? "a floor" : null,
+    includeFloor ? "a floor" : null,
+    includeRoom ? "a room type" : null,
   ].filter((entry): entry is string => entry !== null);
 
   const categoryLabels: string[] = [
-    include.categories ? "category" : null,
+    includeCategories ? "category" : null,
     include.labels ? "labels" : null,
-    include.floor ? "floor" : null,
+    includeFloor ? "floor" : null,
   ].filter((entry): entry is string => entry !== null);
 
   const categoryLabelsText = PROMPT_LIST_FORMAT.format(categoryLabels);
@@ -168,7 +198,7 @@ export async function generateMetadataSuggestionTask<T>(
                     `The name should be in same style and sentence capitalization as existing ${domain}s.`,
                   ]
                 : []),
-              ...(include.categories || include.labels || include.floor
+              ...(includeCategories || include.labels || includeFloor
                 ? [
                     `Suggest ${categoryLabelsText} if relevant to the ${domain}'s purpose.`,
                     `Only suggest ${categoryLabelsText} that are already used by existing ${domain}s.`,
@@ -223,6 +253,10 @@ export async function processMetadataSuggestion(
   const processed: MetadataSuggestionResult = {
     name: include.name ? result.data.name : undefined,
     description: include.description ? result.data.description : undefined,
+    room:
+      include.room && result.data.room && isRoomType(result.data.room)
+        ? result.data.room
+        : undefined,
   };
 
   // Convert category name to ID

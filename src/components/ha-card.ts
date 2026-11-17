@@ -13,7 +13,6 @@ export class HaCard extends LitElement {
         --ha-card-background,
         var(--card-background-color, #ffffff)
       );
-      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none);
       backdrop-filter: var(--ha-card-backdrop-filter, none);
       box-shadow: var(
         --ha-card-box-shadow,
@@ -56,6 +55,7 @@ export class HaCard extends LitElement {
     .card-header,
     :host ::slotted(.card-header) {
       color: var(--ha-card-header-color, var(--primary-text-color));
+<<<<<<< HEAD
       font-family: var(
         --ha-card-header-font-family,
         "Google Sans",
@@ -66,6 +66,13 @@ export class HaCard extends LitElement {
       letter-spacing: -0.01em;
       line-height: 1.4;
       padding: 20px 20px 8px;
+=======
+      font-family: var(--ha-card-header-font-family, inherit);
+      font-size: var(--ha-card-header-font-size, var(--ha-font-size-2xl));
+      letter-spacing: -0.012em;
+      line-height: var(--ha-line-height-condensed);
+      padding: var(--ha-space-5) var(--ha-space-4) var(--ha-space-6);
+>>>>>>> dev
       display: block;
       margin-block-start: 0;
       margin-block-end: 0;
@@ -95,9 +102,11 @@ export class HaCard extends LitElement {
 
   protected render() {
     return html`
-      ${this.header
-        ? html`<h1 class="card-header">${this.header}</h1>`
-        : nothing}
+      ${
+        this.header
+          ? html`<h1 class="card-header">${this.header}</h1>`
+          : nothing
+      }
       <slot></slot>
     `;
   }

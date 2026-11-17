@@ -15,17 +15,23 @@ import type { HaInput } from "../../components/input/ha-input";
 import { assistSatelliteSupportsSetupFlow } from "../../data/assist_satellite";
 import { getConfigEntries } from "../../data/config_entries";
 import type { DataEntryFlowStepCreateEntry } from "../../data/data_entry_flow";
+import type { ConfigEntry } from "../../data/config_entries";
 import type { DeviceRegistryEntry } from "../../data/device/device_registry";
 import { updateDeviceRegistryEntry } from "../../data/device/device_registry";
 import {
   getAutomaticEntityIds,
+  getExtendedEntityRegistryEntries,
+  updateEntitiesArea,
   updateEntityRegistryEntry,
   type EntityRegistryDisplayEntry,
+  type ExtEntityRegistryEntry,
 } from "../../data/entity/entity_registry";
-import { domainToName } from "../../data/integration";
+import { domainToName, type IntegrationManifest } from "../../data/integration";
+import { findRelated } from "../../data/search";
 import type { HomeAssistant, ValueChangedEvent } from "../../types";
 import { brandsUrl } from "../../util/brands-url";
 import { showAlertDialog } from "../generic/show-dialog-box";
+import { showMoreInfoDialog } from "../more-info/show-ha-more-info-dialog";
 import { showVoiceAssistantSetupDialog } from "../voice-assistant-setup/show-voice-assistant-setup-dialog";
 import type { FlowConfig } from "./show-dialog-data-entry-flow";
 import { configFlowContentStyles } from "./styles";
@@ -34,24 +40,57 @@ interface DeviceTarget {
   device: string;
 }
 
+interface HelperResult {
+  deviceId?: string;
+  entityId?: string;
+}
+
+const computeHelperResult = (
+  entities: ExtEntityRegistryEntry[]
+): HelperResult | undefined => {
+  const deviceIds = [
+    ...new Set(
+      entities.flatMap((entity) => (entity.device_id ? [entity.device_id] : []))
+    ),
+  ];
+  if (deviceIds.length === 1) {
+    return { deviceId: deviceIds[0] };
+  }
+  if (!deviceIds.length && entities.length === 1) {
+    return { entityId: entities[0].entity_id };
+  }
+  return undefined;
+};
+
 @customElement("step-flow-create-entry")
 class StepFlowCreateEntry extends LitElement {
   @property({ attribute: false }) public flowConfig!: FlowConfig;
 
   @property({ attribute: false }) public hass!: HomeAssistant;
 
-  @property({ attribute: false }) public step!: DataEntryFlowStepCreateEntry;
+  @property({ attribute: false })
+  public step!: DataEntryFlowStepCreateEntry<ConfigEntry>;
 
   @property({ attribute: false }) public devices!: DeviceRegistryEntry[];
+
+  @property({ attribute: false }) public manifest?: IntegrationManifest | null;
 
   private _domains: Record<string, string> = {};
 
   public navigateToResult = false;
 
+  private _helperEntitiesLookup?: Promise<ExtEntityRegistryEntry[]>;
+
+  @state() private _helperEntities?: ExtEntityRegistryEntry[];
+
+  @state() private _helperArea?: string;
+
   @state() private _deviceUpdate: Record<
     string,
     { name?: string; area?: string }
   > = {};
+
+  @state() private _loading = false;
 
   private _deviceEntities = memoizeOne(
     (
@@ -69,6 +108,18 @@ class StepFlowCreateEntry extends LitElement {
   protected firstUpdated(changedProps: PropertyValues<this>) {
     super.firstUpdated(changedProps);
     this._loadDomains();
+    if (
+      this.flowConfig.flowType === "config_flow" &&
+      this.step.result &&
+      this.manifest?.integration_type === "helper"
+    ) {
+      this._helperEntitiesLookup = this._findHelperEntities(
+        this.step.result.entry_id
+      );
+      this._helperEntitiesLookup.then((entities) => {
+        this._helperEntities = entities;
+      });
+    }
   }
 
   protected willUpdate(changedProps: PropertyValues<this>) {
@@ -79,7 +130,7 @@ class StepFlowCreateEntry extends LitElement {
     if (
       this.devices.length !== 1 ||
       this.devices[0].primary_config_entry !== this.step.result?.entry_id ||
-      this.step.result.domain === "voip"
+      this.step.result?.domain === "voip"
     ) {
       return;
     }
@@ -114,98 +165,132 @@ class StepFlowCreateEntry extends LitElement {
     return html`
       <div class="content">
         ${this.flowConfig.renderCreateEntryDescription(this.hass, this.step)}
-        ${this.step.result?.state === "not_loaded"
-          ? html`<span class="error"
-              >${localize(
-                "ui.panel.config.integrations.config_flow.not_loaded"
-              )}</span
-            >`
-          : nothing}
-        ${this.devices.length === 0 &&
-        ["options_flow", "repair_flow"].includes(this.flowConfig.flowType)
-          ? nothing
-          : this.devices.length === 0
-            ? html`<p>
-                ${localize(
-                  "ui.panel.config.integrations.config_flow.created_config",
-                  { name: this.step.title }
-                )}
-              </p>`
-            : html`
-                <div class="devices">
-                  ${this.devices.map(
-                    (device) => html`
-                      <div class="device">
-                        <div class="device-info">
-                          ${device.primary_config_entry &&
-                          domains[device.primary_config_entry]
-                            ? html`<img
-                                slot="graphic"
-                                alt=${domainToName(
-                                  this.hass.localize,
-                                  domains[device.primary_config_entry]
-                                )}
-                                src=${brandsUrl(
-                                  {
-                                    domain:
-                                      domains[device.primary_config_entry],
-                                    type: "icon",
-                                    darkOptimized: this.hass.themes?.darkMode,
-                                  },
-                                  this.hass.auth.data.hassUrl
-                                )}
-                                crossorigin="anonymous"
-                                referrerpolicy="no-referrer"
-                              />`
-                            : nothing}
-                          <div class="device-info-details">
-                            <span>${device.model || device.manufacturer}</span>
-                            ${device.model
-                              ? html`<span class="secondary">
-                                  ${device.manufacturer}
-                                </span>`
-                              : nothing}
+        ${
+          this.step.result?.state === "not_loaded"
+            ? html`<span class="error"
+                >${localize(
+                  "ui.panel.config.integrations.config_flow.not_loaded"
+                )}</span
+              >`
+            : nothing
+        }
+        ${
+          this.devices.length === 0 &&
+          ["options_flow", "repair_flow"].includes(this.flowConfig.flowType)
+            ? nothing
+            : this.devices.length === 0
+              ? html`<p>
+                    ${localize(
+                      "ui.panel.config.integrations.config_flow.created_config",
+                      { name: html`<b>${this.step.title}</b>` }
+                    )}
+                  </p>
+                  ${
+                    this._entitiesWithoutDevice(this._helperEntities).length
+                      ? html`<ha-area-picker
+                          .value=${this._helperArea}
+                          .disabled=${this._loading}
+                          .helper=${localize(
+                            "ui.panel.config.integrations.config_flow.helper_area"
+                          )}
+                          @value-changed=${this._helperAreaPicked}
+                        ></ha-area-picker>`
+                      : nothing
+                  }`
+              : html`
+                  <div class="devices">
+                    ${this.devices.map(
+                      (device) => html`
+                        <div class="device">
+                          <div class="device-info">
+                            ${
+                              device.primary_config_entry &&
+                              domains[device.primary_config_entry]
+                                ? html`<img
+                                    slot="graphic"
+                                    alt=${domainToName(
+                                      this.hass.localize,
+                                      domains[device.primary_config_entry]
+                                    )}
+                                    src=${brandsUrl(
+                                      {
+                                        domain:
+                                          domains[device.primary_config_entry],
+                                        type: "icon",
+                                        darkOptimized:
+                                          this.hass.themes?.darkMode,
+                                      },
+                                      this.hass.auth.data.hassUrl
+                                    )}
+                                    crossorigin="anonymous"
+                                    referrerpolicy="no-referrer"
+                                  />`
+                                : nothing
+                            }
+                            <div class="device-info-details">
+                              <span
+                                >${device.model || device.manufacturer}</span
+                              >
+                              ${
+                                device.model
+                                  ? html`<span class="secondary">
+                                      ${device.manufacturer}
+                                    </span>`
+                                  : nothing
+                              }
+                            </div>
                           </div>
+                          <ha-input
+                            .label=${localize(
+                              "ui.panel.config.integrations.config_flow.device_name"
+                            )}
+                            .placeholder=${computeDeviceNameDisplay(device, this.hass.localize)}
+                            .value=${
+                              this._deviceUpdate[device.id]?.name ??
+                              computeDeviceName(device)
+                            }
+                            @change=${this._deviceNameChanged}
+                            .device=${device.id}
+                          ></ha-input>
+                          <ha-area-picker
+                            .device=${device.id}
+                            .value=${
+                              this._deviceUpdate[device.id]?.area ??
+                              device.area_id ??
+                              undefined
+                            }
+                            @value-changed=${this._areaPicked}
+                          ></ha-area-picker>
                         </div>
-                        <ha-input
-                          .label=${localize(
-                            "ui.panel.config.integrations.config_flow.device_name"
-                          )}
-                          .placeholder=${computeDeviceNameDisplay(
-                            device,
-                            this.hass.localize,
-                            this.hass.states
-                          )}
-                          .value=${this._deviceUpdate[device.id]?.name ??
-                          computeDeviceName(device)}
-                          @change=${this._deviceNameChanged}
-                          .device=${device.id}
-                        ></ha-input>
-                        <ha-area-picker
-                          .hass=${this.hass}
-                          .device=${device.id}
-                          .value=${this._deviceUpdate[device.id]?.area ??
-                          device.area_id ??
-                          undefined}
-                          @value-changed=${this._areaPicked}
-                        ></ha-area-picker>
-                      </div>
-                    `
-                  )}
-                </div>
-              `}
+                      `
+                    )}
+                  </div>
+                `
+        }
       </div>
     `;
   }
 
   protected updated(changedProps: PropertyValues): void {
     super.updated(changedProps);
-    if (changedProps.has("_deviceUpdate")) {
+    if (changedProps.has("_deviceUpdate") || changedProps.has("_helperArea")) {
       fireEvent(this, "flow-step-footer-state-changed", {
-        hasPendingUpdates: Object.keys(this._deviceUpdate).length > 0,
+        hasPendingUpdates:
+          Object.keys(this._deviceUpdate).length > 0 ||
+          this._helperArea !== undefined,
+      });
+    }
+    if (changedProps.has("_loading")) {
+      fireEvent(this, "flow-step-footer-state-changed", {
+        loading: this._loading,
       });
     }
   }
+
+  private _entitiesWithoutDevice = memoizeOne(
+    (entities?: ExtEntityRegistryEntry[]): ExtEntityRegistryEntry[] =>
+      (entities ?? []).filter((entity) => !entity.device_id)
+  );
 
   private async _loadDomains() {
     const entries = await getConfigEntries(this.hass);
@@ -216,13 +301,9 @@ class StepFlowCreateEntry extends LitElement {
 
   private async _flowDone(): Promise<void> {
     if (Object.keys(this._deviceUpdate).length) {
-      const renamedDevices: string[] = [];
       const deviceUpdates = Object.entries(this._deviceUpdate).map(
-        ([deviceId, update]) => {
-          if (update.name) {
-            renamedDevices.push(deviceId);
-          }
-          return updateDeviceRegistryEntry(this.hass, deviceId, {
+        ([deviceId, update]) =>
+          updateDeviceRegistryEntry(this.hass.callWS, deviceId, {
             name_by_user: update.name,
             area_id: update.area,
           }).catch((err: unknown) => {
@@ -234,13 +315,16 @@ class StepFlowCreateEntry extends LitElement {
                 { error: message }
               ),
             });
-          });
-        }
+          })
       );
       await Promise.allSettled(deviceUpdates);
+
+      // Entity IDs include the device's name and, depending on the user's
+      // entity ID format, its area, so regenerate them for every device
+      // whose name or area was edited.
       const entityUpdates: Promise<unknown>[] = [];
       const entityIds: string[] = [];
-      renamedDevices.forEach((deviceId) => {
+      Object.keys(this._deviceUpdate).forEach((deviceId) => {
         const entities = this._deviceEntities(
           deviceId,
           Object.values(this.hass.entities)
@@ -249,14 +333,14 @@ class StepFlowCreateEntry extends LitElement {
       });
 
       const entityIdsMapping = await getAutomaticEntityIds(
-        this.hass,
+        this.hass.callWS,
         entityIds
       );
 
       Object.entries(entityIdsMapping).forEach(([oldEntityId, newEntityId]) => {
         if (newEntityId) {
           entityUpdates.push(
-            updateEntityRegistryEntry(this.hass, oldEntityId, {
+            updateEntityRegistryEntry(this.hass.callWS, oldEntityId, {
               new_entity_id: newEntityId,
             }).catch((err) =>
               showAlertDialog(this, {
@@ -272,20 +356,110 @@ class StepFlowCreateEntry extends LitElement {
       await Promise.allSettled(entityUpdates);
     }
 
+    // Helpers link their entities to an existing device instead of creating one
+    let helperEntities =
+      this._helperEntitiesLookup && !this.devices.length
+        ? await this._helperEntitiesLookup
+        : [];
+    if (this._helperArea) {
+      helperEntities = await this._saveHelperArea(
+        helperEntities,
+        this._helperArea
+      );
+    }
+
+    const entry = this.navigateToResult ? this.step.result : undefined;
+    const helperResult = entry
+      ? computeHelperResult(helperEntities)
+      : undefined;
+
+    // The dialog was closed while waiting
+    if (!this.isConnected) {
+      return;
+    }
     fireEvent(this, "flow-update", { step: undefined });
-    if (this.step.result && this.navigateToResult) {
-      if (this.devices.length === 1) {
-        navigate(`/config/devices/device/${this.devices[0].id}`);
-      } else {
-        navigate(
-          `/config/integrations/integration/${this.step.result.domain}#config_entry=${this.step.result.entry_id}`
-        );
-      }
+    if (!entry) {
+      return;
+    }
+    const deviceId =
+      this.devices.length === 1 ? this.devices[0].id : helperResult?.deviceId;
+    if (deviceId) {
+      navigate(`/config/devices/device/${deviceId}`);
+    } else if (helperResult?.entityId) {
+      showMoreInfoDialog(this, { entityId: helperResult.entityId });
+    } else {
+      navigate(
+        `/config/integrations/integration/${entry.domain}#config_entry=${entry.entry_id}`
+      );
     }
   }
 
-  public finish(): Promise<void> {
-    return this._flowDone();
+  private async _findHelperEntities(
+    entryId: string
+  ): Promise<ExtEntityRegistryEntry[]> {
+    try {
+      const { entity: entityIds = [] } = await findRelated(
+        this.hass,
+        "config_entry",
+        entryId
+      );
+      if (!entityIds.length) {
+        return [];
+      }
+      return Object.values(
+        await getExtendedEntityRegistryEntries(this.hass, entityIds)
+      ).filter(
+        (entity): entity is ExtEntityRegistryEntry =>
+          entity?.config_entry_id === entryId
+      );
+    } catch (_err) {
+      return [];
+    }
+  }
+
+  private async _saveHelperArea(
+    entities: ExtEntityRegistryEntry[],
+    areaId: string
+  ): Promise<ExtEntityRegistryEntry[]> {
+    try {
+      const newEntityIds = await updateEntitiesArea(
+        this.hass.callWS,
+        this._entitiesWithoutDevice(entities).map((entity) => entity.entity_id),
+        areaId
+      );
+      return entities.map((entity) =>
+        entity.entity_id in newEntityIds
+          ? { ...entity, entity_id: newEntityIds[entity.entity_id] }
+          : entity
+      );
+    } catch (err: unknown) {
+      showAlertDialog(this, {
+        text: this.hass.localize(
+          "ui.panel.config.integrations.config_flow.error_saving_entity",
+          { error: (err as { message?: string })?.message ?? "Unknown error" }
+        ),
+      });
+      return entities;
+    }
+  }
+
+  private _helperAreaPicked(ev: ValueChangedEvent<string | undefined>): void {
+    this._helperArea = ev.detail.value || undefined;
+  }
+
+  public async finish(): Promise<void> {
+    if (this._loading) {
+      return;
+    }
+    // Stay loading until the dialog closes, so a second click cannot save
+    // the updates again
+    this._loading = true;
+    try {
+      await this._flowDone();
+    } catch (err) {
+      this._loading = false;
+      throw err;
+    }
   }
 
   private async _areaPicked(ev: ValueChangedEvent<string>) {

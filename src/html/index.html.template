@@ -1,7 +1,12 @@
 <!DOCTYPE html>
 <html>
   <head>
+<<<<<<< HEAD
     <title>Domolux</title>
+=======
+    <title>Home Assistant</title>
+    <% if (useCacheRecovery) { %><%= renderTemplate("_bootstrap_recovery.html.template") %><% } %>
+>>>>>>> dev
     <%= renderTemplate("_header.html.template") %>
     <link rel="mask-icon" href="/static/icons/mask-icon.svg" color="#1a1a1a" />
     <link
@@ -18,8 +23,10 @@
     <meta name="referrer" content="same-origin" />
     <meta name="theme-color" content="{{ theme_color }}" />
     <meta name="color-scheme" content="dark light" />
+    <%= renderTemplate("_meta_viewport.html.template") %>
     <%= renderTemplate("_style_base.html.template") %>
     <style>
+<<<<<<< HEAD
       @keyframes fade-out {
         from { opacity: 1; }
         to { opacity: 0; }
@@ -31,11 +38,14 @@
       ::view-transition-old(launch-screen) {
         animation: fade-out var(--ha-animation-duration-slow, 350ms) ease-out;
       }
+=======
+>>>>>>> dev
       html {
         background-color: var(--primary-background-color, #fafafa);
         color: var(--primary-text-color, #212121);
         height: 100vh;
       }
+<<<<<<< HEAD
       #ha-launch-screen {
         position: fixed;
         top: 0;
@@ -75,31 +85,37 @@
         align-items: center;
         opacity: .66;
       }
+=======
+>>>>>>> dev
       @media (prefers-color-scheme: dark) {
         html {
           background-color: var(--primary-background-color, #111111);
           color: var(--primary-text-color, #e1e1e1);
         }
-        /* body selector to avoid minification causing bad jinja2 */
-        body #ha-launch-screen {
-          background-color: var(--primary-background-color, #111111);
-        }
-        .ohf-logo {
-          filter: invert(1);
-        }
       }
     </style>
+    <%= renderTemplate("_style_launch_screen.html.template") %>
   </head>
   <body>
     <div id="ha-launch-screen">
       <div class="ha-launch-screen-spacer-top"></div>
+<<<<<<< HEAD
       <picture>
         <source srcset="/static/images/domolux_dark.png" media="(prefers-color-scheme: dark)">
         <img src="/static/images/domolux.png" alt="Domolux" loading="eager" fetchpriority="high" />
       </picture>
+=======
+      <div class="ha-lockup">
+        <img class="ha-logo" src="/static/images/home-assistant-logo-loading.svg" alt="Home Assistant">
+      </div>
+>>>>>>> dev
       <div id="ha-launch-screen-info-box" class="ha-launch-screen-spacer-bottom"></div>
       <div class="ohf-logo">
-        <img src="/static/images/ohf-badge.svg" alt="Home Assistant is a project by the Open Home Foundation" height="46">
+        <span id="ha-launch-screen-attribution">A project from the</span>
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="/static/images/open-home-foundation-on-dark.svg">
+          <img src="/static/images/open-home-foundation-on-light.svg" alt="Open Home Foundation" width="237" height="24">
+        </picture>
       </div>
     </div>
     <home-assistant></home-assistant>
@@ -114,28 +130,111 @@
         window.latestJS = true;
       }
     </script>
-    <% if (obj.hassUrl === "") { %>
-      <script>
-        {%- for extra_module in extra_modules -%}
-        import("{{ extra_module }}");
-        {%- endfor -%}
-      </script>
-    <% } %>
     <script>
         if (!window.latestJS) {
-          window.customPanelJS = "<%= es5CustomPanelJS %>";
-          <% for (const entry of es5EntryJS) { %>
-            _ls("<%= entry %>", true);
-          <% } %>
+          // Floor check: BigInt for Chrome 67, <dialog> for Safari 15.4 and
+          // Firefox 98. Not transpiled, so keep this ES5.
+          (function () {
+            var ACCEPTED_KEY = "haUnsupportedBrowserAccepted";
+            var REMIND_AFTER = 30 * 24 * 60 * 60 * 1000;
+
+            function loadApp() {
+              window.customPanelJS = "<%= es5CustomPanelJS %>";
+              <% for (const entry of es5EntryJS) { %>
+                _ls("<%= entry %>", true);
+              <% } %>
+            }
+
+            if (
+              typeof BigInt !== "undefined" &&
+              typeof document.createElement("dialog").showModal === "function"
+            ) {
+              loadApp();
+              return;
+            }
+
+            // Shown while the app loads too.
+            var box = document.getElementById("ha-launch-screen-info-box");
+            var message = document.createElement("p");
+            message.textContent =
+              "This browser is no longer supported. Some parts of Home Assistant may not work.";
+            box.appendChild(message);
+
+            // Stored: "always", or when the user last continued (ms).
+            var stored = null;
+            try {
+              stored = localStorage.getItem(ACCEPTED_KEY);
+            } catch (_err) {
+              // Ask on every load.
+            }
+            if (stored === "always") {
+              loadApp();
+              return;
+            }
+            var acceptedAt = Number(stored) || 0;
+            // A clock behind the stored time asks again.
+            var age = Date.now() - acceptedAt;
+            if (acceptedAt && age >= 0 && age < REMIND_AFTER) {
+              loadApp();
+              return;
+            }
+
+            var actions = document.createElement("div");
+            actions.className = "ha-launch-screen-actions";
+            box.appendChild(actions);
+
+            var always = null;
+            var button = document.createElement("button");
+            button.type = "button";
+            button.textContent = "Continue anyway";
+            button.addEventListener("click", function () {
+              try {
+                localStorage.setItem(
+                  ACCEPTED_KEY,
+                  always && always.checked ? "always" : String(Date.now())
+                );
+              } catch (_err) {
+                // Continue this time only.
+              }
+              box.removeChild(actions);
+              loadApp();
+            });
+            actions.appendChild(button);
+
+            // From the first reminder on. A checkbox, so it is not chosen by
+            // accident.
+            if (acceptedAt) {
+              var label = document.createElement("label");
+              always = document.createElement("input");
+              always.type = "checkbox";
+              label.appendChild(always);
+              label.appendChild(document.createTextNode("Don't show again"));
+              actions.appendChild(label);
+            }
+          })();
         }
     </script>
 
     <% if (obj.hassUrl === "") { %>
       <script>
-        if (!window.latestJS) {
-          {%- for extra_script in extra_js_es5 -%}
-          _ls("{{ extra_script }}");
+        // The app entry calls this right after it installs the scoped custom
+        // element registry polyfill, so extra modules define their elements in
+        // the registry that the app uses.
+        window.__haLoadExtraModules = function () {
+          {%- for extra_module in extra_modules -%}
+          // Caught, or the boot recovery guard reads it as a stale build.
+          import("{{ extra_module }}").catch(function (err) {
+            console.error("Failed to load extra module {{ extra_module }}", err);
+          });
           {%- endfor -%}
+          if (!window.latestJS) {
+            {%- for extra_script in extra_js_es5 -%}
+            _ls("{{ extra_script }}");
+            {%- endfor -%}
+          }
+        };
+        if (window.__haScopedRegistryReady) {
+          window.__haLoadExtraModules();
         }
       </script>
     <% } %>

@@ -1,12 +1,13 @@
-import { consume, type ContextType } from "@lit/context";
+import type { ContextType } from "@lit/context";
 import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators";
+import { consume } from "../../common/decorators/consume";
+import { ctrlOrCmdLabel } from "../../common/keyboard/ctrl-or-cmd";
 import type { LocalizeKeys } from "../../common/translations/localize";
 import "../../components/ha-alert";
 import "../../components/ha-dialog";
 import "../../components/ha-svg-icon";
 import { internationalizationContext } from "../../data/context";
-import { isMac } from "../../util/is_mac";
 import { DialogMixin } from "../dialog-mixin";
 
 interface Text {
@@ -124,10 +125,19 @@ const _SHORTCUTS: Section[] = [
     items: [
       {
         shortcut: [
-          CTRL_CMD,
           { shortcutTranslationKey: "ui.dialogs.shortcuts.shortcuts.drag" },
         ],
         descriptionTranslationKey: "ui.dialogs.shortcuts.charts.drag_to_zoom",
+      },
+      {
+        shortcut: [
+          "Shift",
+          {
+            shortcutTranslationKey:
+              "ui.dialogs.shortcuts.shortcuts.scroll_wheel",
+          },
+        ],
+        descriptionTranslationKey: "ui.dialogs.shortcuts.charts.scroll_to_pan",
       },
       {
         shortcut: [
@@ -171,6 +181,10 @@ const _SHORTCUTS: Section[] = [
         shortcut: ["Shift", "/"],
         descriptionTranslationKey: "ui.dialogs.shortcuts.other.show_shortcuts",
       },
+      {
+        shortcut: [CTRL_CMD, "Shift", "Y"],
+        descriptionTranslationKey: "ui.dialogs.shortcuts.other.toggle_yaml",
+      },
     ],
   },
 ];
@@ -190,15 +204,13 @@ class DialogShortcuts extends DialogMixin(LitElement) {
         ${shortcutKeys.map(
           (shortcutKey) =>
             html`<span
-              >${shortcutKey === CTRL_CMD
-                ? isMac
-                  ? "⌘"
-                  : this._i18n.localize("ui.dialogs.shortcuts.keys.ctrl")
-                : typeof shortcutKey === "string"
-                  ? shortcutKey
-                  : this._i18n.localize(
-                      shortcutKey.shortcutTranslationKey
-                    )}</span
+              >${
+                shortcutKey === CTRL_CMD
+                  ? ctrlOrCmdLabel(this._i18n.localize)
+                  : typeof shortcutKey === "string"
+                    ? shortcutKey
+                    : this._i18n.localize(shortcutKey.shortcutTranslationKey)
+              }</span
             >`
         )}
         ${this._i18n.localize(descriptionKey)}
@@ -235,7 +247,7 @@ class DialogShortcuts extends DialogMixin(LitElement) {
 
         <ha-alert slot="footer">
           ${this._i18n.localize("ui.dialogs.shortcuts.enable_shortcuts_hint", {
-            user_profile: html`<a href="/profile/general#shortcuts"
+            user_profile: html`<a href="/profile/browser#shortcuts"
               >${this._i18n.localize(
                 "ui.dialogs.shortcuts.enable_shortcuts_hint_user_profile"
               )}</a
@@ -249,6 +261,7 @@ class DialogShortcuts extends DialogMixin(LitElement) {
   static styles = [
     css`
       .shortcut {
+        direction: ltr;
         display: flex;
         flex-direction: row;
         align-items: center;

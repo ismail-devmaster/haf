@@ -1,26 +1,50 @@
-import type { SelectedDetail } from "@material/mwc-list";
+import type { ContextType } from "@lit/context";
 import { mdiFilterVariantRemove } from "@mdi/js";
-import type { CSSResultGroup, PropertyValues } from "lit";
+import type { CSSResultGroup } from "lit";
 import { css, html, LitElement, nothing } from "lit";
-import { customElement, property, query, state } from "lit/decorators";
+import { customElement, property, state } from "lit/decorators";
+import { createRef, ref } from "lit/directives/ref";
 import { repeat } from "lit/directives/repeat";
 import memoizeOne from "memoize-one";
+import { consume } from "../common/decorators/consume";
+import {
+  FilterPanelController,
+  filterPanelStyles,
+} from "../common/controllers/filter-panel-controller";
+import { consumeLocalize } from "../common/decorators/consume-context-entry";
+import { arrayWith, arrayWithout } from "../common/array/array-with";
+import type {
+  HASSDomCurrentTargetEvent,
+  HASSDomEvent,
+} from "../common/dom/fire_event";
 import { fireEvent } from "../common/dom/fire_event";
 import { computeDomain } from "../common/entity/compute_domain";
 import { stringCompare } from "../common/string/compare";
+import type { LocalizeFunc } from "../common/translations/localize";
+import { internationalizationContext, statesContext } from "../data/context";
 import { domainToName } from "../data/integration";
-import { haStyleScrollbar } from "../resources/styles";
-import type { HomeAssistant } from "../types";
-import "./ha-check-list-item";
 import "./ha-domain-icon";
 import "./ha-expansion-panel";
-import "./ha-list";
+import "./item/ha-list-item-option";
+import type { HaListItemOption } from "./item/ha-list-item-option";
+import "./list/ha-list-selectable";
+import type { HaListSelectable } from "./list/ha-list-selectable";
 import "./input/ha-input-search";
 import type { HaInputSearch } from "./input/ha-input-search";
 
 @customElement("ha-filter-domains")
 export class HaFilterDomains extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
+
+  @consume({ context: statesContext, subscribe: true })
+  @state()
+  private _states!: ContextType<typeof statesContext>;
+
+  @consume({ context: internationalizationContext, subscribe: true })
+  @state()
+  private _i18n!: ContextType<typeof internationalizationContext>;
 
   @property({ attribute: false }) public value?: string[];
 
@@ -28,116 +52,125 @@ export class HaFilterDomains extends LitElement {
 
   @property({ type: Boolean, reflect: true }) public expanded = false;
 
-  @state() private _shouldRender = false;
-
   @state() private _filter?: string;
 
-  @query("ha-list") private _list?: HTMLElement;
+  private _content = createRef<HTMLElement>();
+
+  private _panel = new FilterPanelController(this, this._content);
 
   protected render() {
     return html`
       <ha-expansion-panel
         left-chevron
         .expanded=${this.expanded}
-        @expanded-will-change=${this._expandedWillChange}
         @expanded-changed=${this._expandedChanged}
       >
         <div slot="header" class="header">
-          ${this.hass.localize("ui.panel.config.domains.caption")}
-          ${this.value?.length
-            ? html`<div class="badge">${this.value?.length}</div>
-                <ha-icon-button
-                  .path=${mdiFilterVariantRemove}
-                  @click=${this._clearFilter}
-                ></ha-icon-button>`
-            : nothing}
+          ${this._localize("ui.panel.config.domains.caption")}
+          ${
+            this.value?.length
+              ? html`<div class="badge">${this.value?.length}</div>
+                  <ha-icon-button
+                    .path=${mdiFilterVariantRemove}
+                    @click=${this._clearFilter}
+                  ></ha-icon-button>`
+              : nothing
+          }
         </div>
-        ${this._shouldRender
-          ? html`<ha-input-search
+      </ha-expansion-panel>
+      ${
+        this._panel.showContent
+          ? html`<div class="content" ${ref(this._content)}>
+              <ha-input-search
                 appearance="outlined"
                 .value=${this._filter}
                 @input=${this._handleSearchChange}
               >
               </ha-input-search>
-              <ha-list
-                class="ha-scrollbar"
-                @selected=${this._handleItemSelected}
+              <ha-list-selectable
                 multi
+                aria-label=${this._localize("ui.panel.config.domains.caption")}
+                @ha-list-item-selected=${this._handleItemToggled}
+                @ha-list-item-deselected=${this._handleItemToggled}
               >
                 ${repeat(
-                  this._domains(this.hass.states, this._filter, this.value),
+                  this._domains(
+                    this._states,
+                    this._localize,
+                    this._i18n.locale.language,
+                    this._filter
+                  ),
                   (i) => i,
                   (domain) =>
-                    html`<ha-check-list-item
+                    html`<ha-list-item-option
+                      appearance="checkbox"
+                      selection-position="end"
                       .value=${domain}
-                      .selected=${(this.value || []).includes(domain)}
-                      graphic="icon"
+                      .selected=${this.value?.includes(domain) ?? false}
                     >
                       <ha-domain-icon
-                        slot="graphic"
+                        slot="start"
                         .domain=${domain}
                         brand-fallback
                       ></ha-domain-icon>
-                      ${domainToName(this.hass.localize, domain)}
-                    </ha-check-list-item>`
+                      <span slot="headline"
+                        >${domainToName(this._localize, domain)}</span
+                      >
+                    </ha-list-item-option>`
                 )}
-              </ha-list> `
-          : nothing}
-      </ha-expansion-panel>
+              </ha-list-selectable>
+            </div>`
+          : nothing
+      }
     `;
   }
 
-  private _domains = memoizeOne((states, filter, _value) => {
-    const domains = new Set<string>();
-    Object.keys(states).forEach((entityId) => {
-      domains.add(computeDomain(entityId));
-    });
+  private _domains = memoizeOne(
+    (
+      states: ContextType<typeof statesContext>,
+      localize: LocalizeFunc,
+      language: string | undefined,
+      filter: string | undefined
+    ) => {
+      const domains = new Set<string>();
+      Object.keys(states).forEach((entityId) => {
+        domains.add(computeDomain(entityId));
+      });
 
-    return Array.from(domains.values())
-      .map((domain) => ({
-        domain,
-        name: domainToName(this.hass.localize, domain),
-      }))
-      .filter(
-        (entry) =>
-          !filter ||
-          entry.domain.toLowerCase().includes(filter) ||
-          entry.name.toLowerCase().includes(filter)
-      )
-      .sort((a, b) => stringCompare(a.name, b.name, this.hass.locale.language))
-      .map((entry) => entry.domain);
-  });
-
-  protected updated(changed: PropertyValues<this>) {
-    if (changed.has("expanded") && this.expanded) {
-      setTimeout(() => {
-        if (!this.expanded) return;
-        this._list!.style.height = `${this.clientHeight - 49 - 4 - 32}px`;
-        // 49px - height of a header + 1px
-        // 4px - padding-top of the search-input
-        // 32px - height of the search input
-      }, 300);
+      return Array.from(domains.values())
+        .map((domain) => ({
+          domain,
+          name: domainToName(localize, domain),
+        }))
+        .filter(
+          (entry) =>
+            !filter ||
+            entry.domain.toLowerCase().includes(filter) ||
+            entry.name.toLowerCase().includes(filter)
+        )
+        .sort((a, b) => stringCompare(a.name, b.name, language))
+        .map((entry) => entry.domain);
     }
-  }
-
-  private _expandedWillChange(ev) {
-    this._shouldRender = ev.detail.expanded;
-  }
+  );
 
   private _expandedChanged(ev) {
     this.expanded = ev.detail.expanded;
   }
 
-  private _handleItemSelected(ev: CustomEvent<SelectedDetail<Set<number>>>) {
-    const domains = this._domains(this.hass.states, this._filter, this.value);
+  private _handleItemToggled(
+    ev: HASSDomEvent<number> & HASSDomCurrentTargetEvent<HaListSelectable>
+  ) {
+    const domain = (
+      ev.currentTarget.items[ev.detail] as HaListItemOption | undefined
+    )?.value;
+    if (!domain) {
+      return;
+    }
 
-    const visibleDomains = new Set(domains);
-    const preserved = (this.value || []).filter((d) => !visibleDomains.has(d));
-    const selected = [...ev.detail.index]
-      .map((i) => domains[i])
-      .filter((d): d is string => !!d);
-
-    this.value = [...preserved, ...selected];
+    this.value =
+      ev.type === "ha-list-item-selected"
+        ? arrayWith(this.value, domain)
+        : arrayWithout(this.value, domain);
 
     fireEvent(this, "data-table-filter-changed", {
       value: this.value.length ? this.value : undefined,
@@ -161,29 +194,24 @@ export class HaFilterDomains extends LitElement {
 
   static get styles(): CSSResultGroup {
     return [
-      haStyleScrollbar,
+      filterPanelStyles,
       css`
-        :host {
-          border-bottom: 1px solid var(--divider-color);
-        }
-        :host([expanded]) {
+        ha-list-selectable {
+          display: flex;
           flex: 1;
-          height: 0;
+          min-height: 0;
         }
-        ha-expansion-panel {
-          --ha-card-border-radius: var(--ha-border-radius-square);
-          --expansion-panel-content-padding: 0;
+        ha-list-selectable::part(base) {
+          flex: 1;
+          min-height: 0;
         }
         .header {
           display: flex;
           align-items: center;
         }
         .header ha-icon-button {
-          margin-inline-start: initial;
+          margin-inline-start: auto;
           margin-inline-end: 8px;
-        }
-        ha-check-list-item {
-          --mdc-list-item-graphic-margin: var(--ha-space-4);
         }
         .badge {
           display: inline-block;

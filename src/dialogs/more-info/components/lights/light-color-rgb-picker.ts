@@ -1,7 +1,9 @@
+import type { ContextType } from "@lit/context";
 import { mdiEyedropper } from "@mdi/js";
 import type { CSSResultGroup, PropertyValues } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
+import { consume } from "../../../../common/decorators/consume";
 import {
   hex2rgb,
   hs2rgb,
@@ -10,19 +12,21 @@ import {
   rgb2hs,
   rgb2hsv,
 } from "../../../../common/color/convert-color";
+import { consumeLocalize } from "../../../../common/decorators/consume-context-entry";
 import { fireEvent } from "../../../../common/dom/fire_event";
+import type { LocalizeFunc } from "../../../../common/translations/localize";
+import { PendingValueSync } from "../../../../common/util/pending-value-sync";
 import { throttle } from "../../../../common/util/throttle";
 import "../../../../components/ha-hs-color-picker";
 import "../../../../components/ha-icon";
-import "../../../../components/ha-icon-button-prev";
 import "../../../../components/ha-labeled-slider";
+import { apiContext } from "../../../../data/context";
 import type { LightColor, LightEntity } from "../../../../data/light";
 import {
   getLightCurrentModeRgbColor,
   LightColorMode,
   lightSupportsColorMode,
 } from "../../../../data/light";
-import type { HomeAssistant } from "../../../../types";
 
 declare global {
   interface HASSDomEvents {
@@ -32,7 +36,13 @@ declare global {
 
 @customElement("light-color-rgb-picker")
 class LightRgbColorPicker extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
+  @state()
+  @consume({ context: apiContext, subscribe: true })
+  private _api!: ContextType<typeof apiContext>;
+
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
 
   @property({ attribute: false }) public stateObj!: LightEntity;
 
@@ -49,6 +59,8 @@ class LightRgbColorPicker extends LitElement {
   @state() private _hsPickerValue?: [number, number];
 
   @state() private _isInteracting?: boolean;
+
+  private _pendingSync = new PendingValueSync();
 
   protected render() {
     if (!this.stateObj) {
@@ -89,92 +101,112 @@ class LightRgbColorPicker extends LitElement {
           @value-changed=${this._hsColorChanged}
           @cursor-moved=${this._hsColorCursorMoved}
           .value=${this._hsPickerValue}
-          .colorBrightness=${this._colorBrightnessSliderValue != null
-            ? (this._colorBrightnessSliderValue * 255) / 100
-            : undefined}
-          .wv=${this._wvSliderValue != null
-            ? (this._wvSliderValue * 255) / 100
-            : undefined}
-          .ww=${this._wwSliderValue != null
-            ? (this._wwSliderValue * 255) / 100
-            : undefined}
-          .cw=${this._cwSliderValue != null
-            ? (this._cwSliderValue * 255) / 100
-            : undefined}
+          .colorBrightness=${
+            this._colorBrightnessSliderValue != null
+              ? (this._colorBrightnessSliderValue * 255) / 100
+              : undefined
+          }
+          .wv=${
+            this._wvSliderValue != null
+              ? (this._wvSliderValue * 255) / 100
+              : undefined
+          }
+          .ww=${
+            this._wwSliderValue != null
+              ? (this._wwSliderValue * 255) / 100
+              : undefined
+          }
+          .cw=${
+            this._cwSliderValue != null
+              ? (this._cwSliderValue * 255) / 100
+              : undefined
+          }
           .minKelvin=${this.stateObj.attributes.min_color_temp_kelvin}
           .maxKelvin=${this.stateObj.attributes.max_color_temp_kelvin}
         >
         </ha-hs-color-picker>
       </div>
-      ${supportsRgbw || supportsRgbww
-        ? html`<ha-labeled-slider
-            labeled
-            .caption=${this.hass.localize("ui.card.light.color_brightness")}
-            icon="mdi:brightness-7"
-            min="0"
-            max="100"
-            .value=${this._colorBrightnessSliderValue}
-            @value-changed=${this._colorBrightnessSliderChanged}
-          ></ha-labeled-slider>`
-        : nothing}
-      ${supportsRgbw
-        ? html`
-            <ha-labeled-slider
+      ${
+        supportsRgbw || supportsRgbww
+          ? html`<ha-labeled-slider
               labeled
-              .caption=${this.hass.localize("ui.card.light.white_value")}
-              icon="mdi:file-word-box"
+              .caption=${this._localize("ui.card.light.color_brightness")}
+              icon="mdi:brightness-7"
               min="0"
               max="100"
-              .name=${"wv"}
-              .value=${this._wvSliderValue}
-              @value-changed=${this._wvSliderChanged}
-            ></ha-labeled-slider>
-          `
-        : nothing}
-      ${supportsRgbww
-        ? html`
-            <ha-labeled-slider
-              labeled
-              .caption=${this.hass.localize("ui.card.light.cold_white_value")}
-              icon="mdi:file-word-box-outline"
-              min="0"
-              max="100"
-              .name=${"cw"}
-              .value=${this._cwSliderValue}
-              @value-changed=${this._wvSliderChanged}
-            ></ha-labeled-slider>
-            <ha-labeled-slider
-              labeled
-              .caption=${this.hass.localize("ui.card.light.warm_white_value")}
-              icon="mdi:file-word-box"
-              min="0"
-              max="100"
-              .name=${"ww"}
-              .value=${this._wwSliderValue}
-              @value-changed=${this._wvSliderChanged}
-            ></ha-labeled-slider>
-          `
-        : nothing}
+              .value=${this._colorBrightnessSliderValue}
+              @value-changed=${this._colorBrightnessSliderChanged}
+            ></ha-labeled-slider>`
+          : nothing
+      }
+      ${
+        supportsRgbw
+          ? html`
+              <ha-labeled-slider
+                labeled
+                .caption=${this._localize("ui.card.light.white_value")}
+                icon="mdi:file-word-box"
+                min="0"
+                max="100"
+                .name=${"wv"}
+                .value=${this._wvSliderValue}
+                @value-changed=${this._wvSliderChanged}
+              ></ha-labeled-slider>
+            `
+          : nothing
+      }
+      ${
+        supportsRgbww
+          ? html`
+              <ha-labeled-slider
+                labeled
+                .caption=${this._localize("ui.card.light.cold_white_value")}
+                icon="mdi:file-word-box-outline"
+                min="0"
+                max="100"
+                .name=${"cw"}
+                .value=${this._cwSliderValue}
+                @value-changed=${this._wvSliderChanged}
+              ></ha-labeled-slider>
+              <ha-labeled-slider
+                labeled
+                .caption=${this._localize("ui.card.light.warm_white_value")}
+                icon="mdi:file-word-box"
+                min="0"
+                max="100"
+                .name=${"ww"}
+                .value=${this._wwSliderValue}
+                @value-changed=${this._wvSliderChanged}
+              ></ha-labeled-slider>
+            `
+          : nothing
+      }
     `;
+  }
+
+  private _updateBrightnessAdjusted() {
+    const stateObj = this.stateObj;
+
+    this._brightnessAdjusted = undefined;
+    if (
+      stateObj.attributes.color_mode === LightColorMode.RGB &&
+      stateObj.attributes.rgb_color &&
+      !lightSupportsColorMode(stateObj, LightColorMode.RGBWW) &&
+      !lightSupportsColorMode(stateObj, LightColorMode.RGBW)
+    ) {
+      const maxVal = Math.max(...stateObj.attributes.rgb_color);
+
+      if (maxVal < 255) {
+        this._brightnessAdjusted = maxVal;
+      }
+    }
   }
 
   private _updateSliderValues() {
     const stateObj = this.stateObj;
 
     if (stateObj.state === "on") {
-      this._brightnessAdjusted = undefined;
-      if (
-        stateObj.attributes.color_mode === LightColorMode.RGB &&
-        stateObj.attributes.rgb_color &&
-        !lightSupportsColorMode(stateObj, LightColorMode.RGBWW) &&
-        !lightSupportsColorMode(stateObj, LightColorMode.RGBW)
-      ) {
-        const maxVal = Math.max(...stateObj.attributes.rgb_color);
-
-        if (maxVal < 255) {
-          this._brightnessAdjusted = maxVal;
-        }
-      }
+      this._updateBrightnessAdjusted();
 
       this._wvSliderValue =
         stateObj.attributes.color_mode === LightColorMode.RGBW &&
@@ -212,14 +244,23 @@ class LightRgbColorPicker extends LitElement {
   public willUpdate(changedProps: PropertyValues) {
     super.willUpdate(changedProps);
 
-    if (
-      this._isInteracting ||
-      (!changedProps.has("entityId") && !changedProps.has("hass"))
-    ) {
+    if (!changedProps.has("stateObj")) {
       return;
     }
 
-    this._updateSliderValues();
+    const oldStateObj = changedProps.get("stateObj") as LightEntity | undefined;
+    if (oldStateObj?.entity_id !== this.stateObj?.entity_id) {
+      this._throttleUpdateColor.cancel();
+      this._pendingSync.reset();
+      this._isInteracting = false;
+      this._updateSliderValues();
+    } else if (!this._isInteracting && this._pendingSync.shouldSync()) {
+      this._updateSliderValues();
+    } else if (this.stateObj.state === "on") {
+      // Keep the picker values, but the brightness normalization has to
+      // follow the reported state, as it is applied to the next color sent.
+      this._updateBrightnessAdjusted();
+    }
   }
 
   private _hsColorCursorMoved(ev: CustomEvent) {
@@ -230,6 +271,7 @@ class LightRgbColorPicker extends LitElement {
       return;
     }
     this._hsPickerValue = color;
+    this._pendingSync.schedule();
 
     this._throttleUpdateColor();
   }
@@ -292,13 +334,23 @@ class LightRgbColorPicker extends LitElement {
       this._colorBrightnessSliderValue = hsv[2] / 2.55;
     }
 
+    this._pendingSync.schedule();
     this._throttleUpdateColor();
   }
 
   private _hsColorChanged(ev: CustomEvent) {
+    this._isInteracting = false;
     if (!ev.detail.value) {
+      // Nothing is sent, so stop blocking state updates.
+      this._throttleUpdateColor.cancel();
+      this._pendingSync.reset();
+      this._updateSliderValues();
       return;
     }
+
+    // A pending throttled call would otherwise send an older color after the
+    // final one.
+    this._throttleUpdateColor.cancel();
     this._hsPickerValue = ev.detail.value;
 
     this._updateColor();
@@ -346,11 +398,15 @@ class LightRgbColorPicker extends LitElement {
 
   private _applyColor(color: LightColor, params?: Record<string, any>) {
     fireEvent(this, "color-changed", color);
-    this.hass.callService("light", "turn_on", {
-      entity_id: this.stateObj!.entity_id,
-      ...color,
-      ...params,
-    });
+    return this._pendingSync.run(
+      () =>
+        this._api.callService("light", "turn_on", {
+          entity_id: this.stateObj!.entity_id,
+          ...color,
+          ...params,
+        }),
+      () => this._updateSliderValues()
+    );
   }
 
   private _colorBrightnessSliderChanged(ev: CustomEvent) {
@@ -463,8 +519,6 @@ class LightRgbColorPicker extends LitElement {
 
         input[type="color"] {
           appearance: none;
-          -webkit-appearance: none;
-          -moz-appearance: none;
           border: none;
           outline: none;
           display: block;

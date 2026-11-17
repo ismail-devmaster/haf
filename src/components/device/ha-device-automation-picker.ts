@@ -1,21 +1,41 @@
-import { consume } from "@lit/context";
+import type { RenderItemFunction } from "@lit-labs/virtualizer/virtualize";
+import type { ContextType } from "@lit/context";
 import type { HassEntities } from "home-assistant-js-websocket";
 import type { PropertyValues } from "lit";
 import { html, LitElement, nothing } from "lit";
 import { property, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
+import { consume } from "../../common/decorators/consume";
+import { preserveUnchangedEntityStatesRecord } from "../../common/decorators/consume-context-entry";
+import { transform } from "../../common/decorators/transform";
 import { fireEvent } from "../../common/dom/fire_event";
 import { caseInsensitiveStringCompare } from "../../common/string/compare";
 import type { LocalizeFunc } from "../../common/translations/localize";
-import { fullEntitiesContext } from "../../data/context";
+import {
+  apiContext,
+  formattersContext,
+  fullEntitiesContext,
+  internationalizationContext,
+  statesContext,
+} from "../../data/context";
 import type { DeviceAutomation } from "../../data/device/device_automation";
 import {
   deviceAutomationsEqual,
   sortDeviceAutomations,
 } from "../../data/device/device_automation";
 import type { EntityRegistryEntry } from "../../data/entity/entity_registry";
-import type { CallWS, HomeAssistant, ValueChangedEvent } from "../../types";
+import { entityRegistryById } from "../../data/entity/entity_registry";
+import type {
+  CallWS,
+  HomeAssistantFormatters,
+  ValueChangedEvent,
+} from "../../types";
+import "../ha-combo-box-item";
 import "../ha-generic-picker";
+import {
+  DEFAULT_ROW_RENDERER_CONTENT,
+  type PickerComboBoxItem,
+} from "../ha-picker-combo-box";
 import type { PickerValueRenderer } from "../ha-picker-field";
 
 const NO_AUTOMATION_KEY = "NO_AUTOMATION";
@@ -23,8 +43,6 @@ const NO_AUTOMATION_KEY = "NO_AUTOMATION";
 export abstract class HaDeviceAutomationPicker<
   T extends DeviceAutomation,
 > extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property() public label?: string;
 
   @property({ attribute: false }) public deviceId?: string;
@@ -41,8 +59,49 @@ export abstract class HaDeviceAutomationPicker<
   @consume({ context: fullEntitiesContext, subscribe: true })
   _entityReg: EntityRegistryEntry[] = [];
 
+  @state()
+  @consume({ context: internationalizationContext, subscribe: true })
+  protected _i18n!: ContextType<typeof internationalizationContext>;
+
+  @state()
+  @consume({ context: statesContext, subscribe: true })
+  @transform<HassEntities, HassEntities>({
+    transformer: function (
+      this: HaDeviceAutomationPicker<DeviceAutomation>,
+      states
+    ) {
+      const registryById = entityRegistryById(this._entityReg ?? []);
+      const picked: HassEntities = {};
+      [...(this._automations ?? []), this.value].forEach((automation) => {
+        const id = automation?.entity_id;
+        const entityId = id?.includes(".")
+          ? id
+          : id && registryById[id]?.entity_id;
+        if (entityId && states?.[entityId]) {
+          picked[entityId] = states[entityId];
+        }
+      });
+      return preserveUnchangedEntityStatesRecord(this._states, picked);
+    },
+    watch: ["_automations", "value", "_entityReg"],
+  })
+  private _states: HassEntities = {};
+
+  @state()
+  @consume({ context: formattersContext, subscribe: true })
+  @transform<
+    HomeAssistantFormatters,
+    HomeAssistantFormatters["formatEntityName"]
+  >({
+    transformer: ({ formatEntityName }) => formatEntityName,
+  })
+  private _formatEntityName!: HomeAssistantFormatters["formatEntityName"];
+
+  @consume({ context: apiContext, subscribe: true })
+  private _api!: ContextType<typeof apiContext>;
+
   protected get NO_AUTOMATION_TEXT() {
-    return this.hass.localize(
+    return this._i18n.localize(
       "ui.panel.config.devices.automation.actions.no_actions"
     );
   }
@@ -50,6 +109,7 @@ export abstract class HaDeviceAutomationPicker<
   private _localizeDeviceAutomation: (
     localize: LocalizeFunc,
     states: HassEntities,
+    formatEntityName: HomeAssistantFormatters["formatEntityName"],
     entityRegistry: EntityRegistryEntry[],
     automation: T
   ) => string;
@@ -99,14 +159,23 @@ export abstract class HaDeviceAutomationPicker<
     const value = this._value;
 
     return html`<ha-generic-picker
-      .hass=${this.hass}
       .label=${this.label}
       .value=${value}
-      .disabled=${!this._automations || this._automations.length === 0}
-      .getItems=${this._getItems(value, this._automations)}
+      .disabled=${this._automations?.length === 0}
+      .loading=${this._automations === undefined}
+      .getItems=${this._getItems(
+        value,
+        this._automations,
+        this._i18n.localize,
+        this._i18n.locale.language,
+        this._states,
+        this._formatEntityName,
+        this._entityReg
+      )}
       @value-changed=${this._automationChanged}
+      .rowRenderer=${this._rowRenderer}
       .valueRenderer=${this._valueRenderer}
-      .unknownItemText=${this.hass.localize(
+      .unknownItemText=${this._i18n.localize(
         "ui.panel.config.devices.automation.actions.unknown_action"
       )}
       hide-clear-icon
@@ -123,16 +192,25 @@ export abstract class HaDeviceAutomationPicker<
   }
 
   private _getItems = memoizeOne(
-    (value: string, automations: T[] | undefined) => {
+    (
+      value: string,
+      automations: T[] | undefined,
+      localize: LocalizeFunc,
+      language: string,
+      states: HassEntities,
+      formatEntityName: HomeAssistantFormatters["formatEntityName"],
+      entityReg: EntityRegistryEntry[]
+    ) => {
       if (!automations) {
         return () => undefined;
       }
 
       const automationListItems = automations.map((automation, idx) => {
         const primary = this._localizeDeviceAutomation(
-          this.hass.localize,
-          this.hass.states,
-          this._entityReg,
+          localize,
+          states,
+          formatEntityName,
+          entityReg,
           automation
         );
         return {
@@ -142,11 +220,7 @@ export abstract class HaDeviceAutomationPicker<
       });
 
       automationListItems.sort((a, b) =>
-        caseInsensitiveStringCompare(
-          a.primary,
-          b.primary,
-          this.hass.locale.language
-        )
+        caseInsensitiveStringCompare(a.primary, b.primary, language)
       );
 
       if (value === NO_AUTOMATION_KEY) {
@@ -160,17 +234,28 @@ export abstract class HaDeviceAutomationPicker<
     }
   );
 
+  // Device automation labels (entity name + subtype) are often longer than the
+  // field, so let the option wrap onto multiple lines instead of truncating.
+  private _rowRenderer: RenderItemFunction<PickerComboBoxItem> = (item) =>
+    html`<ha-combo-box-item multiline>
+      ${DEFAULT_ROW_RENDERER_CONTENT(item)}
+    </ha-combo-box-item>`;
+
   private _valueRenderer: PickerValueRenderer = (value: string) => {
     const automation = this._automations?.find(
       (a, idx) => value === `${a.device_id}_${idx}`
     );
 
-    const text = automation
+    const described =
+      automation ?? (this.value?.domain ? this.value : undefined);
+
+    const text = described
       ? this._localizeDeviceAutomation(
-          this.hass.localize,
-          this.hass.states,
+          this._i18n.localize,
+          this._states,
+          this._formatEntityName,
           this._entityReg,
-          automation
+          described
         )
       : value === NO_AUTOMATION_KEY
         ? this.NO_AUTOMATION_TEXT
@@ -180,9 +265,14 @@ export abstract class HaDeviceAutomationPicker<
   };
 
   private async _updateDeviceInfo() {
+    // Asking a removed device for its automations fails rather than returning
+    // an empty list.
     this._automations = this.deviceId
       ? (
-          await this._fetchDeviceAutomations(this.hass.callWS, this.deviceId)
+          await this._fetchDeviceAutomations(
+            this._api.callWS,
+            this.deviceId
+          ).catch(() => [] as T[])
         ).sort(sortDeviceAutomations)
       : // No device, clear the list of automations
         [];

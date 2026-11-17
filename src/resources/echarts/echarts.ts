@@ -15,6 +15,8 @@ import {
   DataZoomComponent,
   VisualMapComponent,
   ToolboxComponent,
+  MarkAreaComponent,
+  BrushComponent,
 } from "echarts/components";
 
 // Features like Universal Transition and Label Layout
@@ -48,6 +50,8 @@ import type {
   GridComponentOption,
   DataZoomComponentOption,
   VisualMapComponentOption,
+  MarkAreaComponentOption,
+  BrushComponentOption,
 } from "echarts/components";
 import type { ComposeOption } from "echarts/core";
 
@@ -62,10 +66,20 @@ export type ECOption = ComposeOption<
   | GridComponentOption
   | DataZoomComponentOption
   | VisualMapComponentOption
+  | MarkAreaComponentOption
+  | BrushComponentOption
   | SankeySeriesOption
   | GraphSeriesOption
   | SunburstSeriesOption
 >;
+
+export type {
+  HaECOption,
+  HaECSeries,
+  HaECSeriesItem,
+  HaTooltipOption,
+  LitTooltipFormatter,
+} from "./ha-ec-option";
 
 // Register the required components
 echarts.use([
@@ -83,6 +97,8 @@ echarts.use([
   UniversalTransition,
   CanvasRenderer,
   ToolboxComponent,
+  MarkAreaComponent,
+  BrushComponent,
 ]);
 
 export { LinearGradient };

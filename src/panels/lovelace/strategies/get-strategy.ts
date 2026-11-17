@@ -1,6 +1,7 @@
 import {
   isStrategySection,
   type LovelaceSectionConfig,
+  type LovelaceSectionRawConfig,
   type LovelaceStrategySectionConfig,
 } from "../../../data/lovelace/config/section";
 import type { LovelaceStrategyConfig } from "../../../data/lovelace/config/strategy";
@@ -23,11 +24,19 @@ import type {
   LovelaceDashboardStrategyGetCreateSuggestions,
   LovelaceSectionStrategy,
   LovelaceStrategy,
+  LovelaceStrategyDependency,
   LovelaceViewStrategy,
 } from "./types";
 
 const MAX_WAIT_STRATEGY_LOAD = 5000;
 const CUSTOM_PREFIX = "custom:";
+
+const DEFAULT_REGISTRY_DEPENDENCIES: readonly LovelaceStrategyDependency[] = [
+  "entities",
+  "devices",
+  "areas",
+  "floors",
+];
 
 const STRATEGIES: Record<LovelaceStrategyConfigType, Record<string, any>> = {
   dashboard: {
@@ -67,6 +76,8 @@ const STRATEGIES: Record<LovelaceStrategyConfigType, Record<string, any>> = {
   section: {
     "common-controls": () =>
       import("./usage_prediction/common-controls-section-strategy"),
+    device: () => import("./device/device-section-strategy"),
+    entities: () => import("./entities/entities-section-strategy"),
   },
 };
 
@@ -82,24 +93,47 @@ type StrategyConfig<T extends LovelaceStrategyConfigType> = AsyncReturnType<
   Strategies[T]["generate"]
 >;
 
+type StrategyTag =
+  | { type: "builtin"; tag: string }
+  | { type: "custom"; tag: string; legacyTag: string };
+
+// Resolves the custom element tag(s) for a strategy. Custom strategies also
+// expose a legacy tag. `undefined` means the type is neither built-in nor a
+// custom strategy.
+const getStrategyTag = (
+  configType: LovelaceStrategyConfigType,
+  strategyType: string
+): StrategyTag | undefined => {
+  if (strategyType in STRATEGIES[configType]) {
+    return { type: "builtin", tag: `${strategyType}-${configType}-strategy` };
+  }
+  if (strategyType.startsWith(CUSTOM_PREFIX)) {
+    const name = strategyType.slice(CUSTOM_PREFIX.length);
+    return {
+      type: "custom",
+      tag: `ll-strategy-${configType}-${name}`,
+      legacyTag: `ll-strategy-${name}`,
+    };
+  }
+  return undefined;
+};
+
 export const getLovelaceStrategy = async <T extends LovelaceStrategyConfigType>(
   configType: T,
   strategyType: string
 ): Promise<LovelaceStrategy> => {
-  if (strategyType in STRATEGIES[configType]) {
-    await STRATEGIES[configType][strategyType]();
-    const tag = `${strategyType}-${configType}-strategy`;
-    return customElements.get(tag) as unknown as Strategies[T];
-  }
+  const tags = getStrategyTag(configType, strategyType);
 
-  if (!strategyType.startsWith(CUSTOM_PREFIX)) {
+  if (!tags) {
     throw new Error("Unknown strategy");
   }
 
-  const legacyTag = `ll-strategy-${strategyType.slice(CUSTOM_PREFIX.length)}`;
-  const tag = `ll-strategy-${configType}-${strategyType.slice(
-    CUSTOM_PREFIX.length
-  )}`;
+  if (tags.type === "builtin") {
+    await STRATEGIES[configType][strategyType]();
+    return customElements.get(tags.tag) as unknown as Strategies[T];
+  }
+
+  const { tag, legacyTag } = tags;
 
   if (
     (await Promise.race([
@@ -219,19 +253,25 @@ export const generateLovelaceViewStrategy = async (
 
 export const generateLovelaceSectionStrategy = async (
   config: LovelaceStrategySectionConfig,
-  hass: HomeAssistant
+  hass: HomeAssistant,
+  throwOnError = false
 ): Promise<LovelaceSectionConfig> => {
   const { strategy, ...base } = config;
   const generated = await generateStrategy(
     "section",
-    (err) => ({
-      cards: [
-        {
-          type: "markdown",
-          content: `Error loading the section strategy:\n> ${err}`,
-        },
-      ],
-    }),
+    (err) => {
+      if (throwOnError) {
+        throw err instanceof Error ? err : new Error(err);
+      }
+      return {
+        cards: [
+          {
+            type: "markdown",
+            content: `Error loading the section strategy:\n> ${err}`,
+          },
+        ],
+      };
+    },
     strategy,
     hass
   );
@@ -239,6 +279,66 @@ export const generateLovelaceSectionStrategy = async (
     ...base,
     ...generated,
   };
+};
+
+/**
+ * Synchronously checks whether a strategy needs regeneration.
+ * Strategies can implement `shouldRegenerate` for custom logic or declare
+ * `registryDependencies` to opt in to the default reference-equality check.
+ * The default list (entities, devices, areas, floors) is used when neither is
+ * provided, preserving the previous behavior for third-party strategies.
+ */
+export const checkStrategyShouldRegenerate = (
+  configType: LovelaceStrategyConfigType,
+  strategyConfig: LovelaceStrategyConfig,
+  oldHass: HomeAssistant,
+  newHass: HomeAssistant
+): boolean => {
+  const strategyType = strategyConfig.type;
+  if (!strategyType) {
+    return false;
+  }
+
+  const tags = getStrategyTag(configType, strategyType);
+  const strategy = tags
+    ? ((customElements.get(tags.tag) ??
+        (tags.type === "custom"
+          ? customElements.get(tags.legacyTag)
+          : undefined)) as unknown as LovelaceStrategy | undefined)
+    : undefined;
+
+  if (strategy?.shouldRegenerate) {
+    return strategy.shouldRegenerate(strategyConfig, oldHass, newHass);
+  }
+
+  const dependencies =
+    strategy?.registryDependencies ?? DEFAULT_REGISTRY_DEPENDENCIES;
+  return dependencies.some((key) => oldHass[key] !== newHass[key]);
+};
+
+export const expandLovelaceSectionStrategies = async (
+  section: LovelaceSectionRawConfig,
+  hass: HomeAssistant,
+  throwOnError = false
+): Promise<LovelaceSectionConfig> => {
+  let newSection: LovelaceSectionConfig;
+  if (isStrategySection(section)) {
+    const { disabled: _disabled, ...generated } =
+      await generateLovelaceSectionStrategy(section, hass, throwOnError);
+    newSection = generated;
+  } else {
+    newSection = { ...section };
+  }
+
+  if (newSection.sections) {
+    newSection.sections = await Promise.all(
+      newSection.sections.map((childSection) =>
+        expandLovelaceSectionStrategies(childSection, hass, throwOnError)
+      )
+    );
+  }
+
+  return newSection;
 };
 
 /**
@@ -260,12 +360,9 @@ export const expandLovelaceConfigStrategies = async (
 
       if (newView.sections) {
         newView.sections = await Promise.all(
-          newView.sections.map(async (section) => {
-            const newSection = isStrategySection(section)
-              ? await generateLovelaceSectionStrategy(section, hass)
-              : { ...section };
-            return newSection;
-          })
+          newView.sections.map((section) =>
+            expandLovelaceSectionStrategies(section, hass)
+          )
         );
       }
 

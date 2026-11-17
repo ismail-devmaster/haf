@@ -1,5 +1,6 @@
 import { html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
+import memoizeOne from "memoize-one";
 import {
   assert,
   assign,
@@ -10,7 +11,6 @@ import {
   string,
   union,
 } from "superstruct";
-import memoizeOne from "memoize-one";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import "../../../../components/ha-form/ha-form";
 import type { HaFormSchema } from "../../../../components/ha-form/types";
@@ -23,6 +23,65 @@ import type {
 } from "../../cards/types";
 import type { LovelaceCardEditor } from "../../types";
 import { baseLovelaceCardConfig } from "../structs/base-card-struct";
+
+const SCHEMA: HaFormSchema[] = [
+  {
+    name: "title",
+    visible: { field: "type", operator: "not_eq", value: "energy-compare" },
+    selector: { text: {} },
+  },
+  {
+    name: "show_legend",
+    visible: {
+      field: "type",
+      operator: "in",
+      value: ["power-sources-graph", "energy-usage-graph"],
+    },
+    default: true,
+    required: false,
+    selector: { boolean: {} },
+  },
+  {
+    name: "expand_legend",
+    visible: [
+      {
+        field: "type",
+        operator: "in",
+        value: ["power-sources-graph", "energy-usage-graph"],
+      },
+      { field: "show_legend", operator: "not_eq", value: false },
+    ],
+    required: false,
+    selector: { boolean: {} },
+  },
+  {
+    name: "link_dashboard",
+    visible: { field: "type", value: "energy-distribution" },
+    required: false,
+    selector: { boolean: {} },
+  },
+  {
+    name: "combine_sources",
+    visible: {
+      field: "type",
+      operator: "in",
+      value: [
+        "energy-usage-graph",
+        "energy-solar-graph",
+        "energy-gas-graph",
+        "energy-water-graph",
+        "power-sources-graph",
+      ],
+    },
+    required: false,
+    selector: { boolean: {} },
+  },
+  {
+    type: "string",
+    name: "collection_key",
+    required: false,
+  },
+];
 
 const cardConfigStruct = assign(
   baseLovelaceCardConfig,
@@ -44,7 +103,9 @@ const cardConfigStruct = assign(
     title: optional(string()),
     collection_key: optional(string()),
     show_legend: optional(boolean()),
+    expand_legend: optional(boolean()),
     link_dashboard: optional(boolean()),
+    combine_sources: optional(boolean()),
   })
 );
 
@@ -72,44 +133,10 @@ export class HuiEnergyGraphCardEditor
     this._config = config;
   }
 
-  private _schema = memoizeOne((type: string) => {
-    const schema: HaFormSchema[] = [
-      ...(type !== "energy-compare"
-        ? [{ name: "title", selector: { text: {} } }]
-        : []),
-      ...(type === "power-sources-graph"
-        ? [
-            {
-              name: "show_legend",
-              required: false,
-              selector: { boolean: {} },
-            },
-          ]
-        : []),
-      ...(type === "energy-distribution"
-        ? [
-            {
-              name: "link_dashboard",
-              required: false,
-              selector: { boolean: {} },
-            },
-          ]
-        : []),
-      {
-        type: "string",
-        name: "collection_key",
-        required: false,
-      },
-    ];
-    return schema;
-  });
-
   protected render() {
     if (!this.hass || !this._config) {
       return nothing;
     }
-
-    const schema = this._schema(this._config.type);
 
     const data = {
       ...this._config,
@@ -118,12 +145,23 @@ export class HuiEnergyGraphCardEditor
     return html` <ha-form
       .hass=${this.hass}
       .data=${data}
-      .schema=${schema}
+      .schema=${this._schema(this._config.type)}
       .computeLabel=${this._computeLabelCallback}
       .computeHelper=${this._computeHelperCallback}
       @value-changed=${this._valueChanged}
     ></ha-form>`;
   }
+
+  private _schema = memoizeOne((type: string): HaFormSchema[] =>
+    SCHEMA.map((field) =>
+      field.name === "combine_sources"
+        ? ({
+            ...field,
+            default: type === "power-sources-graph",
+          } as HaFormSchema)
+        : field
+    )
+  );
 
   private _valueChanged(ev: CustomEvent): void {
     fireEvent(this, "config-changed", { config: ev.detail.value });

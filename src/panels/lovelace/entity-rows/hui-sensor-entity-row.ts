@@ -12,12 +12,9 @@ import { hasConfigOrEntityChanged } from "../common/has-changed";
 import "../components/hui-generic-entity-row";
 import "../components/hui-timestamp-display";
 import { createEntityNotFoundWarning } from "../components/hui-warning";
-import type { TimestampRenderingFormat } from "../components/types";
 import type { LovelaceRow } from "./types";
 
-interface SensorEntityConfig extends EntitiesCardEntityConfig {
-  format?: TimestampRenderingFormat;
-}
+interface SensorEntityConfig extends EntitiesCardEntityConfig {}
 
 @customElement("hui-sensor-entity-row")
 class HuiSensorEntityRow extends LitElement implements LovelaceRow {
@@ -45,31 +42,35 @@ class HuiSensorEntityRow extends LitElement implements LovelaceRow {
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this._config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this.hass.localize, this.hass.config)}
         </hui-warning>
       `;
     }
 
     return html`
       <hui-generic-entity-row .hass=${this.hass} .config=${this._config}>
-        ${SENSOR_TIMESTAMP_DEVICE_CLASSES.includes(
-          stateObj.attributes.device_class
-        ) &&
-        stateObj.state !== UNAVAILABLE &&
-        stateObj.state !== UNKNOWN
-          ? html`
-              <hui-timestamp-display
-                .hass=${this.hass}
-                .ts=${new Date(stateObj.state)}
-                .format=${this._config.format ??
-                (stateObj.attributes.device_class === SENSOR_DEVICE_CLASS_UPTIME
-                  ? "total"
-                  : undefined)}
-                capitalize
-              ></hui-timestamp-display>
-            `
-          : this.hass.formatEntityState(stateObj)}
+        ${
+          SENSOR_TIMESTAMP_DEVICE_CLASSES.includes(
+            stateObj.attributes.device_class
+          ) &&
+          stateObj.state !== UNAVAILABLE &&
+          stateObj.state !== UNKNOWN
+            ? html`
+                <hui-timestamp-display
+                  .ts=${new Date(stateObj.state)}
+                  .format=${
+                    this._config.time_format ??
+                    (stateObj.attributes.device_class ===
+                    SENSOR_DEVICE_CLASS_UPTIME
+                      ? "total"
+                      : undefined)
+                  }
+                  capitalize
+                ></hui-timestamp-display>
+              `
+            : this.hass.formatEntityState(stateObj)
+        }
       </hui-generic-entity-row>
     `;
   }

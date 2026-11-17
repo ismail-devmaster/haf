@@ -6,7 +6,6 @@ import { ifDefined } from "lit/directives/if-defined";
 import { DOMAINS_TOGGLE } from "../../../common/const";
 import { applyThemesOnElement } from "../../../common/dom/apply_themes_on_element";
 import { computeDomain } from "../../../common/entity/compute_domain";
-import { computeStateName } from "../../../common/entity/compute_state_name";
 import { stateActive } from "../../../common/entity/state_active";
 import "../../../components/ha-card";
 import "../../../components/ha-icon-button";
@@ -161,8 +160,7 @@ class HuiPictureGlanceCard extends LitElement implements LovelaceCard {
     }
     const oldHass = changedProps.get("hass") as HomeAssistant | undefined;
     const oldConfig = changedProps.get("_config") as
-      | PictureGlanceCardConfig
-      | undefined;
+      PictureGlanceCardConfig | undefined;
 
     if (
       !oldHass ||
@@ -240,15 +238,17 @@ class HuiPictureGlanceCard extends LitElement implements LovelaceCard {
             .cameraView=${this._config.camera_view}
             .entity=${this._config.entity}
             .fitMode=${this._config.fit_mode}
-            .aspectRatio=${ignoreAspectRatio
-              ? undefined
-              : this._config.aspect_ratio}
+            .aspectRatio=${
+              ignoreAspectRatio ? undefined : this._config.aspect_ratio
+            }
           ></hui-image>
         </div>
         <div class="box">
-          ${this._config.title
-            ? html`<div class="title">${this._config.title}</div>`
-            : ""}
+          ${
+            this._config.title
+              ? html`<div class="title">${this._config.title}</div>`
+              : ""
+          }
           <div class="row">
             ${this._entitiesDialog!.map((entityConf) =>
               this._renderEntity(entityConf, true)
@@ -279,7 +279,7 @@ class HuiPictureGlanceCard extends LitElement implements LovelaceCard {
     if (!stateObj) {
       return html`
         <hui-warning-element
-          .label=${createEntityNotFoundWarning(this.hass!, entityConf.entity)}
+          .label=${createEntityNotFoundWarning(this.hass!.localize, this.hass!.config)}
         ></hui-warning-element>
       `;
     }
@@ -300,8 +300,9 @@ class HuiPictureGlanceCard extends LitElement implements LovelaceCard {
           class=${classMap({
             "state-on": stateActive(stateObj),
           })}
-          title=${`${computeStateName(
-            stateObj
+          title=${`${this.hass.formatEntityName(
+            stateObj,
+            entityConf.name
           )} : ${this.hass.formatEntityState(stateObj)}`}
         >
           <ha-state-icon
@@ -310,19 +311,23 @@ class HuiPictureGlanceCard extends LitElement implements LovelaceCard {
           ></ha-state-icon>
         </ha-icon-button>
 
-        ${this._config!.show_state !== true && entityConf.show_state !== true
-          ? html`<div class="state"></div>`
-          : html`
-              <div class="state">
-                ${entityConf.attribute
-                  ? html`
-                      ${entityConf.prefix}${stateObj.attributes[
-                        entityConf.attribute
-                      ]}${entityConf.suffix}
-                    `
-                  : this.hass.formatEntityState(stateObj)}
-              </div>
-            `}
+        ${
+          this._config!.show_state !== true && entityConf.show_state !== true
+            ? html`<div class="state"></div>`
+            : html`
+                <div class="state">
+                  ${
+                    entityConf.attribute
+                      ? html`
+                          ${entityConf.prefix}${
+                            stateObj.attributes[entityConf.attribute]
+                          }${entityConf.suffix}
+                        `
+                      : this.hass.formatEntityState(stateObj)
+                  }
+                </div>
+              `
+        }
       </div>
     `;
   }

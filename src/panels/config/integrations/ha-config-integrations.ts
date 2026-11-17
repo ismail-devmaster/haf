@@ -10,7 +10,7 @@ import {
 } from "../../../data/config_flow";
 import type { DataEntryFlowProgress } from "../../../data/data_entry_flow";
 import { domainToName } from "../../../data/integration";
-import "../../../layouts/hass-loading-screen";
+import { ChildPanelReady } from "../../../layouts/panel-ready";
 import type { RouterOptions } from "../../../layouts/hass-router-page";
 import { HassRouterPage } from "../../../layouts/hass-router-page";
 import { SubscribeMixin } from "../../../mixins/subscribe-mixin";
@@ -51,8 +51,6 @@ class HaConfigIntegrations extends SubscribeMixin(HassRouterPage) {
 
   @property({ attribute: "is-wide", type: Boolean }) public isWide = false;
 
-  @property({ attribute: false }) public showAdvanced = false;
-
   protected routerOptions: RouterOptions = {
     defaultPage: "dashboard",
     routes: {
@@ -62,6 +60,7 @@ class HaConfigIntegrations extends SubscribeMixin(HassRouterPage) {
       },
       integration: {
         tag: "ha-config-integration-page",
+        itemId: true,
       },
     },
   };
@@ -71,6 +70,11 @@ class HaConfigIntegrations extends SubscribeMixin(HassRouterPage) {
   @state() private _configEntriesInProgress?: DataEntryFlowProgressExtended[];
 
   private _loadTranslationsPromise?: Promise<LocalizeFunc>;
+
+  public constructor() {
+    super();
+    new ChildPanelReady(this);
+  }
 
   public hassSubscribe() {
     return [
@@ -198,7 +202,12 @@ class HaConfigIntegrations extends SubscribeMixin(HassRouterPage) {
         if (urlParams.has("domain")) {
           const domain = urlParams.get("domain");
           pageEl.domain = domain;
-          navigate(`/config/integrations/integration/${domain}`);
+          urlParams.delete("domain");
+          const search = urlParams.toString();
+          navigate(
+            `/config/integrations/integration/${domain}${search ? `?${search}` : ""}`,
+            { replace: true }
+          );
         }
       }
     }
@@ -207,7 +216,6 @@ class HaConfigIntegrations extends SubscribeMixin(HassRouterPage) {
     pageEl.configEntriesInProgress = this._configEntriesInProgress;
     pageEl.narrow = this.narrow;
     pageEl.isWide = this.isWide;
-    pageEl.showAdvanced = this.showAdvanced;
   }
 }
 

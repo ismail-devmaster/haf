@@ -33,20 +33,24 @@ class HuiUpdateEntityRow extends LitElement implements LovelaceRow {
     }
 
     const stateObj = this.hass.states[this._config.entity] as
-      | UpdateEntity
-      | undefined;
+      UpdateEntity | undefined;
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this._config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this.hass.localize, this.hass.config)}
         </hui-warning>
       `;
     }
 
     return html`
       <hui-generic-entity-row .hass=${this.hass} .config=${this._config}>
-        ${computeUpdateStateDisplay(stateObj, this.hass)}
+        ${computeUpdateStateDisplay(
+          stateObj,
+          this.hass.localize,
+          this.hass.locale,
+          this.hass.formatEntityState
+        )}
       </hui-generic-entity-row>
     `;
   }

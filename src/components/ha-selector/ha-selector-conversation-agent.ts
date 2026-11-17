@@ -1,13 +1,10 @@
 import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators";
 import type { ConversationAgentSelector } from "../../data/selector";
-import type { HomeAssistant } from "../../types";
 import "../ha-conversation-agent-picker";
 
 @customElement("ha-selector-conversation_agent")
 export class HaConversationAgentSelector extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property({ attribute: false }) public selector!: ConversationAgentSelector;
 
   @property() public value?: any;
@@ -26,10 +23,10 @@ export class HaConversationAgentSelector extends LitElement {
 
   protected render() {
     return html`<ha-conversation-agent-picker
-      .hass=${this.hass}
       .value=${this.value}
-      .language=${this.selector.conversation_agent?.language ||
-      this.context?.language}
+      .language=${
+        this.selector.conversation_agent?.language || this.context?.language
+      }
       .label=${this.label}
       .helper=${this.helper}
       .disabled=${this.disabled}

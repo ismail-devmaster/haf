@@ -36,8 +36,8 @@ class HuiInputButtonEntityRow extends LitElement implements LovelaceRow {
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this._config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this.hass.localize, this.hass.config)}
         </hui-warning>
       `;
     }
@@ -46,7 +46,7 @@ class HuiInputButtonEntityRow extends LitElement implements LovelaceRow {
       <hui-generic-entity-row .hass=${this.hass} .config=${this._config}>
         <ha-button
           appearance="plain"
-          size="small"
+          size="s"
           @click=${this._pressButton}
           .disabled=${stateObj.state === UNAVAILABLE}
         >

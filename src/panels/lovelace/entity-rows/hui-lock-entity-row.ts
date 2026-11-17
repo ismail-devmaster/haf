@@ -37,8 +37,8 @@ class HuiLockEntityRow extends LitElement implements LovelaceRow {
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this._config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this.hass.localize, this.hass.config)}
         </hui-warning>
       `;
     }
@@ -47,14 +47,16 @@ class HuiLockEntityRow extends LitElement implements LovelaceRow {
       <hui-generic-entity-row .hass=${this.hass} .config=${this._config}>
         <ha-button
           appearance="plain"
-          size="small"
+          size="s"
           @click=${this._callService}
           .disabled=${stateObj.state === UNAVAILABLE}
           class="text-content"
         >
-          ${stateObj.state === "locked"
-            ? this.hass!.localize("ui.card.lock.unlock")
-            : this.hass!.localize("ui.card.lock.lock")}
+          ${
+            stateObj.state === "locked"
+              ? this.hass!.localize("ui.card.lock.unlock")
+              : this.hass!.localize("ui.card.lock.lock")
+          }
         </ha-button>
       </hui-generic-entity-row>
     `;
@@ -81,7 +83,14 @@ class HuiLockEntityRow extends LitElement implements LovelaceRow {
         this.hass!.localize(`ui.card.lock.${action}`)
       ))
     ) {
-      callProtectedLockService(this, this.hass!, stateObj, action);
+      callProtectedLockService(
+        this,
+        this.hass!.callService,
+        this.hass!.callWS,
+        this.hass!.localize,
+        stateObj,
+        action
+      );
     }
   }
 }

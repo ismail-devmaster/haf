@@ -1,12 +1,14 @@
+import { sanitizeUrl } from "@braintree/sanitize-url";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
 import { ifDefined } from "lit/directives/if-defined";
 import { styleMap } from "lit/directives/style-map";
+import { consumeLocalize } from "../../../common/decorators/consume-context-entry";
+import type { LocalizeFunc } from "../../../common/translations/localize";
 import parseAspectRatio from "../../../common/util/parse-aspect-ratio";
 import "../../../components/ha-alert";
 import "../../../components/ha-card";
-import type { HomeAssistant } from "../../../types";
 import type {
   LovelaceCard,
   LovelaceCardEditor,
@@ -33,9 +35,11 @@ export class HuiIframeCard extends LitElement implements LovelaceCard {
   @property({ attribute: false })
   public layout?: string;
 
-  @property({ attribute: false }) public hass?: HomeAssistant;
-
   @state() protected _config?: IframeCardConfig;
+
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
 
   public getCardSize(): number {
     if (!this._config) {
@@ -52,11 +56,17 @@ export class HuiIframeCard extends LitElement implements LovelaceCard {
       throw new Error("URL required");
     }
 
+    // The sandbox keeps allow-same-origin, so a javascript: URL would run in
+    // the frontend's own origin
+    if (sanitizeUrl(config.url) === "about:blank") {
+      throw new Error("Invalid URL");
+    }
+
     this._config = config;
   }
 
   protected render() {
-    if (!this._config || !this.hass) {
+    if (!this._config) {
       return nothing;
     }
 
@@ -78,7 +88,7 @@ export class HuiIframeCard extends LitElement implements LovelaceCard {
     if (location.protocol === "https:" && target_protocol !== "https:") {
       return html`
         <ha-alert alert-type="error">
-          ${this.hass!.localize(
+          ${this._localize(
             "ui.panel.lovelace.cards.iframe.error_secure_context",
             {
               target_protocol,

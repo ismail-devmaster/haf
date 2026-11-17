@@ -65,49 +65,55 @@ class HuiInputNumberEntityRow extends LitElement implements LovelaceRow {
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this._config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this.hass.localize, this.hass.config)}
         </hui-warning>
       `;
     }
 
+    const name = this.hass.formatEntityName(stateObj, this._config.name);
+
     return html`
       <hui-generic-entity-row .hass=${this.hass} .config=${this._config}>
-        ${stateObj.attributes.mode === "slider"
-          ? html`
-              <div class="flex">
-                <ha-slider
-                  labeled
-                  .disabled=${stateObj.state === UNAVAILABLE}
-                  .step=${Number(stateObj.attributes.step)}
-                  .min=${Number(stateObj.attributes.min)}
-                  .max=${Number(stateObj.attributes.max)}
-                  .value=${stateObj.state}
-                  @change=${this._selectedValueChanged}
-                ></ha-slider>
-                <span class="state">
-                  ${this.hass.formatEntityState(stateObj)}
-                </span>
-              </div>
-            `
-          : html`
-              <div class="flex state">
-                <ha-input
-                  .disabled=${stateObj.state === UNAVAILABLE}
-                  pattern="[0-9]+([\\.][0-9]+)?"
-                  .step=${Number(stateObj.attributes.step)}
-                  .min=${Number(stateObj.attributes.min)}
-                  .max=${Number(stateObj.attributes.max)}
-                  .value=${Number(stateObj.state).toString()}
-                  type="number"
-                  @change=${this._selectedValueChanged}
-                >
-                  <span slot="end"
-                    >${stateObj.attributes.unit_of_measurement || ""}</span
+        ${
+          stateObj.attributes.mode === "slider"
+            ? html`
+                <div class="flex">
+                  <ha-slider
+                    labeled
+                    .accessibleLabel=${name}
+                    .disabled=${stateObj.state === UNAVAILABLE}
+                    .step=${Number(stateObj.attributes.step)}
+                    .min=${Number(stateObj.attributes.min)}
+                    .max=${Number(stateObj.attributes.max)}
+                    .value=${stateObj.state}
+                    @change=${this._selectedValueChanged}
+                  ></ha-slider>
+                  <span class="state">
+                    ${this.hass.formatEntityState(stateObj)}
+                  </span>
+                </div>
+              `
+            : html`
+                <div class="flex box">
+                  <ha-input
+                    .accessibleLabel=${name}
+                    .disabled=${stateObj.state === UNAVAILABLE}
+                    pattern="[0-9]+([\\.][0-9]+)?"
+                    .step=${Number(stateObj.attributes.step)}
+                    .min=${Number(stateObj.attributes.min)}
+                    .max=${Number(stateObj.attributes.max)}
+                    .value=${Number(stateObj.state).toString()}
+                    type="number"
+                    @change=${this._selectedValueChanged}
                   >
-                </ha-input>
-              </div>
-            `}
+                    <span slot="end"
+                      >${stateObj.attributes.unit_of_measurement || ""}</span
+                    >
+                  </ha-input>
+                </div>
+              `
+        }
       </hui-generic-entity-row>
     `;
   }
@@ -126,6 +132,10 @@ class HuiInputNumberEntityRow extends LitElement implements LovelaceRow {
       min-width: 45px;
       text-align: end;
     }
+    .box {
+      flex-grow: 0;
+      min-width: 45px;
+    }
     ha-input {
       width: 100%;
     }
@@ -135,6 +145,9 @@ class HuiInputNumberEntityRow extends LitElement implements LovelaceRow {
     ha-slider {
       width: 100%;
       max-width: 200px;
+      /* Horizontal margin leaves room for the thumb at min and max so it
+         isn't clipped by the card's overflow-x: hidden. */
+      margin: 1px var(--ha-space-2);
     }
   `;
 
@@ -171,7 +184,7 @@ class HuiInputNumberEntityRow extends LitElement implements LovelaceRow {
 
     if ((ev.target as HTMLInputElement).value !== stateObj.state) {
       setValue(
-        this.hass!,
+        this.hass!.callService,
         stateObj.entity_id,
         (ev.target as HTMLInputElement).value
       );

@@ -80,6 +80,9 @@ export class HaControlCircularSlider extends LitElement {
   @property({ type: String, attribute: "high-label" })
   public highLabel?: string;
 
+  @property({ attribute: false })
+  public formatValue?: (value: number) => string;
+
   @property({ type: Number }) public value?: number;
 
   @property({ type: Number }) public low?: number;
@@ -384,7 +387,7 @@ export class HaControlCircularSlider extends LitElement {
   }
 
   private _handleKeyDown(e: KeyboardEvent) {
-    if (!A11Y_KEY_CODES.has(e.code)) return;
+    if (this.disabled || !A11Y_KEY_CODES.has(e.code)) return;
     e.preventDefault();
     if (this._lastSlider) {
       this.shadowRoot?.getElementById(this._lastSlider)?.focus();
@@ -436,7 +439,7 @@ export class HaControlCircularSlider extends LitElement {
   }
 
   private _handleKeyUp(e: KeyboardEvent) {
-    if (!A11Y_KEY_CODES.has(e.code)) return;
+    if (this.disabled || !A11Y_KEY_CODES.has(e.code)) return;
     this._activeSlider = (e.currentTarget as any).id as ActiveSlider;
     e.preventDefault();
     fireEvent(this, `${this._activeSlider}-changing`, {
@@ -562,13 +565,22 @@ export class HaControlCircularSlider extends LitElement {
                 aria-valuemin=${this.min}
                 aria-valuemax=${this.max}
                 aria-valuenow=${
-                  this._localValue != null
-                    ? this._steppedValue(this._localValue)
-                    : undefined
+                  value != null ? this._steppedValue(value) : undefined
                 }
+                aria-valuetext=${ifDefined(
+                  value != null && this.formatValue
+                    ? this.formatValue(this._steppedValue(value))
+                    : undefined
+                )}
                 aria-disabled=${this.disabled}
                 aria-readonly=${this.readonly}
-                aria-label=${ifDefined(this.lowLabel ?? this.label)}
+                aria-label=${ifDefined(
+                  id === "low"
+                    ? (this.lowLabel ?? this.label)
+                    : id === "high"
+                      ? (this.highLabel ?? this.label)
+                      : this.label
+                )}
                 @keydown=${this._handleKeyDown}
                 @keyup=${this._handleKeyUp}
               />
@@ -658,8 +670,9 @@ export class HaControlCircularSlider extends LitElement {
         >
           <path d=${trackPath} ?data-interaction=${!onlyDotInteraction} />
           <path class="background" d=${trackPath} />
-          ${currentStroke
-            ? svg`
+          ${
+            currentStroke
+              ? svg`
                   <path
                     class="current"
                     d=${trackPath}
@@ -667,17 +680,22 @@ export class HaControlCircularSlider extends LitElement {
                     stroke-dashoffset=${currentStroke[1]}
                   />
                 `
-            : nothing}
-          ${lowValue != null || this.mode === "full"
-            ? this.renderArc(
-                this.dual ? "low" : "value",
-                lowValue,
-                (!this.dual && this.mode) || "start"
-              )
-            : nothing}
-          ${this.dual && highValue != null
-            ? this.renderArc("high", highValue, "end")
-            : nothing}
+              : nothing
+          }
+          ${
+            lowValue != null || this.mode === "full"
+              ? this.renderArc(
+                  this.dual ? "low" : "value",
+                  lowValue,
+                  (!this.dual && this.mode) || "start"
+                )
+              : nothing
+          }
+          ${
+            this.dual && highValue != null
+              ? this.renderArc("high", highValue, "end")
+              : nothing
+          }
         </g>
       </svg>
     `;

@@ -6,12 +6,18 @@ import {
   mdiClose,
   mdiDelete,
 } from "@mdi/js";
-import type { CSSResultGroup } from "lit";
+import type { ContextType } from "@lit/context";
+import type { CSSResultGroup, PropertyValues } from "lit";
 import { css, html, LitElement, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators";
+import { customElement, state } from "lit/decorators";
 import { repeat } from "lit/directives/repeat";
 import { isComponentLoaded } from "../../common/config/is_component_loaded";
+import { consume } from "../../common/decorators/consume";
+import { consumeLocalize } from "../../common/decorators/consume-context-entry";
+import { transform } from "../../common/decorators/transform";
 import { fireEvent } from "../../common/dom/fire_event";
+import type { LocalizeFunc } from "../../common/translations/localize";
+import { apiContext, configContext } from "../../data/context";
 import { deleteImage, getIdFromUrl } from "../../data/image_upload";
 import type { MediaPlayerItem } from "../../data/media-player";
 import { MediaClassBrowserSettings } from "../../data/media-player";
@@ -22,24 +28,33 @@ import {
   removeLocalMedia,
 } from "../../data/media_source";
 import { showConfirmationDialog } from "../../dialogs/generic/show-dialog-box";
-import type { HomeAssistant } from "../../types";
+import type { HomeAssistantConfig } from "../../types";
 import "../ha-button";
-import "../ha-check-list-item";
 import "../ha-dialog";
-import "../ha-dialog-footer";
 import "../ha-dialog-header";
 import "../ha-icon-button";
-import "../ha-list";
 import "../ha-spinner";
 import "../ha-svg-icon";
 import "../ha-tip";
-import "./ha-media-player-browse";
+import "../item/ha-list-item-option";
+import "../list/ha-list-selectable";
 import "./ha-media-upload-button";
 import type { MediaManageDialogParams } from "./show-media-manage-dialog";
 
 @customElement("dialog-media-manage")
 class DialogMediaManage extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
+  @state() @consumeLocalize() private _localize!: LocalizeFunc;
+
+  @state()
+  @consume({ context: configContext, subscribe: true })
+  @transform<HomeAssistantConfig, boolean>({
+    transformer: (value) =>
+      !!value?.config && isComponentLoaded(value.config, "hassio"),
+  })
+  private _hassioLoaded = false;
+
+  @consume({ context: apiContext, subscribe: true })
+  private _api!: ContextType<typeof apiContext>;
 
   @state() private _currentItem?: MediaPlayerItem;
 
@@ -59,7 +74,6 @@ class DialogMediaManage extends LitElement {
 
   public showDialog(params: MediaManageDialogParams): void {
     this._params = params;
-    this._refreshMedia();
     this._open = true;
   }
 
@@ -80,15 +94,12 @@ class DialogMediaManage extends LitElement {
     fireEvent(this, "dialog-closed", { dialog: this.localName });
   }
 
-  protected willUpdate() {
+  protected willUpdate(changedProps: PropertyValues) {
+    if (changedProps.has("_params") && this._params) {
+      this._refreshMedia();
+    }
     this._filteredChildren =
       this._currentItem?.children?.filter((child) => !child.can_expand) || [];
-    if (this._filteredChildren.length === 0 && this._selected.size !== 0) {
-      // When running delete all, sometimes the list can throw off a spurious
-      // select event that makes it think that 1 item is still selected. Clear selected
-      // if nothing can be selected.
-      this._selected = new Set();
-    }
   }
 
   protected render() {
@@ -105,150 +116,177 @@ class DialogMediaManage extends LitElement {
         @closed=${this._dialogClosed}
       >
         <ha-dialog-header slot="header">
-          ${!(this._uploading || this._deleting)
-            ? html`<slot name="headerNavigationIcon" slot="navigationIcon">
-                <ha-icon-button
-                  data-dialog="close"
-                  .label=${this.hass?.localize("ui.common.close") ?? "Close"}
-                  .path=${mdiClose}
-                ></ha-icon-button
-              ></slot>`
-            : nothing}
+          ${
+            !(this._uploading || this._deleting)
+              ? html`<slot name="headerNavigationIcon" slot="navigationIcon">
+                  <ha-icon-button
+                    data-dialog="close"
+                    .label=${this._localize("ui.common.close")}
+                    .path=${mdiClose}
+                  ></ha-icon-button
+                ></slot>`
+              : nothing
+          }
           <h1 class="title" slot="title" id="dialog-box-title">
-            ${this.hass.localize(
+            ${this._localize(
               "ui.components.media-browser.file_management.title"
             )}
           </h1>
-          ${this._selected.size === 0
-            ? html`<ha-media-upload-button
-                .hass=${this.hass}
-                .currentItem=${this._params.currentItem}
-                @uploading=${this._startUploading}
-                @media-refresh=${this._doneUploading}
-                slot="actionItems"
-              ></ha-media-upload-button>`
-            : html`<ha-button
-                variant="danger"
-                slot="actionItems"
-                .disabled=${this._deleting}
-                @click=${this._handleDelete}
-              >
-                <ha-svg-icon .path=${mdiDelete} slot="start"></ha-svg-icon>
-                ${this.hass.localize(
-                  `ui.components.media-browser.file_management.${
-                    this._deleting ? "deleting" : "delete"
-                  }`,
-                  { count: this._selected.size }
-                )}
-              </ha-button>`}
+          ${
+            this._selected.size === 0
+              ? html`<ha-media-upload-button
+                  .currentItem=${this._params.currentItem}
+                  @uploading=${this._startUploading}
+                  @media-refresh=${this._doneUploading}
+                  slot="actionItems"
+                ></ha-media-upload-button>`
+              : html`<ha-button
+                  variant="danger"
+                  slot="actionItems"
+                  .disabled=${this._deleting}
+                  @click=${this._handleDelete}
+                >
+                  <ha-svg-icon .path=${mdiDelete} slot="start"></ha-svg-icon>
+                  ${this._localize(
+                    `ui.components.media-browser.file_management.${
+                      this._deleting ? "deleting" : "delete"
+                    }`,
+                    { count: this._selected.size }
+                  )}
+                </ha-button>`
+          }
         </ha-dialog-header>
-        ${!this._currentItem
-          ? html`
-              <div class="refresh">
-                <ha-spinner></ha-spinner>
-              </div>
-            `
-          : !this._filteredChildren.length
-            ? html`<div class="no-items">
-                <p>
-                  ${this.hass.localize(
-                    "ui.components.media-browser.file_management.no_items"
-                  )}
-                </p>
-                ${this._currentItem?.children?.length
-                  ? html`<span class="folders"
-                      >${this.hass.localize(
-                        "ui.components.media-browser.file_management.folders_not_supported"
-                      )}</span
-                    >`
-                  : ""}
-              </div>`
-            : html`
-                <div class="buttons" slot="footer">
-                  <ha-button
-                    appearance="filled"
-                    @click=${this._handleDeselectAll}
-                    .disabled=${this._selected.size === 0}
-                  >
-                    <ha-svg-icon
-                      .path=${mdiCheckboxBlankOutline}
-                      slot="start"
-                    ></ha-svg-icon>
-                    ${this.hass.localize(
-                      `ui.components.media-browser.file_management.deselect_all`
-                    )}
-                  </ha-button>
-                  <ha-button
-                    appearance="filled"
-                    @click=${this._handleSelectAll}
-                    .disabled=${this._selected.size ===
-                    this._filteredChildren.length}
-                  >
-                    <ha-svg-icon
-                      .path=${mdiCheckboxMarkedOutline}
-                      slot="start"
-                    ></ha-svg-icon>
-                    ${this.hass.localize(
-                      `ui.components.media-browser.file_management.select_all`
-                    )}
-                  </ha-button>
+        ${
+          !this._currentItem
+            ? html`
+                <div class="refresh">
+                  <ha-spinner></ha-spinner>
                 </div>
-                <ha-list multi @selected=${this._handleSelected}>
-                  ${repeat(
-                    this._filteredChildren,
-                    (item) => item.media_content_id,
-                    (item) => {
-                      const icon = html`
-                        <ha-svg-icon
-                          slot="graphic"
-                          .path=${MediaClassBrowserSettings[
-                            item.media_class === "directory"
-                              ? item.children_media_class || item.media_class
-                              : item.media_class
-                          ].icon}
-                        ></ha-svg-icon>
-                      `;
-                      return html`
-                        <ha-check-list-item
-                          ${animate({
-                            id: item.media_content_id,
-                            skipInitial: true,
-                          })}
-                          graphic="icon"
-                          .disabled=${this._uploading || this._deleting}
-                          .selected=${this._selected.has(fileIndex++)}
-                          .item=${item}
-                        >
-                          ${icon} ${item.title}
-                        </ha-check-list-item>
-                      `;
-                    }
-                  )}
-                </ha-list>
-              `}
-        ${isComponentLoaded(this.hass.config, "hassio")
-          ? html`<ha-tip .hass=${this.hass}>
-              ${this.hass.localize(
-                "ui.components.media-browser.file_management.tip_media_storage",
-                {
-                  storage: html`<a
-                    href="/config/storage"
-                    @click=${this.closeDialog}
+              `
+            : !this._filteredChildren.length
+              ? html`<div class="no-items">
+                  <p>
+                    ${this._localize(
+                      "ui.components.media-browser.file_management.no_items"
+                    )}
+                  </p>
+                  ${
+                    this._currentItem?.children?.length
+                      ? html`<span class="folders"
+                          >${this._localize(
+                            "ui.components.media-browser.file_management.folders_not_supported"
+                          )}</span
+                        >`
+                      : ""
+                  }
+                </div>`
+              : html`
+                  <div class="buttons" slot="footer">
+                    <ha-button
+                      appearance="filled"
+                      @click=${this._handleDeselectAll}
+                      .disabled=${this._selected.size === 0}
+                    >
+                      <ha-svg-icon
+                        .path=${mdiCheckboxBlankOutline}
+                        slot="start"
+                      ></ha-svg-icon>
+                      ${this._localize(
+                        `ui.components.media-browser.file_management.deselect_all`
+                      )}
+                    </ha-button>
+                    <ha-button
+                      appearance="filled"
+                      @click=${this._handleSelectAll}
+                      .disabled=${
+                        this._selected.size === this._filteredChildren.length
+                      }
+                    >
+                      <ha-svg-icon
+                        .path=${mdiCheckboxMarkedOutline}
+                        slot="start"
+                      ></ha-svg-icon>
+                      ${this._localize(
+                        `ui.components.media-browser.file_management.select_all`
+                      )}
+                    </ha-button>
+                  </div>
+                  <ha-list-selectable
+                    multi
+                    aria-label=${this._localize(
+                      "ui.components.media-browser.file_management.title"
+                    )}
+                    @ha-list-item-selected=${this._handleItemSelected}
+                    @ha-list-item-deselected=${this._handleItemDeselected}
                   >
-                    ${this.hass.localize(
-                      "ui.components.media-browser.file_management.tip_storage_panel"
-                    )}</a
-                  >`,
-                }
-              )}
-            </ha-tip>`
-          : nothing}
+                    ${repeat(
+                      this._filteredChildren,
+                      (item) => item.media_content_id,
+                      (item) => {
+                        const icon = html`
+                          <ha-svg-icon
+                            slot="start"
+                            .path=${
+                              MediaClassBrowserSettings[
+                                item.media_class === "directory"
+                                  ? item.children_media_class ||
+                                    item.media_class
+                                  : item.media_class
+                              ].icon
+                            }
+                          ></ha-svg-icon>
+                        `;
+                        return html`
+                          <ha-list-item-option
+                            ${animate({
+                              id: item.media_content_id,
+                              skipInitial: true,
+                            })}
+                            appearance="checkbox"
+                            selection-position="end"
+                            .disabled=${this._uploading || this._deleting}
+                            .selected=${this._selected.has(fileIndex++)}
+                          >
+                            ${icon}
+                            <span slot="headline">${item.title}</span>
+                          </ha-list-item-option>
+                        `;
+                      }
+                    )}
+                  </ha-list-selectable>
+                `
+        }
+        ${
+          this._hassioLoaded
+            ? html`<ha-tip>
+                ${this._localize(
+                  "ui.components.media-browser.file_management.tip_media_storage",
+                  {
+                    storage: html`<a
+                      href="/config/storage"
+                      @click=${this.closeDialog}
+                    >
+                      ${this._localize(
+                        "ui.components.media-browser.file_management.tip_storage_panel"
+                      )}</a
+                    >`,
+                  }
+                )}
+              </ha-tip>`
+            : nothing
+        }
       </ha-dialog>
     `;
   }
 
-  private _handleSelected(ev) {
-    this._selected = ev.detail.index;
+  private _handleItemSelected(ev: CustomEvent<number>) {
+    this._selected = new Set(this._selected).add(ev.detail);
+  }
+
+  private _handleItemDeselected(ev: CustomEvent<number>) {
+    const selected = new Set(this._selected);
+    selected.delete(ev.detail);
+    this._selected = selected;
   }
 
   private _startUploading() {
@@ -274,7 +312,7 @@ class DialogMediaManage extends LitElement {
   private async _handleDelete() {
     if (
       !(await showConfirmationDialog(this, {
-        text: this.hass.localize(
+        text: this._localize(
           "ui.components.media-browser.file_management.confirm_delete",
           { count: this._selected.size }
         ),
@@ -301,11 +339,11 @@ class DialogMediaManage extends LitElement {
       await Promise.all(
         toDelete.map(async (item) => {
           if (isLocalMediaSourceContentId(item.media_content_id)) {
-            await removeLocalMedia(this.hass, item.media_content_id);
+            await removeLocalMedia(this._api.callWS, item.media_content_id);
           } else if (isImageUploadMediaSourceContentId(item.media_content_id)) {
             const media_id = getIdFromUrl(item.media_content_id);
             if (media_id) {
-              await deleteImage(this.hass, media_id);
+              await deleteImage(this._api.callWS, media_id);
             }
           }
           this._currentItem = {
@@ -324,7 +362,7 @@ class DialogMediaManage extends LitElement {
     this._selected = new Set();
     this._currentItem = undefined;
     this._currentItem = await browseLocalMediaPlayer(
-      this.hass,
+      this._api.callWS,
       this._params!.currentItem.media_content_id
     );
   }

@@ -1,12 +1,12 @@
-import type { CSSResultGroup, TemplateResult } from "lit";
-import { css, html, LitElement } from "lit";
+import { css, html, LitElement, type nothing, type TemplateResult } from "lit";
 import { customElement, property } from "lit/decorators";
 import { tinykeys } from "tinykeys";
 import { compareNodeOrder } from "../../common/dom/compare-node-order";
 import { fireEvent, type HASSDomEvent } from "../../common/dom/fire_event";
+import { haStyleScrollbar } from "../../resources/styles";
 import type { HaListItemBase } from "../item/ha-list-item-base";
 import "./types";
-import type { HaListItemRegistrationDetail } from "./types";
+import type { HaListItemRegistrationDetail, HaListMoveTarget } from "./types";
 
 /**
  * @element ha-list-base
@@ -27,7 +27,13 @@ import type { HaListItemRegistrationDetail } from "./types";
  * @cssprop --ha-list-gap - Spacing between items. Defaults to `0`.
  * @cssprop --ha-list-padding - Padding around the list content. Defaults to `0`.
  *
+ * With `virtual-focus`, DOM focus stays outside the list, for example in a
+ * search field. The list then ignores key presses. The element that owns the
+ * focus drives navigation with `moveActiveItem()`, and the list marks the row
+ * it points at with the `active` attribute instead of focusing it.
+ *
  * @attr {boolean} wrap-focus - Whether ArrowUp/Down navigation wraps at the ends.
+ * @attr {boolean} virtual-focus - Keep DOM focus outside the list and mark the active row instead.
  * @attr {string} aria-label - Accessible label for the list.
  *
  * @fires ha-list-activated - Fired when an item is activated via Enter/Space. `detail: { index, item }`.
@@ -37,6 +43,14 @@ export class HaListBase extends LitElement {
   @property({ type: Boolean, attribute: "wrap-focus" })
   public wrapFocus = false;
 
+  /**
+   * Keep DOM focus outside the list. The list does not handle keys and marks
+   * the active row with `active` instead of focusing it. Drive navigation with
+   * `moveActiveItem()`.
+   */
+  @property({ type: Boolean, attribute: "virtual-focus" })
+  public virtualFocus = false;
+
   @property({ type: String, attribute: "aria-label", reflect: true })
   public ariaLabel: string | null = null;
 
@@ -45,15 +59,19 @@ export class HaListBase extends LitElement {
   /** Host `role` attribute. Empty string means no role is set. */
   protected readonly hostRole: string = "list";
 
-  private _activeItemIndex = -1;
+  protected activeItemIndex = -1;
 
-  private _firstFocusableIndex = -1;
+  protected firstFocusableIndex = -1;
 
-  private _lastFocusableIndex = -1;
+  protected lastFocusableIndex = -1;
 
-  private _hasFocusableItem = false;
+  protected hasFocusableItem = false;
+
+  private _activeItem?: HaListItemBase;
 
   private _unbindKeys?: () => void;
+
+  private _listItemsUpdatePending = false;
 
   public connectedCallback() {
     super.connectedCallback();
@@ -63,22 +81,28 @@ export class HaListBase extends LitElement {
     if (!this.hasAttribute("role") && this.hostRole) {
       this.setAttribute("role", this.hostRole);
     }
-    this._unbindKeys = tinykeys(this, {
-      ArrowDown: this._onForward,
-      ArrowUp: this._onBack,
-      Home: this._onHome,
-      End: this._onEnd,
-      Enter: this._onActivate,
-      Space: this._onActivate,
-    });
-    this.addEventListener("focusin", this._onFocusIn);
+    this._unbindKeys = tinykeys(
+      this,
+      {
+        ArrowDown: this._onForward,
+        ArrowUp: this._onBack,
+        Home: this._onHome,
+        End: this._onEnd,
+        PageDown: this._onPageDown,
+        PageUp: this._onPageUp,
+        Enter: this.onActivate,
+        Space: this.onActivate,
+      },
+      { ignore: this._ignoreKeyEvent }
+    );
+    this.addEventListener("focusin", this.onFocusIn);
     this.addEventListener(
       "ha-list-item-register",
-      this._onItemRegister as EventListener
+      this.onItemRegister as EventListener
     );
     this.addEventListener(
       "ha-list-item-unregister",
-      this._onItemUnregister as EventListener
+      this.onItemUnregister as EventListener
     );
   }
 
@@ -86,25 +110,23 @@ export class HaListBase extends LitElement {
     super.disconnectedCallback();
     this._unbindKeys?.();
     this._unbindKeys = undefined;
-    this.removeEventListener("focusin", this._onFocusIn);
+    this.removeEventListener("focusin", this.onFocusIn);
     this.removeEventListener(
       "ha-list-item-register",
-      this._onItemRegister as EventListener
+      this.onItemRegister as EventListener
     );
     this.removeEventListener(
       "ha-list-item-unregister",
-      this._onItemUnregister as EventListener
+      this.onItemUnregister as EventListener
     );
   }
 
   public focus(options?: FocusOptions) {
-    if (!this.items.length) {
+    if (!this.itemCount) {
       super.focus(options);
       return;
     }
-    this.focusItemAtIndex(
-      this._activeItemIndex >= 0 ? this._activeItemIndex : 0
-    );
+    this.focusItemAtIndex(this.activeItemIndex >= 0 ? this.activeItemIndex : 0);
   }
 
   public focusItemAtIndex(index: number) {
@@ -115,19 +137,54 @@ export class HaListBase extends LitElement {
   }
 
   public getActiveItemIndex(): number {
-    return this._activeItemIndex;
+    return this.activeItemIndex;
+  }
+
+  /**
+   * Move the active row, skipping rows that are not interactive or disabled.
+   * With `virtual-focus`, the row is marked `active` and scrolled into view;
+   * otherwise it is focused.
+   */
+  public moveActiveItem(target: HaListMoveTarget) {
+    if (!this.hasFocusableItem) {
+      return;
+    }
+    this.moveActiveTo(this._targetIndex(target));
+  }
+
+  /** Clear the active row, so no row is marked `active`. */
+  public clearActiveItem() {
+    this.activeItemIndex = -1;
+    this._activeItem = undefined;
+    this.applyActive(false);
   }
 
   public setActiveItemIndex(index: number, focusItem = false) {
-    if (!this._hasFocusableItem) {
-      this._activeItemIndex = -1;
+    if (!this.hasFocusableItem) {
+      this.activeItemIndex = -1;
       return;
     }
-    this._activeItemIndex = Math.max(0, Math.min(this.items.length - 1, index));
-    if (!this._isFocusable(this._activeItemIndex)) {
-      this._activeItemIndex = this._firstFocusableIndex;
+    this.activeItemIndex = Math.max(0, Math.min(this.itemCount - 1, index));
+    if (!this.isFocusable(this.activeItemIndex)) {
+      this.activeItemIndex = this.firstFocusableIndex;
     }
-    this._applyActive(focusItem);
+    this._activeItem = this.items[this.activeItemIndex];
+    this.applyActive(focusItem);
+  }
+
+  /**
+   * Run `updateListItems()` once after the current task, so rows that change
+   * their focusability together cause a single update.
+   */
+  public requestListItemsUpdate() {
+    if (this._listItemsUpdatePending) {
+      return;
+    }
+    this._listItemsUpdatePending = true;
+    queueMicrotask(() => {
+      this._listItemsUpdatePending = false;
+      this.updateListItems();
+    });
   }
 
   /**
@@ -135,22 +192,41 @@ export class HaListBase extends LitElement {
    * to layer in extra bookkeeping (e.g. selection state sync).
    */
   public updateListItems() {
-    this._recomputeFocusableIndexes();
-    if (
-      this._activeItemIndex >= this.items.length ||
-      !this._hasFocusableItem ||
-      this._activeItemIndex < 0
-    ) {
-      this._activeItemIndex = this._firstFocusableIndex;
+    this.recomputeFocusableIndexes();
+    // Follow the active row when rows are added, removed or reordered
+    const activeIndex = this._activeItem
+      ? this.items.indexOf(this._activeItem)
+      : -1;
+    if (activeIndex !== -1) {
+      this.activeItemIndex = activeIndex;
     }
-    this._applyActive(false);
+    if (this.virtualFocus) {
+      // Nothing is active until the owner starts navigating.
+      if (
+        this.activeItemIndex >= this.itemCount ||
+        !this.isFocusable(this.activeItemIndex)
+      ) {
+        this.activeItemIndex = -1;
+      }
+    } else if (!this.isFocusable(this.activeItemIndex)) {
+      // Also leave an active row that got disabled, so the list keeps a Tab stop
+      this.activeItemIndex = this.firstFocusableIndex;
+      if (activeIndex !== -1) {
+        this._activeItem = this.items[this.activeItemIndex];
+      }
+    }
+    if (!this._activeItem) {
+      this._activeItem = this.items[this.activeItemIndex];
+    }
+    this.applyActive(false);
   }
 
-  private _onItemRegister = (
+  protected onItemRegister = (
     ev: HASSDomEvent<HaListItemRegistrationDetail>
   ) => {
     ev.stopPropagation();
     const item = ev.detail.item;
+    ev.detail.list = this;
     if (this.items.includes(item)) {
       return;
     }
@@ -160,7 +236,7 @@ export class HaListBase extends LitElement {
     this.updateListItems();
   };
 
-  private _onItemUnregister = (
+  protected onItemUnregister = (
     ev: HASSDomEvent<HaListItemRegistrationDetail>
   ) => {
     ev.stopPropagation();
@@ -170,138 +246,244 @@ export class HaListBase extends LitElement {
     }
     this.items = this.items.filter((it) => it !== item);
     this.updateListItems();
+    if (item === this._activeItem) {
+      // A moved row registers again in the same task, a removed row does not
+      queueMicrotask(() => {
+        if (this._activeItem === item && !this.items.includes(item)) {
+          this._activeItem = undefined;
+          this.updateListItems();
+        }
+      });
+    }
   };
 
-  private _recomputeFocusableIndexes() {
+  protected recomputeFocusableIndexes() {
     let first = -1;
     let last = -1;
-    for (let i = 0; i < this.items.length; i++) {
-      if (this._isFocusable(i)) {
+    for (let i = 0; i < this.itemCount; i++) {
+      if (this.isFocusable(i)) {
         if (first === -1) {
           first = i;
         }
         last = i;
       }
     }
-    this._firstFocusableIndex = first;
-    this._lastFocusableIndex = last;
-    this._hasFocusableItem = first !== -1;
+    this.firstFocusableIndex = first;
+    this.lastFocusableIndex = last;
+    this.hasFocusableItem = first !== -1;
   }
 
-  protected render(): TemplateResult {
-    return html`<div part="base" class="base">
+  protected render(): TemplateResult | typeof nothing {
+    return html`<div part="base" class="base ha-scrollbar">
       <slot></slot>
     </div>`;
   }
 
-  private _isFocusable(index: number): boolean {
+  protected isFocusable(index: number): boolean {
     const item = this.items[index];
     return !!item && item.interactive && !item.disabled;
   }
 
-  private _applyActive(focusItem: boolean) {
+  /**
+   * Apply the active row. With `virtual-focus`, `focusItem` scrolls the active
+   * row into view instead of focusing it.
+   */
+  protected applyActive(focusItem: boolean) {
+    if (this.virtualFocus) {
+      this.items.forEach((item, i) => {
+        item.removeAttribute("tabindex");
+        item.active = i === this.activeItemIndex;
+      });
+      if (focusItem && this.activeItemIndex >= 0) {
+        this.items[this.activeItemIndex]?.scrollIntoView({ block: "nearest" });
+      }
+      return;
+    }
     this.items.forEach((item, i) => {
       if (!item.interactive || item.disabled) {
         item.removeAttribute("tabindex");
         return;
       }
-      item.tabIndex = i === this._activeItemIndex ? 0 : -1;
+      item.tabIndex = i === this.activeItemIndex ? 0 : -1;
     });
-    if (focusItem && this._activeItemIndex >= 0) {
-      this.items[this._activeItemIndex]?.focus();
+    if (focusItem && this.activeItemIndex >= 0) {
+      this.items[this.activeItemIndex]?.focus();
     }
   }
 
-  private _onFocusIn = (ev: FocusEvent) => {
+  protected onFocusIn = (ev: FocusEvent) => {
     const path = ev.composedPath();
     for (let i = 0; i < this.items.length; i++) {
       if (path.includes(this.items[i])) {
-        if (i !== this._activeItemIndex) {
-          this._activeItemIndex = i;
-          this._applyActive(false);
+        this._activeItem = this.items[i];
+        if (i !== this.activeItemIndex) {
+          this.activeItemIndex = i;
+          this.applyActive(false);
         }
         return;
       }
     }
   };
 
+  private _ignoreKeyEvent = (ev: KeyboardEvent): boolean => {
+    if (this.virtualFocus) {
+      return true;
+    }
+    if (ev.repeat && (ev.key === "Enter" || ev.key === " ")) {
+      return true;
+    }
+    if (ev.isComposing) {
+      return true;
+    }
+    // Let controls nested in a row handle their own Enter/Space
+    if (
+      (ev.key === "Enter" || ev.key === " ") &&
+      !(ev.composedPath()[0] as Element).hasAttribute?.("ha-list-item")
+    ) {
+      return true;
+    }
+    const target = ev.target as HTMLElement | null;
+    // Allow held arrow/Home/End to repeat for continuous navigation
+    return (
+      !!target &&
+      target !== ev.currentTarget &&
+      target.matches("[contenteditable],input,select,textarea")
+    );
+  };
+
   private _onForward = (ev: KeyboardEvent) => {
-    this._moveFocus(ev, this._stepIndex(this._activeItemIndex, 1));
+    this.moveFocus(ev, this._targetIndex("next"));
   };
 
   private _onBack = (ev: KeyboardEvent) => {
-    this._moveFocus(ev, this._stepIndex(this._activeItemIndex, -1));
+    this.moveFocus(ev, this._targetIndex("previous"));
   };
 
   private _onHome = (ev: KeyboardEvent) => {
-    this._moveFocus(ev, this._firstFocusableIndex);
+    this.moveFocus(ev, this._targetIndex("first"));
   };
 
   private _onEnd = (ev: KeyboardEvent) => {
-    this._moveFocus(ev, this._lastFocusableIndex);
+    this.moveFocus(ev, this._targetIndex("last"));
   };
 
-  private _onActivate = (ev: KeyboardEvent) => {
-    if (!this._isFocusable(this._activeItemIndex)) {
+  private _onPageDown = (ev: KeyboardEvent) => {
+    this.moveFocus(ev, this._targetIndex("next-page"));
+  };
+
+  private _onPageUp = (ev: KeyboardEvent) => {
+    this.moveFocus(ev, this._targetIndex("previous-page"));
+  };
+
+  private _targetIndex(target: HaListMoveTarget): number {
+    switch (target) {
+      case "next":
+        return this._stepIndex(this.activeItemIndex, 1);
+      case "previous":
+        return this._stepIndex(this.activeItemIndex, -1);
+      case "first":
+        return this.firstFocusableIndex;
+      case "last":
+        return this.lastFocusableIndex;
+      case "next-page":
+        return this._stepIndex(this.activeItemIndex, 1, this.getPageSize());
+      case "previous-page":
+        return this._stepIndex(this.activeItemIndex, -1, this.getPageSize());
+    }
+    return -1;
+  }
+
+  /**
+   * Number of items to jump for PageUp/PageDown. Defaults to 10 (per WAI-ARIA
+   * Authoring Practices: "moves focus a manageable number of nodes,
+   * typically 10"). Subclasses with a known viewport (e.g. virtualized lists)
+   * can override to use the visible page size.
+   */
+  protected getPageSize(): number {
+    return 10;
+  }
+
+  protected onActivate = (ev: KeyboardEvent) => {
+    if (!this.isFocusable(this.activeItemIndex)) {
       return;
     }
     ev.preventDefault();
-    const active = this.items[this._activeItemIndex];
+    const active = this.items[this.activeItemIndex];
     active.activate();
     fireEvent(this, "ha-list-activated", {
-      index: this._activeItemIndex,
+      index: this.activeItemIndex,
       item: active,
     });
   };
 
-  private _moveFocus(ev: KeyboardEvent, next: number) {
-    if (!this._hasFocusableItem || next < 0 || next === this._activeItemIndex) {
+  protected moveFocus(ev: KeyboardEvent, next: number) {
+    if (!this.hasFocusableItem) {
       return;
     }
     ev.preventDefault();
-    this._activeItemIndex = next;
-    this._applyActive(true);
+    this.moveActiveTo(next);
+  }
+
+  /** Make `next` the active row and focus it (or reveal it with `virtual-focus`). */
+  protected moveActiveTo(next: number) {
+    if (next < 0 || next === this.activeItemIndex) {
+      return;
+    }
+    this.activeItemIndex = next;
+    this._activeItem = this.items[next];
+    this.applyActive(true);
+  }
+
+  protected get itemCount(): number {
+    return this.items.length;
   }
 
   /**
    * Step from `from` by `delta`, skipping non-interactive and disabled items.
-   * Returns `from` when no other focusable item can be reached (honouring
-   * `wrapFocus`).
+   * Pass `count` > 1 to advance by multiple focusable items (PageUp/Down).
+   * Returns the last focusable index reached, or `from` when none is.
    */
-  private _stepIndex(from: number, delta: 1 | -1): number {
-    const n = this.items.length;
-    if (!n || !this._hasFocusableItem) {
+  private _stepIndex(from: number, delta: 1 | -1, count = 1): number {
+    const n = this.itemCount;
+    if (!n || !this.hasFocusableItem) {
       return from;
     }
+    let last = from;
     let i = from;
-    for (let step = 0; step < n; step++) {
+    let landed = 0;
+    for (let step = 0; step < n && landed < count; step++) {
       i += delta;
       if (i < 0 || i >= n) {
         if (!this.wrapFocus) {
-          return from;
+          return last;
         }
         i = (i + n) % n;
       }
-      if (this._isFocusable(i)) {
-        return i;
+      if (this.isFocusable(i)) {
+        last = i;
+        landed++;
       }
     }
-    return from;
+    return last;
   }
 
-  static styles: CSSResultGroup = css`
-    :host {
-      display: block;
-    }
-    .base {
-      display: flex;
-      flex-direction: column;
-      gap: var(--ha-list-gap, 0);
-      padding: var(--ha-list-padding, 0);
-      margin: 0;
-      list-style: none;
-    }
-  `;
+  static styles = [
+    haStyleScrollbar,
+    css`
+      :host {
+        display: block;
+      }
+      .base {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ha-list-gap, 0);
+        padding: var(--ha-list-padding, 0);
+        margin: 0;
+        list-style: none;
+        overflow-x: hidden;
+      }
+    `,
+  ];
 }
 
 declare global {

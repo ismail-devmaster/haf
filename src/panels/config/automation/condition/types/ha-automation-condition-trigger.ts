@@ -1,31 +1,33 @@
-import { consume } from "@lit/context";
-import { mdiAlert } from "@mdi/js";
+import { mdiAlert, mdiLinkVariantOff } from "@mdi/js";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
+import { consume } from "../../../../../common/decorators/consume";
 import { ensureArray } from "../../../../../common/array/ensure-array";
 import { fireEvent } from "../../../../../common/dom/fire_event";
+import { capitalizeFirstLetter } from "../../../../../common/string/capitalize-first-letter";
+import "../../../../../components/animation/ha-fade-in";
 import "../../../../../components/ha-alert";
-import "../../../../../components/ha-form/ha-form";
-import "../../../../../components/ha-select";
+import "../../../../../components/ha-button";
+import "../../../../../components/ha-spinner";
+import "../../../../../components/ha-svg-icon";
+import "../../../../../components/ha-trigger-icon";
 import "../../../../../components/item/ha-list-item-option";
-import type { HaListItemOption } from "../../../../../components/item/ha-list-item-option";
-import "../../../../../components/list/ha-list-selectable";
 import type { HaListSelectable } from "../../../../../components/list/ha-list-selectable";
-import type { HaListSelectedDetail } from "../../../../../components/list/types";
+import "../../../../../components/list/ha-list-selectable";
+import type { TriggerCondition } from "../../../../../data/automation";
 import {
-  automationConfigContext,
-  type AutomationConfig,
-  type TriggerCondition,
-} from "../../../../../data/automation";
-import {
-  getTriggerInfos,
-  type TriggerInfo,
-} from "../../../../../data/automation_i18n";
+  automationTriggerContext,
+  hasCustomTriggerId,
+  triggerOptionsResolved,
+  type AutomationTriggerContext,
+  type TriggerIdOption,
+} from "../../trigger/automation-trigger-id";
+import { describeTrigger } from "../../../../../data/automation_i18n";
 import { fullEntitiesContext } from "../../../../../data/context";
 import type { EntityRegistryEntry } from "../../../../../data/entity/entity_registry";
 import type { HomeAssistant } from "../../../../../types";
-import "../../ha-trigger-id-chip";
+import { rowStyles } from "../../styles";
 
 @customElement("ha-automation-condition-trigger")
 export class HaTriggerCondition extends LitElement {
@@ -36,24 +38,12 @@ export class HaTriggerCondition extends LitElement {
   @property({ type: Boolean }) public disabled = false;
 
   @state()
-  @consume({ context: automationConfigContext, subscribe: true })
-  private _automationConfig?: AutomationConfig;
+  @consume({ context: automationTriggerContext, subscribe: true })
+  private _triggers?: AutomationTriggerContext;
 
   @state()
   @consume({ context: fullEntitiesContext, subscribe: true })
   private _entityReg: EntityRegistryEntry[] = [];
-
-  private _triggerInfos = memoizeOne(
-    (
-      triggers: AutomationConfig["triggers"] | undefined,
-      entityReg: EntityRegistryEntry[]
-    ): TriggerInfo[] =>
-      getTriggerInfos(
-        triggers ? ensureArray(triggers) : undefined,
-        this.hass,
-        entityReg
-      )
-  );
 
   public static get defaultConfig(): TriggerCondition {
     return {
@@ -63,145 +53,287 @@ export class HaTriggerCondition extends LitElement {
   }
 
   protected render() {
-    const selectedIds = ensureArray(this.condition.id || []).filter(
-      (id): id is string => typeof id === "string" && id !== ""
-    );
+    const selectedIds = (ensureArray(this.condition.id) ?? []).filter(Boolean);
+    const triggerIdOptions = this._triggers?.options ?? [];
+    const missingIds = this._missingIds(this.condition.id, triggerIdOptions);
+    const status = this._triggers?.blueprintStatus;
+    const resolved = triggerOptionsResolved(this._triggers);
 
-    const triggerInfos = this._triggerInfos(
-      this._automationConfig?.triggers,
-      this._entityReg
-    );
-
-    if (!triggerInfos.length && !selectedIds.length) {
-      return html`
-        <ha-alert alert-type="info">
-          ${this.hass.localize(
+    if (!triggerIdOptions.length && !selectedIds.length) {
+      switch (status) {
+        case "loading":
+          return html`<ha-fade-in .delay=${500}>
+            <ha-spinner size="small"></ha-spinner>
+          </ha-fade-in>`;
+        case "failed":
+          return this.hass.localize(
+            "ui.panel.config.automation.editor.conditions.type.trigger.blueprint_triggers_unavailable"
+          );
+        case "loaded":
+          return this.hass.localize(
+            "ui.panel.config.automation.editor.conditions.type.trigger.blueprint_no_trigger_ids"
+          );
+        case undefined:
+          return this.hass.localize(
             "ui.panel.config.automation.editor.conditions.type.trigger.no_triggers"
-          )}
-        </ha-alert>
-      `;
+          );
+      }
     }
 
     return html`
-      <ha-list-selectable @ha-list-selected=${this._valueChanged} multi>
-        ${this._renderOptions(selectedIds, triggerInfos)}
+      ${
+        resolved && missingIds.length
+          ? html`<ha-alert alert-type="warning">
+              ${this.hass.localize(
+                "ui.panel.config.automation.editor.conditions.type.trigger.missing_triggers"
+              )}
+            </ha-alert>`
+          : nothing
+      }
+      ${
+        triggerIdOptions.some((option) => option.duplicate)
+          ? html`<ha-alert alert-type="warning">
+              ${this.hass.localize(
+                "ui.panel.config.automation.editor.conditions.type.trigger.duplicate_ids"
+              )}
+              <ha-button
+                slot="action"
+                size="s"
+                variant="warning"
+                appearance="filled"
+                .disabled=${this.disabled}
+                @click=${this._fixDuplicateIds}
+              >
+                ${this.hass.localize(
+                  "ui.panel.config.automation.editor.conditions.type.trigger.duplicate_ids_fix"
+                )}
+              </ha-button>
+            </ha-alert>`
+          : nothing
+      }
+      <ha-list-selectable
+        multi
+        controlled
+        @ha-list-item-selected=${this._handleSelected}
+        @ha-list-item-deselected=${this._handleDeselected}
+      >
+        ${triggerIdOptions.map(
+          (option) => html`
+            <ha-list-item-option
+              .value=${option.id}
+              .selected=${selectedIds.includes(option.id)}
+              .disabled=${this.disabled}
+              appearance="checkbox"
+            >
+              <span slot="start" class="trigger-row-leading">
+                ${
+                  this._triggers?.showIndices
+                    ? html`<span class="trigger-index-badge"
+                        >${option.index + 1}</span
+                      >`
+                    : nothing
+                }
+                <ha-trigger-icon
+                  .trigger=${
+                    "trigger" in option.trigger ? option.trigger.trigger : ""
+                  }
+                ></ha-trigger-icon>
+              </span>
+              <span slot="headline">
+                ${capitalizeFirstLetter(
+                  describeTrigger(option.trigger, this.hass, this._entityReg)
+                )}
+              </span>
+              ${
+                option.duplicate ||
+                hasCustomTriggerId(option) ||
+                !this._triggers?.showIndices
+                  ? html`<span
+                      slot="supporting-text"
+                      class="trigger-id ${option.duplicate ? "duplicate" : ""}"
+                    >
+                      ${
+                        option.duplicate
+                          ? html`<ha-svg-icon
+                              .path=${mdiAlert}
+                              role="img"
+                              aria-label=${this.hass.localize(
+                                "ui.panel.config.automation.editor.conditions.type.trigger.duplicate_id"
+                              )}
+                            ></ha-svg-icon>`
+                          : nothing
+                      }
+                      <span class="trigger-id-text" title=${option.id}
+                        >${option.id}</span
+                      >
+                    </span>`
+                  : nothing
+              }
+            </ha-list-item-option>
+          `
+        )}
+        ${missingIds.map(
+          (id) => html`
+            <ha-list-item-option
+              .value=${id}
+              .selected=${true}
+              .disabled=${this.disabled}
+              appearance="checkbox"
+            >
+              ${
+                resolved
+                  ? html`<span slot="start" class="missing-trigger-badge">
+                      <ha-svg-icon .path=${mdiLinkVariantOff}></ha-svg-icon>
+                      <span class="missing-trigger-id">${id}</span>
+                    </span>`
+                  : nothing
+              }
+              <span slot="headline">
+                ${
+                  resolved
+                    ? this.hass.localize(
+                        "ui.panel.config.automation.editor.conditions.type.trigger.missing_trigger"
+                      )
+                    : id
+                }
+              </span>
+            </ha-list-item-option>
+          `
+        )}
       </ha-list-selectable>
     `;
   }
 
-  private _renderOptions(selectedIds: string[], triggerInfos: TriggerInfo[]) {
-    const unknownTriggerIds = selectedIds.filter(
-      (id) => !triggerInfos.some((info) => info.id === id)
-    );
-
-    const alertIcon = html`<ha-svg-icon
-      slot="start"
-      .path=${mdiAlert}
-    ></ha-svg-icon>`;
-
-    return html`
-      ${unknownTriggerIds.map(
-        (id) => html`
-          <ha-list-item-option
-            .value=${id}
-            .selected=${true}
-            appearance="checkbox"
-          >
-            <div class="option" slot="headline">
-              <ha-trigger-id-chip
-                id=${`trigger-${id}`}
-                warning
-                .triggerId=${id}
-              >
-                ${alertIcon}
-              </ha-trigger-id-chip>
-              ${this.hass.localize("state.default.unavailable")}
-              <ha-tooltip .for=${`trigger-${id}`}>
-                ${this.hass.localize(
-                  "ui.panel.config.automation.editor.conditions.type.trigger.unavailable_info",
-                  { id: html`<b>${id}</b>` }
-                )}
-              </ha-tooltip>
-            </div>
-          </ha-list-item-option>
-        `
-      )}
-      ${triggerInfos.map(
-        (info) => html`
-          <ha-list-item-option
-            .value=${info.id}
-            .selected=${selectedIds.includes(info.id)}
-            appearance="checkbox"
-          >
-            <div class="option" slot="headline">
-              <ha-trigger-id-chip
-                id=${`trigger-${info.id}`}
-                .warning=${info.count > 1}
-                .triggerId=${info.id}
-              >
-                ${info.count > 1 ? alertIcon : nothing}
-              </ha-trigger-id-chip>
-              ${info.label}${info.count > 1
-                ? html`<ha-tooltip .for=${`trigger-${info.id}`}
-                    >${this.hass.localize(
-                      "ui.panel.config.automation.editor.conditions.type.trigger.duplicated_info"
-                    )}</ha-tooltip
-                  >`
-                : nothing}
-            </div>
-          </ha-list-item-option>
-        `
-      )}
-    `;
-  }
-
-  private _valueChanged(ev: CustomEvent<HaListSelectedDetail>): void {
+  private _handleSelected = (ev: CustomEvent<number>) => {
     ev.stopPropagation();
-    if (
-      !ev.detail.diff ||
-      (!ev.detail.diff?.added.size && !ev.detail.diff?.removed.size)
-    ) {
+    const list = ev.currentTarget as HaListSelectable;
+    const item = list.items[ev.detail] as HTMLElement & { value?: string };
+    const id = item?.value;
+    if (!id) {
       return;
     }
+    this._selectId(id, true);
+  };
 
-    const ids = ensureArray(this.condition.id || []);
-
-    const valueSet = ev.detail.diff.added.size
-      ? ev.detail.diff.added
-      : ev.detail.diff.removed;
-
-    const index = valueSet.values().next().value;
-
-    if (index === undefined) {
+  private _handleDeselected = (ev: CustomEvent<number>) => {
+    ev.stopPropagation();
+    const list = ev.currentTarget as HaListSelectable;
+    const item = list.items[ev.detail] as HTMLElement & { value?: string };
+    const id = item?.value;
+    if (!id) {
       return;
     }
-    const triggerId = (
-      (ev.currentTarget as HaListSelectable).items[index] as HaListItemOption
-    ).value;
-    if (triggerId === undefined || triggerId === "") {
+    this._selectId(id, false);
+  };
+
+  private _selectId(id: string, checked: boolean) {
+    const ids = (ensureArray(this.condition.id) ?? []).filter(Boolean);
+    const selectedIds = checked
+      ? ids.includes(id)
+        ? ids
+        : [...ids, id]
+      : ids.filter((_id) => _id !== id);
+    if (this._triggers?.select(this.condition, selectedIds)) {
       return;
     }
-
-    if (ev.detail.diff.added.size) {
-      ids.push(triggerId);
-    } else {
-      const removeIndex = ids.indexOf(triggerId);
-      if (removeIndex > -1) {
-        ids.splice(removeIndex, 1);
-      }
-    }
-
-    fireEvent(this, "value-changed", { value: { ...this.condition, id: ids } });
+    fireEvent(this, "value-changed", {
+      value: {
+        ...this.condition,
+        id: selectedIds.length ? selectedIds : "",
+      },
+    });
   }
 
-  static styles = css`
-    .option {
-      display: flex;
-      align-items: center;
-      gap: var(--ha-space-1);
-      color: var(--ha-color-on-neutral-normal);
+  private _fixDuplicateIds = () => {
+    if (!this.disabled) {
+      return this._triggers?.fixDuplicateIds();
     }
-  `;
+    return undefined;
+  };
+
+  private _missingIds = memoizeOne(
+    (ids: TriggerCondition["id"], triggerIdOptions: TriggerIdOption[]) => {
+      const availableIds = new Set(triggerIdOptions.map((option) => option.id));
+      return (ensureArray(ids) ?? []).filter(
+        (id) => id && !availableIds.has(id)
+      );
+    }
+  );
+
+  static styles = [
+    rowStyles,
+    css`
+      ha-alert {
+        display: block;
+        margin-bottom: var(--ha-space-4);
+      }
+      ha-list-selectable {
+        --ha-list-gap: var(--ha-space-2);
+        --ha-list-padding: 0;
+      }
+      ha-list-item-option {
+        --ha-list-item-padding: var(--ha-space-1) var(--ha-space-2);
+      }
+      .trigger-row-leading {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--ha-space-2);
+      }
+      ha-trigger-icon {
+        --mdc-icon-size: 20px;
+        color: var(--ha-color-on-neutral-quiet);
+      }
+      .missing-trigger-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--ha-space-1);
+        padding: 2px var(--ha-space-2);
+        border-radius: var(--ha-border-radius-md);
+        background: var(--ha-color-fill-warning-normal-resting);
+        color: var(--ha-color-on-warning-normal);
+        line-height: 18px;
+      }
+      .missing-trigger-badge ha-svg-icon {
+        --mdc-icon-size: 18px;
+        flex-shrink: 0;
+      }
+      .missing-trigger-id {
+        font-family: var(--ha-font-family-code);
+        font-size: var(--ha-font-size-s);
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .trigger-id {
+        display: flex;
+        align-items: center;
+        gap: var(--ha-space-1);
+        min-width: 0;
+      }
+      .trigger-id.duplicate {
+        color: var(--ha-color-on-warning-normal);
+      }
+      .trigger-id ha-svg-icon {
+        --mdc-icon-size: 16px;
+        flex-shrink: 0;
+      }
+      .trigger-id-text {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-family: var(--ha-font-family-code);
+        font-size: var(--ha-font-size-s);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* Reveal the full ID to keyboard users, who cannot hover for the title. */
+      ha-list-item-option:focus-visible .trigger-id-text {
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+    `,
+  ];
 }
 
 declare global {

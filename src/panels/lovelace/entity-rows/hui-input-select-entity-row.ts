@@ -38,13 +38,12 @@ class HuiInputSelectEntityRow extends LitElement implements LovelaceRow {
     }
 
     const stateObj = this.hass.states[this._config.entity] as
-      | InputSelectEntity
-      | undefined;
+      InputSelectEntity | undefined;
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this._config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this.hass.localize, this.hass.config)}
         </hui-warning>
       `;
     }
@@ -96,7 +95,7 @@ class HuiInputSelectEntityRow extends LitElement implements LovelaceRow {
 
     forwardHaptic(this, "light");
 
-    setInputSelectOption(this.hass!, stateObj.entity_id, option);
+    setInputSelectOption(this.hass!.callService, stateObj.entity_id, option);
   }
 }
 

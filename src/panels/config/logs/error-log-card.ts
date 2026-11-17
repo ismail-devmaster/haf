@@ -11,6 +11,7 @@ import {
   mdiWrap,
   mdiWrapDisabled,
 } from "@mdi/js";
+import type { UnsubscribeFunc } from "home-assistant-js-websocket";
 import {
   css,
   type CSSResultGroup,
@@ -23,6 +24,7 @@ import {
 import { classMap } from "lit/directives/class-map";
 
 import { IntersectionController } from "@lit-labs/observers/intersection-controller.js";
+import type { ContextType } from "@lit/context";
 import { customElement, property, query, state } from "lit/decorators";
 import "../../../components/chips/ha-assist-chip";
 import "../../../components/ha-alert";
@@ -33,19 +35,33 @@ import "../../../components/ha-card";
 import "../../../components/ha-dropdown";
 import "../../../components/ha-dropdown-item";
 import "../../../components/ha-icon-button";
-import "../../../components/ha-spinner";
 import "../../../components/ha-svg-icon";
+import "../../../components/skeleton/ha-skeleton-log";
 
 import { getSignedPath } from "../../../data/auth";
 
 import { isComponentLoaded } from "../../../common/config/is_component_loaded";
 import { atLeastVersion } from "../../../common/config/version";
+import { consume } from "../../../common/decorators/consume";
+import { consumeLocalize } from "../../../common/decorators/consume-context-entry";
 import { fireEvent, type HASSDomEvent } from "../../../common/dom/fire_event";
 import type { LocalizeFunc } from "../../../common/translations/localize";
 import { debounce } from "../../../common/util/debounce";
 import type { HaDropdownSelectEvent } from "../../../components/ha-dropdown";
 import type { ConnectionStatus } from "../../../data/connection-status";
-import { fetchErrorLog, getErrorLogDownloadUrl } from "../../../data/error_log";
+import {
+  apiContext,
+  configContext,
+  connectionContext,
+  internationalizationContext,
+} from "../../../data/context";
+import {
+  downloadIntegrationLog,
+  fetchErrorLog,
+  getCoreLogFileDownloadUnavailableReason,
+  getErrorLogDownloadUrl,
+  subscribeIntegrationLog,
+} from "../../../data/error_log";
 import { extractApiErrorMessage } from "../../../data/hassio/common";
 import {
   fetchHassioBoots,
@@ -55,26 +71,57 @@ import {
   fetchHassioLogsLegacy,
   getHassioLogDownloadUrl,
 } from "../../../data/hassio/supervisor";
-import type { HomeAssistant } from "../../../types";
+import { domainToName } from "../../../data/integration";
+import { LogStreamMerger } from "../../../data/log_backlog";
+import { formatListWithAnds } from "../../../common/string/format-list";
+import { haStyleScrollbar } from "../../../resources/styles";
+import type {
+  HomeAssistantApi,
+  HomeAssistantConfig,
+  HomeAssistantConnection,
+} from "../../../types";
 import { fileDownload } from "../../../util/file_download";
 import { showDownloadLogsDialog } from "./show-dialog-download-logs";
 
 const NUMBER_OF_LINES = 100;
+// Matches the live log dialog on the integration page
+const INTEGRATION_LOG_LINE_LIMIT = 5000;
+// Every subscription gets its lines of a log flush in a message of its own
+const INTEGRATION_LOG_MERGE_DELAY = 100;
+
+// Lines shown around each search match, as a failure's cause is often logged
+// on the lines next to its summary.
+const SEARCH_CONTEXT_LINES = 3;
 
 @customElement("error-log-card")
 class ErrorLogCard extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
-  @property({ attribute: false }) public localizeFunc?: LocalizeFunc<any>;
-
   @property() public filter = "";
 
   @property() public header?: string;
 
   @property() public provider?: string;
 
+  @property({ attribute: false }) public integrations?: string[];
+
   @property({ attribute: "allow-switch", type: Boolean }) public allowSwitch =
     false;
+
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
+
+  @consume({ context: internationalizationContext, subscribe: true })
+  private _i18n!: ContextType<typeof internationalizationContext>;
+
+  @consume({ context: apiContext, subscribe: true })
+  private _api!: HomeAssistantApi;
+
+  @state()
+  @consume({ context: configContext, subscribe: true })
+  private _config!: HomeAssistantConfig;
+
+  @consume({ context: connectionContext, subscribe: true })
+  private _connection!: HomeAssistantConnection;
 
   @query(".error-log") private _logElement?: HTMLElement;
 
@@ -103,6 +150,9 @@ class ErrorLogCard extends LitElement {
 
   @state() private _logStreamAborter?: AbortController;
 
+  // Responses of an earlier load are ignored once the log source changes
+  private _loadId = 0;
+
   @state() private _streamSupported?: boolean;
 
   @state() private _loadingState: "loading" | "empty" | "loaded" = "loading";
@@ -121,77 +171,111 @@ class ErrorLogCard extends LitElement {
 
   @state() private _wrapLines = true;
 
+  @state() private _integrationLive = false;
+
+  private _integrationUnsubs?: Promise<UnsubscribeFunc>[];
+
+  private _integrationMergeTimeout?: number;
+
+  private _integrationLines: string[] = [];
+
   protected render(): TemplateResult {
-    const streaming =
-      this._streamSupported &&
-      this.provider &&
-      isComponentLoaded(this.hass.config, "hassio") &&
-      this._loadingState !== "loading";
+    const integrationLog = this._isIntegrationLog();
 
-    const hasBoots = this._streamSupported && Array.isArray(this._boots);
+    const streaming = integrationLog
+      ? this._integrationLive
+      : this._streamSupported &&
+        this.provider &&
+        isComponentLoaded(this._config.config, "hassio") &&
+        this._loadingState !== "loading";
 
-    const localize = this.localizeFunc || this.hass.localize;
+    const hasBoots =
+      !integrationLog && this._streamSupported && Array.isArray(this._boots);
+
+    const localize = this._localize;
+    const logFileDownloadUnavailableReason =
+      !integrationLog && (!this.provider || this.provider === "core")
+        ? getCoreLogFileDownloadUnavailableReason(this._config)
+        : undefined;
+
     return html`
       <div class="error-log-intro">
-        ${this._error
-          ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
-          : nothing}
+        ${
+          this._error
+            ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
+            : nothing
+        }
         <ha-card outlined>
           <div class="header">
             <h1 class="card-header">
               ${this.header || localize("ui.panel.config.logs.show_full_logs")}
             </h1>
             <div class="action-buttons">
-              ${hasBoots && this._showBootsSelect
-                ? html`
-                    <ha-dropdown @wa-select=${this._handleOverflowAction}>
-                      <ha-assist-chip
-                        slot="trigger"
-                        .title=${localize(
-                          "ui.panel.config.logs.haos_boots_title"
-                        )}
-                        .label=${this._boot === 0
-                          ? localize("ui.panel.config.logs.current")
-                          : this._boot === -1
-                            ? localize("ui.panel.config.logs.previous")
-                            : localize("ui.panel.config.logs.startups_ago", {
-                                boot: this._boot * -1,
-                              })}
-                      >
-                        <ha-svg-icon
-                          slot="trailing-icon"
-                          .path=${mdiMenuDown}
-                        ></ha-svg-icon
-                      ></ha-assist-chip>
-
-                      ${this._boots!.map(
-                        (boot) => html`
-                          <ha-dropdown-item
-                            .value=${`boot_${boot}`}
-                            .selected=${boot === this._boot}
-                          >
-                            ${boot === 0
+              ${
+                hasBoots && this._showBootsSelect
+                  ? html`
+                      <ha-dropdown @wa-select=${this._handleOverflowAction}>
+                        <ha-assist-chip
+                          slot="trigger"
+                          .title=${localize(
+                            "ui.panel.config.logs.haos_boots_title"
+                          )}
+                          .label=${
+                            this._boot === 0
                               ? localize("ui.panel.config.logs.current")
-                              : boot === -1
+                              : this._boot === -1
                                 ? localize("ui.panel.config.logs.previous")
                                 : localize(
                                     "ui.panel.config.logs.startups_ago",
-                                    { boot: boot * -1 }
-                                  )}
-                          </ha-dropdown-item>
-                          ${boot === 0
-                            ? html`<wa-divider></wa-divider>`
-                            : nothing}
-                        `
-                      )}
-                    </ha-dropdown>
-                  `
-                : nothing}
-              <ha-icon-button
-                .path=${mdiDownload}
-                @click=${this._downloadLogs}
-                .label=${localize("ui.panel.config.logs.download_logs")}
-              ></ha-icon-button>
+                                    {
+                                      boot: this._boot * -1,
+                                    }
+                                  )
+                          }
+                        >
+                          <ha-svg-icon
+                            slot="trailing-icon"
+                            .path=${mdiMenuDown}
+                          ></ha-svg-icon
+                        ></ha-assist-chip>
+
+                        ${this._boots!.map(
+                          (boot) => html`
+                            <ha-dropdown-item
+                              .value=${`boot_${boot}`}
+                              .selected=${boot === this._boot}
+                            >
+                              ${
+                                boot === 0
+                                  ? localize("ui.panel.config.logs.current")
+                                  : boot === -1
+                                    ? localize("ui.panel.config.logs.previous")
+                                    : localize(
+                                        "ui.panel.config.logs.startups_ago",
+                                        { boot: boot * -1 }
+                                      )
+                              }
+                            </ha-dropdown-item>
+                            ${
+                              boot === 0
+                                ? html`<wa-divider></wa-divider>`
+                                : nothing
+                            }
+                          `
+                        )}
+                      </ha-dropdown>
+                    `
+                  : nothing
+              }
+              ${
+                logFileDownloadUnavailableReason
+                  ? nothing
+                  : html`<ha-icon-button
+                      .path=${mdiDownload}
+                      @click=${this._downloadLogs}
+                      .label=${localize("ui.panel.config.logs.download_logs")}
+                    ></ha-icon-button>`
+              }
               <ha-icon-button
                 .path=${this._wrapLines ? mdiWrapDisabled : mdiWrap}
                 @click=${this._toggleLineWrap}
@@ -199,71 +283,116 @@ class ErrorLogCard extends LitElement {
                   `ui.panel.config.logs.${this._wrapLines ? "full_width" : "wrap_lines"}`
                 )}
               ></ha-icon-button>
-              ${!streaming || this._error
-                ? html`<ha-icon-button
-                    .path=${mdiRefresh}
-                    @click=${this._handleRefresh}
-                    .label=${localize("ui.common.refresh")}
-                  ></ha-icon-button>`
-                : nothing}
-              ${(this.allowSwitch && this.provider === "core") || hasBoots
-                ? html`
-                    <ha-dropdown @wa-select=${this._handleOverflowAction}>
-                      <ha-icon-button
-                        slot="trigger"
-                        .path=${mdiDotsVertical}
-                        .label=${localize("ui.common.menu")}
-                      ></ha-icon-button>
-                      ${this.allowSwitch && this.provider === "core"
-                        ? html`<ha-dropdown-item value="switch-log-view">
-                            <ha-svg-icon
-                              slot="icon"
-                              .path=${mdiFolderTextOutline}
-                            ></ha-svg-icon>
-                            ${this.hass.localize(
-                              "ui.panel.config.logs.show_condensed_logs"
-                            )}
-                          </ha-dropdown-item>`
-                        : nothing}
-                      ${hasBoots
-                        ? html`<ha-dropdown-item value="toggle-boots">
-                            <ha-svg-icon
-                              slot="icon"
-                              .path=${mdiFormatListNumbered}
-                            ></ha-svg-icon>
-                            ${localize(
-                              `ui.panel.config.logs.${this._showBootsSelect ? "hide" : "show"}_haos_boots`
-                            )}
-                          </ha-dropdown-item>`
-                        : nothing}
-                    </ha-dropdown>
-                  `
-                : nothing}
+              ${
+                !streaming || this._error
+                  ? html`<ha-icon-button
+                      .path=${mdiRefresh}
+                      @click=${this._handleRefresh}
+                      .label=${localize("ui.common.refresh")}
+                    ></ha-icon-button>`
+                  : nothing
+              }
+              ${
+                (this.allowSwitch && this.provider === "core") || hasBoots
+                  ? html`
+                      <ha-dropdown @wa-select=${this._handleOverflowAction}>
+                        <ha-icon-button
+                          slot="trigger"
+                          .path=${mdiDotsVertical}
+                          .label=${localize("ui.common.menu")}
+                        ></ha-icon-button>
+                        ${
+                          this.allowSwitch && this.provider === "core"
+                            ? html`<ha-dropdown-item value="switch-log-view">
+                                <ha-svg-icon
+                                  slot="icon"
+                                  .path=${mdiFolderTextOutline}
+                                ></ha-svg-icon>
+                                ${this._localize(
+                                  "ui.panel.config.logs.show_condensed_logs"
+                                )}
+                              </ha-dropdown-item>`
+                            : nothing
+                        }
+                        ${
+                          hasBoots
+                            ? html`<ha-dropdown-item value="toggle-boots">
+                                <ha-svg-icon
+                                  slot="icon"
+                                  .path=${mdiFormatListNumbered}
+                                ></ha-svg-icon>
+                                ${localize(
+                                  `ui.panel.config.logs.${this._showBootsSelect ? "hide" : "show"}_haos_boots`
+                                )}
+                              </ha-dropdown-item>`
+                            : nothing
+                        }
+                      </ha-dropdown>
+                    `
+                  : nothing
+              }
             </div>
           </div>
-          <div class="card-content error-log">
+          <div class="card-content error-log ha-scrollbar">
             <div id="scroll-top-marker"></div>
-            ${this._loadingPrevState === "loading"
-              ? html`<div class="loading-old">
-                  <ha-spinner></ha-spinner>
-                </div>`
-              : nothing}
-            ${this._loadingState === "loading"
-              ? html`<div>${localize("ui.panel.config.logs.loading_log")}</div>`
-              : this._loadingState === "empty"
-                ? html`<div>${localize("ui.panel.config.logs.no_errors")}</div>`
-                : nothing}
-            ${this._loadingState === "loaded" &&
-            this.filter &&
-            this._noSearchResults
-              ? html`<div>
-                  ${localize("ui.panel.config.logs.no_issues_search", {
-                    term: this.filter,
-                  })}
-                </div>`
-              : nothing}
+            ${
+              this._loadingPrevState === "loading"
+                ? html`<ha-skeleton-log
+                    lines="3"
+                    .label=${localize("ui.panel.config.logs.loading_log")}
+                  ></ha-skeleton-log>`
+                : nothing
+            }
+            ${
+              logFileDownloadUnavailableReason
+                ? html`<ha-alert alert-type="warning">
+                    ${localize(
+                      `ui.panel.config.logs.log_file_disabled.${logFileDownloadUnavailableReason}`
+                    )}
+                  </ha-alert>`
+                : this._loadingState === "loading"
+                  ? // Lines kept while reconnecting stay visible, unless the search hides them all
+                    this._ansiToHtmlElement?.hasLines &&
+                    !(this.filter && this._noSearchResults)
+                    ? nothing
+                    : html`<ha-skeleton-log
+                        .label=${localize("ui.panel.config.logs.loading_log")}
+                      ></ha-skeleton-log>`
+                  : this._loadingState === "empty"
+                    ? html`<div>
+                        ${
+                          integrationLog
+                            ? localize(
+                                "ui.panel.config.logs.integration_log_waiting",
+                                {
+                                  integration: formatListWithAnds(
+                                    this._i18n.locale,
+                                    this.integrations!.map((domain) =>
+                                      domainToName(this._localize, domain)
+                                    )
+                                  ),
+                                }
+                              )
+                            : localize("ui.panel.config.logs.no_errors")
+                        }
+                      </div>`
+                    : nothing
+            }
+            ${
+              this._loadingState === "loaded" &&
+              this.filter &&
+              this._noSearchResults
+                ? html`<div>
+                    ${localize("ui.panel.config.logs.no_issues_search", {
+                      term: this.filter,
+                    })}
+                  </div>`
+                : nothing
+            }
             <ha-ansi-to-html
               ?wrap-disabled=${!this._wrapLines}
+              .contextLines=${SEARCH_CONTEXT_LINES}
+              .expandLabel=${this._expandLabel}
             ></ha-ansi-to-html>
             <div id="scroll-bottom-marker"></div>
           </div>
@@ -274,7 +403,7 @@ class ErrorLogCard extends LitElement {
                   !this._scrolledToBottomController.value) ||
                 false,
             })}"
-            size="small"
+            size="s"
             appearance="filled"
             @click=${this._scrollToBottom}
           >
@@ -285,12 +414,14 @@ class ErrorLogCard extends LitElement {
             ${localize("ui.panel.config.logs.scroll_down_button")}
             <ha-svg-icon .path=${mdiArrowCollapseDown} slot="end"></ha-svg-icon>
           </ha-button>
-          ${streaming && this._boot === 0 && !this._error
-            ? html`<div class="live-indicator">
-                <ha-svg-icon path=${mdiCircle}></ha-svg-icon>
-                Live
-              </div>`
-            : nothing}
+          ${
+            streaming && this._boot === 0 && !this._error
+              ? html`<div class="live-indicator">
+                  <ha-svg-icon path=${mdiCircle}></ha-svg-icon>
+                  ${localize("ui.panel.config.logs.live")}
+                </div>`
+              : nothing
+          }
         </ha-card>
       </div>
     `;
@@ -300,7 +431,7 @@ class ErrorLogCard extends LitElement {
     super.willUpdate(changedProps);
     if (!this.hasUpdated) {
       this._streamSupported = atLeastVersion(
-        this.hass.config.version,
+        this._config.config.version,
         2024,
         11
       );
@@ -313,10 +444,10 @@ class ErrorLogCard extends LitElement {
         this._handleConnectionStatus
       );
 
-      this.hass.loadFragmentTranslation("config");
+      this._i18n.loadFragmentTranslation("config");
     }
 
-    if (changedProps.has("provider")) {
+    if (changedProps.has("provider") || changedProps.has("integrations")) {
       this._boot = 0;
       this._loadLogs();
     }
@@ -338,8 +469,16 @@ class ErrorLogCard extends LitElement {
       this._newLogsIndicator = false;
     }
 
-    if (changedProps.has("filter")) {
+    if (
+      changedProps.has("filter") ||
+      (changedProps.has("_loadingState") &&
+        this._loadingState === "loaded" &&
+        this.filter)
+    ) {
       this._debounceSearch();
+    } else if (changedProps.has("_localize") && this.filter) {
+      // The hidden lines buttons are built outside Lit, so relabel them.
+      this._ansiToHtmlElement?.filterLines(this.filter);
     }
 
     if (
@@ -353,12 +492,27 @@ class ErrorLogCard extends LitElement {
     }
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    // The settings panel is kept while away, the log stopped when it was
+    // detached
+    if (this.hasUpdated) {
+      window.addEventListener(
+        "connection-status",
+        this._handleConnectionStatus
+      );
+      this._loadLogs();
+    }
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
 
     if (this._logStreamAborter) {
       this._logStreamAborter.abort();
     }
+
+    this._unsubscribeIntegrationLog();
 
     window.removeEventListener(
       "connection-status",
@@ -367,6 +521,21 @@ class ErrorLogCard extends LitElement {
   }
 
   private async _downloadLogs(): Promise<void> {
+    if (this._isIntegrationLog()) {
+      downloadIntegrationLog(
+        this.integrations!.join("_"),
+        this._integrationLines
+      );
+      return;
+    }
+
+    if (
+      (!this.provider || this.provider === "core") &&
+      getCoreLogFileDownloadUnavailableReason(this._config)
+    ) {
+      return;
+    }
+
     if (this._streamSupported && this.provider) {
       showDownloadLogsDialog(this, {
         header: this.header,
@@ -379,17 +548,19 @@ class ErrorLogCard extends LitElement {
       const downloadUrl =
         this.provider && this.provider !== "core"
           ? getHassioLogDownloadUrl(this.provider)
-          : getErrorLogDownloadUrl(this.hass);
+          : getErrorLogDownloadUrl(this._config);
       const logFileName =
         this.provider && this.provider !== "core"
           ? `${this.provider}_${timeString}.log`
           : `home-assistant_${timeString}.log`;
-      const signedUrl = await getSignedPath(this.hass, downloadUrl);
+
+      const signedUrl = await getSignedPath(this._api, downloadUrl);
       fileDownload(signedUrl.path, logFileName);
     }
   }
 
   private async _loadLogs(retry = false): Promise<void> {
+    const loadId = ++this._loadId;
     this._error = undefined;
     this._loadingState = "loading";
     this._numberOfLines = retry ? (this._numberOfLines ?? 0) : 0;
@@ -400,9 +571,28 @@ class ErrorLogCard extends LitElement {
       this._ansiToHtmlElement?.clear();
     }
 
+    this._unsubscribeIntegrationLog();
+
+    if (this._isIntegrationLog()) {
+      if (this._logStreamAborter) {
+        this._logStreamAborter.abort();
+        this._logStreamAborter = undefined;
+      }
+      this._subscribeIntegrationLog();
+      return;
+    }
+
+    if (
+      (!this.provider || this.provider === "core") &&
+      getCoreLogFileDownloadUnavailableReason(this._config)
+    ) {
+      this._loadingState = "loaded";
+      return;
+    }
+
     const streamLogs =
       this._streamSupported &&
-      isComponentLoaded(this.hass.config, "hassio") &&
+      isComponentLoaded(this._config.config, "hassio") &&
       this.provider;
 
     try {
@@ -417,12 +607,15 @@ class ErrorLogCard extends LitElement {
         if (!retry) {
           // check if there are any logs at all
           const testResponse = await fetchHassioLogs(
-            this.hass,
+            this._api,
             this.provider!,
             `entries=:-1:`,
             this._boot
           );
           const testLogs = await testResponse.text();
+          if (loadId !== this._loadId) {
+            return;
+          }
           if (!testLogs.trim()) {
             this._loadingState = "empty";
           }
@@ -432,7 +625,7 @@ class ErrorLogCard extends LitElement {
 
         if (retry && this._firstCursor) {
           response = await fetchHassioLogsFollowSkip(
-            this.hass,
+            this._api,
             this.provider!,
             this._logStreamAborter.signal,
             this._firstCursor,
@@ -442,12 +635,16 @@ class ErrorLogCard extends LitElement {
           );
         } else {
           response = await fetchHassioLogsFollow(
-            this.hass,
+            this._api,
             this.provider!,
             this._logStreamAborter.signal,
             NUMBER_OF_LINES,
             this._boot
           );
+        }
+
+        if (loadId !== this._loadId) {
+          return;
         }
 
         if (response.headers.has("X-First-Cursor")) {
@@ -511,10 +708,15 @@ class ErrorLogCard extends LitElement {
         // fallback to old method
         this._streamSupported = false;
         let logs = "";
-        if (isComponentLoaded(this.hass.config, "hassio") && this.provider) {
-          logs = await fetchHassioLogsLegacy(this.hass, this.provider);
+
+        if (isComponentLoaded(this._config.config, "hassio") && this.provider) {
+          logs = await fetchHassioLogsLegacy(this._api, this.provider);
         } else {
-          logs = await fetchErrorLog(this.hass);
+          logs = await fetchErrorLog(this._api);
+        }
+
+        if (loadId !== this._loadId) {
+          return;
         }
 
         if (logs) {
@@ -524,7 +726,7 @@ class ErrorLogCard extends LitElement {
         }
       }
     } catch (err: any) {
-      if (err.name === "AbortError") {
+      if (err.name === "AbortError" || loadId !== this._loadId) {
         return;
       }
 
@@ -534,13 +736,131 @@ class ErrorLogCard extends LitElement {
         return;
       }
 
-      this._error = (this.localizeFunc || this.hass.localize)(
-        "ui.panel.config.logs.failed_get_logs",
-        {
-          provider: this.provider,
-          error: extractApiErrorMessage(err),
+      this._error = this._localize("ui.panel.config.logs.failed_get_logs", {
+        provider: this.provider,
+        error: extractApiErrorMessage(err),
+      });
+    }
+  }
+
+  private _isIntegrationLog(): boolean {
+    return (
+      !!this.integrations?.length &&
+      (!this.provider || this.provider === "core")
+    );
+  }
+
+  private _subscribeIntegrationLog() {
+    // The backlog is sent again on every subscription
+    this._integrationLines = [];
+    this._ansiToHtmlElement?.clear();
+    // Show the skeleton again now the retained lines are gone
+    this.requestUpdate();
+
+    // Each subscription starts with the integration's backlog, which are
+    // merged in time order with the lines sent meanwhile once all arrived.
+    // After that every flush of the log sends a batch to each subscription,
+    // so the batches of a flush are merged too.
+    const integrations = this.integrations!;
+    const merger = new LogStreamMerger(
+      integrations.length,
+      INTEGRATION_LOG_LINE_LIMIT
+    );
+    const batches: string[][] = integrations.map(() => []);
+    const backlogReceived = integrations.map(() => false);
+
+    const addBatches = () => {
+      this._integrationMergeTimeout = undefined;
+      if (this._integrationUnsubs !== unsubs) {
+        return;
+      }
+      const lines = merger.merge(batches);
+      for (const batch of batches) {
+        batch.length = 0;
+      }
+      this._addIntegrationLines(lines);
+    };
+
+    const unsubs = integrations.map((integration, index) =>
+      subscribeIntegrationLog(
+        this._connection.connection,
+        integration,
+        (lines) => {
+          if (this._integrationUnsubs !== unsubs) {
+            return;
+          }
+          batches[index].push(...lines);
+          backlogReceived[index] = true;
+          if (
+            backlogReceived.every(Boolean) &&
+            this._integrationMergeTimeout === undefined
+          ) {
+            this._integrationMergeTimeout = window.setTimeout(
+              addBatches,
+              INTEGRATION_LOG_MERGE_DELAY
+            );
+          }
         }
+      )
+    );
+    this._integrationUnsubs = unsubs;
+    Promise.all(unsubs).then(
+      () => {
+        if (this._integrationUnsubs !== unsubs) {
+          return;
+        }
+        this._integrationLive = true;
+        if (this._loadingState === "loading") {
+          this._loadingState = "empty";
+        }
+      },
+      () => {
+        if (this._integrationUnsubs !== unsubs) {
+          return;
+        }
+        this._unsubscribeIntegrationLog();
+        this._loadingState = "loaded";
+        this._error = this._localize(
+          "ui.panel.config.logs.integration_log_unsupported"
+        );
+      }
+    );
+  }
+
+  private _unsubscribeIntegrationLog() {
+    this._integrationUnsubs?.forEach((unsub) =>
+      unsub.then((unsubscribe) => unsubscribe()).catch(() => undefined)
+    );
+    this._integrationUnsubs = undefined;
+    clearTimeout(this._integrationMergeTimeout);
+    this._integrationMergeTimeout = undefined;
+    this._integrationLive = false;
+  }
+
+  private _addIntegrationLines(lines: string[]) {
+    const newLines = lines.flatMap((line) => line.split("\n"));
+    if (!newLines.length) {
+      return;
+    }
+    const scrolledToBottom = this._scrolledToBottomController.value;
+    this._integrationLines.push(...newLines);
+    this._integrationLines.splice(
+      0,
+      this._integrationLines.length - INTEGRATION_LOG_LINE_LIMIT
+    );
+    this._ansiToHtmlElement?.parseLinesToColoredPre(newLines);
+    this._ansiToHtmlElement?.trimLines(INTEGRATION_LOG_LINE_LIMIT);
+    if (this.filter) {
+      this._noSearchResults = !this._ansiToHtmlElement?.filterLines(
+        this.filter
       );
+    }
+    this._loadingState = "loaded";
+
+    if (scrolledToBottom) {
+      this._scrollToBottom();
+    } else {
+      this._newLogsIndicator = true;
     }
   }
 
@@ -551,6 +871,9 @@ class ErrorLogCard extends LitElement {
       this._scrollToBottom();
     }
   }, 150);
+
+  private _expandLabel = (count: number) =>
+    this._localize("ui.panel.config.logs.show_hidden_lines", { count });
 
   private _debounceScrollToBottom = debounce(() => {
     this._logElement!.scrollTop = this._logElement!.scrollHeight;
@@ -572,6 +895,12 @@ class ErrorLogCard extends LitElement {
       this._logStreamAborter.abort();
       this._loadingState = "loading";
     }
+    if (ev.detail === "disconnected" && this._integrationUnsubs) {
+      // The subscriptions ended with the connection
+      this._integrationUnsubs = undefined;
+      this._integrationLive = false;
+      this._loadingState = "loading";
+    }
     if (ev.detail === "connected") {
       this._loadLogs(true);
     }
@@ -591,12 +920,16 @@ class ErrorLogCard extends LitElement {
     const scrollPositionFromBottom =
       this._logElement.scrollHeight - this._logElement.scrollTop;
     this._loadingPrevState = "loading";
+    const loadId = this._loadId;
     const response = await fetchHassioLogs(
-      this.hass,
+      this._api,
       this.provider,
       `entries=${this._firstCursor}:-100:100`,
       this._boot
     );
+    if (loadId !== this._loadId) {
+      return;
+    }
 
     if (response.headers.has("X-First-Cursor")) {
       if (this._firstCursor === response.headers.get("X-First-Cursor")!) {
@@ -607,6 +940,9 @@ class ErrorLogCard extends LitElement {
     }
 
     const body = await response.text();
+    if (loadId !== this._loadId) {
+      return;
+    }
 
     if (body) {
       const lines = body
@@ -648,10 +984,10 @@ class ErrorLogCard extends LitElement {
   private async _loadBoots() {
     if (
       this._streamSupported &&
-      isComponentLoaded(this.hass.config, "hassio")
+      isComponentLoaded(this._config.config, "hassio")
     ) {
       try {
-        const { data } = await fetchHassioBoots(this.hass);
+        const { data } = await fetchHassioBoots(this._api);
         const boots = Object.keys(data.boots)
           .map(Number)
           .sort((a, b) => b - a);
@@ -704,12 +1040,14 @@ class ErrorLogCard extends LitElement {
   }
 
   static styles: CSSResultGroup = css`
+    ${haStyleScrollbar}
+
     :host {
       direction: var(--direction);
     }
     .error-log-intro {
       text-align: center;
-      margin: 16px;
+      margin: var(--error-log-card-margin, 16px);
     }
 
     ha-card {
@@ -775,6 +1113,14 @@ class ErrorLogCard extends LitElement {
       overflow-wrap: break-word;
     }
 
+    ha-skeleton-log {
+      --ha-skeleton-log-padding: var(--ha-space-4);
+    }
+
+    ha-skeleton-log[lines] {
+      --ha-skeleton-log-padding: var(--ha-space-2) 0;
+    }
+
     .error-log > div:hover {
       background-color: var(--secondary-background-color);
     }
@@ -800,16 +1146,9 @@ class ErrorLogCard extends LitElement {
       color: var(--warning-color);
     }
 
-    .loading-old {
-      display: flex;
-      width: 100%;
-      justify-content: center;
-      padding: 16px;
-    }
-
     ha-assist-chip {
       --ha-assist-chip-container-shape: 10px;
-      --md-assist-chip-trailing-space: 8px;
+      --ha-assist-chip-trailing-space: 8px;
     }
 
     @keyframes breathe {

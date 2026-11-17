@@ -1,26 +1,36 @@
-import type { SelectedDetail } from "@material/mwc-list";
 import { mdiFilterVariantRemove } from "@mdi/js";
 import type { CSSResultGroup, PropertyValues } from "lit";
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property, query, state } from "lit/decorators";
+import { customElement, property, state } from "lit/decorators";
+import { createRef, ref } from "lit/directives/ref";
 import { repeat } from "lit/directives/repeat";
+import {
+  FilterPanelController,
+  filterPanelStyles,
+} from "../common/controllers/filter-panel-controller";
+import { consumeLocalize } from "../common/decorators/consume-context-entry";
+import type { LocalizeFunc } from "../common/translations/localize";
+import { arrayWith, arrayWithout } from "../common/array/array-with";
+import type {
+  HASSDomCurrentTargetEvent,
+  HASSDomEvent,
+} from "../common/dom/fire_event";
 import { fireEvent } from "../common/dom/fire_event";
-import { haStyleScrollbar } from "../resources/styles";
-import type { HomeAssistant } from "../types";
-import "./ha-check-list-item";
 import "./ha-expansion-panel";
 import "./ha-icon";
 import "./ha-icon-button";
-import "./ha-label";
-import "./ha-list";
-import "./ha-list-item";
+import "./item/ha-list-item-option";
+import type { HaListItemOption } from "./item/ha-list-item-option";
+import "./list/ha-list-selectable";
+import type { HaListSelectable } from "./list/ha-list-selectable";
 import "./voice-assistant-brand-icon";
 import { voiceAssistants } from "../data/expose";
-import "../panels/config/voice-assistants/expose/expose-assistant-icon";
 
 @customElement("ha-filter-voice-assistants")
 export class HaFilterVoiceAssistants extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
 
   // the list of selected voiceAssistantIds
   @property({ attribute: false }) public value: string[] = [];
@@ -31,58 +41,65 @@ export class HaFilterVoiceAssistants extends LitElement {
 
   @state() private _voiceAssistantOptions: string[] = [];
 
-  @state() private _shouldRender = false;
+  private _content = createRef<HTMLElement>();
 
-  @query("ha-list") private _list?: HTMLElement;
+  private _panel = new FilterPanelController(this, this._content);
 
   protected render() {
     return html`
       <ha-expansion-panel
         left-chevron
         .expanded=${this.expanded}
-        @expanded-will-change=${this._expandedWillChange}
         @expanded-changed=${this._expandedChanged}
       >
         <div slot="header" class="header">
-          ${this.hass.localize(
-            "ui.panel.config.dashboard.voice_assistants.main"
-          )}
-          ${this.value?.length
-            ? html`<div class="badge">${this.value?.length}</div>
-                <ha-icon-button
-                  .path=${mdiFilterVariantRemove}
-                  @click=${this._clearFilter}
-                ></ha-icon-button>`
-            : nothing}
+          ${this._localize("ui.panel.config.dashboard.voice_assistants.main")}
+          ${
+            this.value?.length
+              ? html`<div class="badge">${this.value?.length}</div>
+                  <ha-icon-button
+                    .path=${mdiFilterVariantRemove}
+                    @click=${this._clearFilter}
+                  ></ha-icon-button>`
+              : nothing
+          }
         </div>
-        ${this._shouldRender
-          ? html`<ha-list
-              @selected=${this._assistantsSelected}
-              class="ha-scrollbar"
-              multi
-            >
-              ${repeat(
-                this._voiceAssistantOptions,
-                (voiceAssistantId) => voiceAssistantId,
-                (voiceAssistantId) =>
-                  html`<ha-check-list-item
-                    .value=${voiceAssistantId}
-                    .selected=${(this.value || []).includes(voiceAssistantId)}
-                    hasMeta
-                    graphic="icon"
-                  >
-                    <voice-assistant-brand-icon
-                      slot="graphic"
-                      .voiceAssistantId=${voiceAssistantId}
-                      .hass=${this.hass}
-                    >
-                    </voice-assistant-brand-icon>
-                    ${voiceAssistants[voiceAssistantId].name}
-                  </ha-check-list-item>`
-              )}
-            </ha-list> `
-          : nothing}
       </ha-expansion-panel>
+      ${
+        this._panel.showContent
+          ? html`<div class="content" ${ref(this._content)}>
+              <ha-list-selectable
+                multi
+                aria-label=${this._localize(
+                  "ui.panel.config.dashboard.voice_assistants.main"
+                )}
+                @ha-list-item-selected=${this._handleItemToggled}
+                @ha-list-item-deselected=${this._handleItemToggled}
+              >
+                ${repeat(
+                  this._voiceAssistantOptions,
+                  (voiceAssistantId) => voiceAssistantId,
+                  (voiceAssistantId) =>
+                    html`<ha-list-item-option
+                      appearance="checkbox"
+                      selection-position="end"
+                      .value=${voiceAssistantId}
+                      .selected=${this.value?.includes(voiceAssistantId) ?? false}
+                    >
+                      <voice-assistant-brand-icon
+                        slot="start"
+                        .voiceAssistantId=${voiceAssistantId}
+                      >
+                      </voice-assistant-brand-icon>
+                      <span slot="headline"
+                        >${voiceAssistants[voiceAssistantId].name}</span
+                      >
+                    </ha-list-item-option>`
+                )}
+              </ha-list-selectable>
+            </div>`
+          : nothing
+      }
     `;
   }
 
@@ -91,40 +108,24 @@ export class HaFilterVoiceAssistants extends LitElement {
     this._voiceAssistantOptions = Object.keys(voiceAssistants);
   }
 
-  protected updated(changed: PropertyValues<this>) {
-    if (changed.has("expanded") && this.expanded) {
-      setTimeout(() => {
-        if (!this.expanded) return;
-        this._list!.style.height = `${this.clientHeight - 49}px`;
-      }, 300);
-    }
-  }
-
-  private _expandedWillChange(ev) {
-    this._shouldRender = ev.detail.expanded;
-  }
-
   private _expandedChanged(ev) {
     this.expanded = ev.detail.expanded;
   }
 
-  private async _assistantsSelected(
-    ev: CustomEvent<SelectedDetail<Set<number>>>
+  private _handleItemToggled(
+    ev: HASSDomEvent<number> & HASSDomCurrentTargetEvent<HaListSelectable>
   ) {
-    if (!ev.detail.index) {
-      fireEvent(this, "data-table-filter-changed", {
-        value: [],
-        items: undefined,
-      });
-      this.value = [];
+    const voiceAssistantId = (
+      ev.currentTarget.items[ev.detail] as HaListItemOption | undefined
+    )?.value;
+    if (!voiceAssistantId) {
       return;
     }
 
-    const newvalue: string[] = [];
-    for (const index of ev.detail.index) {
-      newvalue.push(this._voiceAssistantOptions![index]);
-    }
-    this.value = newvalue;
+    this.value =
+      ev.type === "ha-list-item-selected"
+        ? arrayWith(this.value, voiceAssistantId)
+        : arrayWithout(this.value, voiceAssistantId);
 
     fireEvent(this, "data-table-filter-changed", {
       value: this.value,
@@ -143,19 +144,16 @@ export class HaFilterVoiceAssistants extends LitElement {
 
   static get styles(): CSSResultGroup {
     return [
-      haStyleScrollbar,
+      filterPanelStyles,
       css`
-        :host {
-          position: relative;
-          border-bottom: 1px solid var(--divider-color);
-        }
-        :host([expanded]) {
+        ha-list-selectable {
+          display: flex;
           flex: 1;
-          height: 0;
+          min-height: 0;
         }
-        ha-expansion-panel {
-          --ha-card-border-radius: var(--ha-border-radius-square);
-          --expansion-panel-content-padding: 0;
+        ha-list-selectable::part(base) {
+          flex: 1;
+          min-height: 0;
         }
         .header {
           display: flex;
@@ -164,9 +162,6 @@ export class HaFilterVoiceAssistants extends LitElement {
         .header ha-icon-button {
           margin-inline-start: auto;
           margin-inline-end: 8px;
-        }
-        ha-check-list-item {
-          --mdc-list-item-graphic-margin: var(--ha-space-4);
         }
         .badge {
           display: inline-block;

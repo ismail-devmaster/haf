@@ -8,20 +8,30 @@ import "../../../components/ha-dialog";
 import "../../../components/ha-form/ha-form";
 import "../../../components/ha-button";
 import type { HomeZoneMutableParams } from "../../../data/zone";
+import { DirtyStateProviderMixin } from "../../../mixins/dirty-state-provider-mixin";
 import { haStyleDialog } from "../../../resources/styles";
 import type { HomeAssistant } from "../../../types";
 import type { HomeZoneDetailDialogParams } from "./show-dialog-home-zone-detail";
+import {
+  HOME_ZONE_ENTITY_ID,
+  zoneColor,
+} from "../../../common/map/entity-map-colors";
 
-const SCHEMA = [
-  {
-    name: "location",
-    required: true,
-    selector: { location: { radius: true } },
-  },
-];
+const SCHEMA = memoizeOne(
+  (icon: string, color: string) =>
+    [
+      {
+        name: "location",
+        required: true,
+        selector: { location: { radius: true, icon, color } },
+      },
+    ] as const
+);
 
 @customElement("dialog-home-zone-detail")
-class DialogHomeZoneDetail extends LitElement {
+class DialogHomeZoneDetail extends DirtyStateProviderMixin<HomeZoneMutableParams>()(
+  LitElement
+) {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
   @state() private _error?: Record<string, string>;
@@ -43,6 +53,7 @@ class DialogHomeZoneDetail extends LitElement {
       longitude: this.hass.config.longitude,
       radius: this.hass.config.radius,
     };
+    this._initDirtyTracking({ type: "deep" }, this._data);
     this._open = true;
   }
 
@@ -71,13 +82,17 @@ class DialogHomeZoneDetail extends LitElement {
         header-title=${this.hass!.localize("ui.common.edit_item", {
           name: this._data.name,
         })}
-        prevent-scrim-close
+        .preventScrimClose=${this.isDirtyState}
         @closed=${this._dialogClosed}
       >
         <ha-form
           autofocus
           .hass=${this.hass}
-          .schema=${SCHEMA}
+          .schema=${SCHEMA(
+            this.hass.states[HOME_ZONE_ENTITY_ID]?.attributes.icon ||
+              "mdi:home",
+            zoneColor(HOME_ZONE_ENTITY_ID, false, [], getComputedStyle(this))
+          )}
           .data=${this._formData(this._data)}
           .error=${this._error}
           .computeLabel=${this._computeLabel}
@@ -94,7 +109,7 @@ class DialogHomeZoneDetail extends LitElement {
           <ha-button
             slot="primaryAction"
             @click=${this._updateEntry}
-            .disabled=${!valid || this._submitting}
+            .disabled=${!valid || this._submitting || !this.isDirtyState}
           >
             ${this.hass!.localize("ui.common.save")}
           </ha-button>
@@ -120,6 +135,7 @@ class DialogHomeZoneDetail extends LitElement {
     value.radius = value.location.radius;
     delete value.location;
     this._data = value;
+    this._updateDirtyState(value);
   }
 
   private _computeLabel = (): string => "";

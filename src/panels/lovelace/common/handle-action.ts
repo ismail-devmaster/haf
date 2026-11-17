@@ -1,3 +1,5 @@
+import { sanitizeUrl } from "@braintree/sanitize-url";
+import type { HASSDomEvent } from "../../../common/dom/fire_event";
 import { fireEvent } from "../../../common/dom/fire_event";
 import { navigate } from "../../../common/navigate";
 import { forwardHaptic } from "../../../data/haptics";
@@ -12,6 +14,11 @@ import { toggleEntity } from "./entity/toggle-entity";
 declare global {
   interface HASSDomEvents {
     "ll-custom": ActionConfig;
+    "hass-navigate": { path: string; replace?: boolean };
+  }
+
+  interface HTMLElementEventMap {
+    "hass-navigate": HASSDomEvent<HASSDomEvents["hass-navigate"]>;
   }
 }
 
@@ -119,9 +126,23 @@ export const handleAction = async (
     }
     case "navigate":
       if (actionConfig.navigation_path) {
-        navigate(actionConfig.navigation_path, {
-          replace: actionConfig.navigation_replace,
-        });
+        // A page that embeds the dashboard, such as the demo embed, can
+        // navigate within it instead, and cancel the event
+        const navigateEvent = fireEvent(
+          node,
+          "hass-navigate",
+          {
+            path: actionConfig.navigation_path,
+            replace: actionConfig.navigation_replace,
+          },
+          { cancelable: true }
+        );
+
+        if (!navigateEvent.defaultPrevented) {
+          navigate(actionConfig.navigation_path, {
+            replace: actionConfig.navigation_replace,
+          });
+        }
       } else {
         showToast(node, {
           message: hass.localize(
@@ -133,7 +154,7 @@ export const handleAction = async (
       break;
     case "url": {
       if (actionConfig.url_path) {
-        window.open(actionConfig.url_path);
+        window.open(sanitizeUrl(actionConfig.url_path));
       } else {
         showToast(node, {
           message: hass.localize("ui.panel.lovelace.cards.actions.no_url"),

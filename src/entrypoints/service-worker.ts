@@ -9,15 +9,96 @@ import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 import { registerRoute, setCatchHandler } from "workbox-routing";
 import {
   CacheFirst,
+  NetworkFirst,
   NetworkOnly,
   StaleWhileRevalidate,
 } from "workbox-strategies";
+import {
+  createNavigationFallbackPlugin,
+  noFallBackRegEx,
+} from "../util/service-worker-navigation";
 
 // eslint-disable-next-line @typescript-eslint/naming-convention
 declare const __WB_MANIFEST__: Parameters<typeof precacheAndRoute>[0];
 
-const noFallBackRegEx =
-  /\/(api|static|auth|frontend_latest|frontend_es5|local)\/.*/;
+const NAVIGATION_CACHE = "navigation-cache";
+const NAVIGATION_TIMEOUT_SECONDS = 3;
+const NAVIGATION_MAX_ENTRIES = 50;
+
+// Camera / image proxy endpoints that carry credentials in the URL.
+// We pre-validate the credential in the service worker so obviously invalid
+// requests (signature expired, token missing) never reach the server and
+// don't trigger spurious "Login attempt" warnings from http.ban after BFCache
+// restore, tab resume, network change, or any other browser-initiated replay
+// of a stale `<img>` URL. This only covers subresources: navigation preload
+// sends a navigation to core before the worker runs.
+const proxyPathRegEx =
+  /^\/api\/(camera_proxy_stream|camera_proxy|image_proxy)\//;
+
+// Reject signatures this many ms before their nominal expiry to absorb small
+// client/server clock differences. Erring this direction only ever turns a
+// would-be valid request into a local 401; we cannot err the other way without
+// re-introducing the warnings this filter exists to prevent.
+const JWT_EXPIRY_SKEW_MS = 5000;
+
+const base64UrlDecode = (input: string): string => {
+  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  return atob(padded);
+};
+
+const isJwtExpired = (jwt: string): boolean => {
+  try {
+    const parts = jwt.split(".");
+    if (parts.length !== 3) {
+      return false;
+    }
+    const payload = JSON.parse(base64UrlDecode(parts[1]));
+    if (typeof payload.exp !== "number") {
+      return false;
+    }
+    return payload.exp * 1000 < Date.now() + JWT_EXPIRY_SKEW_MS;
+  } catch (_err) {
+    // If we can't parse the JWT for any reason, defer to the server.
+    return false;
+  }
+};
+
+const handleProxyRequest: RouteHandler = async ({ request, event }) => {
+  const req = request as Request;
+  const url = new URL(req.url);
+
+  const token = url.searchParams.get("token");
+  if (token === "undefined" || token === "null" || token === "") {
+    return new Response(null, { status: 401, statusText: "Invalid token" });
+  }
+
+  const authSig = url.searchParams.get("authSig");
+  if (authSig && isJwtExpired(authSig)) {
+    return new Response(null, {
+      status: 401,
+      statusText: "Signature expired",
+    });
+  }
+
+  if (req.mode === "navigate" && event instanceof FetchEvent) {
+    const preloaded = await event.preloadResponse;
+    if (preloaded) {
+      return preloaded;
+    }
+  }
+  return fetch(req);
+};
+
+// The access token rotates, so keying on the full URL empties the cache every
+// rotation. Other params (such as brands' "placeholder") stay in the key.
+const ignoreTokenPlugin = {
+  cacheKeyWillBeUsed: async ({ request }: { request: Request }) => {
+    const url = new URL(request.url);
+    url.searchParams.delete("token");
+    return url.href;
+  },
+};
 
 const initRouting = () => {
   precacheAndRoute(__WB_MANIFEST__, {
@@ -25,16 +106,18 @@ const initRouting = () => {
     ignoreURLParametersMatching: [/.*/],
   });
 
-  // Cache static content (including translations) on first access.
+  // Cache static content (including translations) on first access. Match on
+  // the start of the path: custom integrations serve their own files from
+  // paths like /api/<domain>/static/, and those must not be cached forever.
   registerRoute(
-    /\/(static|frontend_latest|frontend_es5)\/.+/,
+    ({ url }) =>
+      url.origin === location.origin &&
+      /^\/(static|frontend_latest|frontend_es5)\/.+/.test(url.pathname),
     new CacheFirst({ matchOptions: { ignoreSearch: true } })
   );
 
   // Cache any brand images used for 1 day
   // Brands are proxied via the local API with backend caching.
-  // Strip the rotating access token from cache keys so token rotation
-  // doesn't bust the cache, while preserving other params like "placeholder".
   registerRoute(
     ({ url, request }) =>
       url.pathname.startsWith("/api/brands/") &&
@@ -42,13 +125,7 @@ const initRouting = () => {
     new StaleWhileRevalidate({
       cacheName: "brands",
       plugins: [
-        {
-          cacheKeyWillBeUsed: async ({ request }) => {
-            const url = new URL(request.url);
-            url.searchParams.delete("token");
-            return url.href;
-          },
-        },
+        ignoreTokenPlugin,
         // Add 404 so we quickly respond to domains with missing images
         new CacheableResponsePlugin({ statuses: [0, 200, 404] }),
         new ExpirationPlugin({
@@ -59,16 +136,103 @@ const initRouting = () => {
     })
   );
 
+  // A stale token gives a 403, and caching that would pin the failure.
+  const cacheableTile = new CacheableResponsePlugin({ statuses: [0, 200] });
+
+  // A couple of dozen, pinned to an upstream release. Kept apart from the
+  // tiles so panning cannot evict the fonts every label needs.
+  registerRoute(
+    ({ url }) => /^\/api\/map_tiles\/(fonts|sprites)\//.test(url.pathname),
+    new CacheFirst({
+      cacheName: "map-assets",
+      plugins: [
+        ignoreTokenPlugin,
+        cacheableTile,
+        new ExpirationPlugin({
+          maxAgeSeconds: 60 * 60 * 24 * 30,
+          purgeOnQuotaError: true,
+        }),
+      ],
+    })
+  );
+
+  // The working set is a tile pyramid over every zoom visited, so the ceiling
+  // is generous; the quota purge is what actually bounds it.
+  registerRoute(
+    ({ url }) => /^\/api\/map_tiles\/(vector|raster)\//.test(url.pathname),
+    new CacheFirst({
+      cacheName: "map-tiles",
+      plugins: [
+        ignoreTokenPlugin,
+        cacheableTile,
+        new ExpirationPlugin({
+          maxEntries: 1000,
+          maxAgeSeconds: 60 * 60 * 24 * 7,
+          purgeOnQuotaError: true,
+        }),
+      ],
+    })
+  );
+
+  // Every map waits on this before its first tile, so serve it from cache -
+  // revalidated behind that, since it is how a moved endpoint arrives.
+  registerRoute(
+    ({ url }) => url.pathname === "/api/map_tiles/tilejson.json",
+    new StaleWhileRevalidate({
+      cacheName: "map-tilejson",
+      plugins: [
+        ignoreTokenPlugin,
+        cacheableTile,
+        new ExpirationPlugin({
+          maxAgeSeconds: 60 * 60 * 24,
+          purgeOnQuotaError: true,
+        }),
+      ],
+    })
+  );
+
+  // Short-circuit camera/image proxy requests with an expired signature or a
+  // missing/undefined token so they don't hit core and get logged as invalid
+  // login attempts. Registered before the generic /api route below so it wins.
+  registerRoute(
+    ({ url, request }) =>
+      proxyPathRegEx.test(url.pathname) && request.method === "GET",
+    handleProxyRequest
+  );
+
   // Get api from network.
   registerRoute(/\/(api|auth)\/.*/, new NetworkOnly());
+
+  // Signed URLs (such as media files under /media/ with an authSig) differ on
+  // every request, so caching them never produces a hit. With the catch-all
+  // route below, a photo slideshow would store one full-size image per slide
+  // until the browser's storage quota runs out.
+  registerRoute(
+    ({ url }) =>
+      url.origin === location.origin && url.searchParams.has("authSig"),
+    new NetworkOnly()
+  );
 
   // Get manifest and onboarding from network.
   registerRoute(/\/(?:manifest\.json|onboarding\.html)/, new NetworkOnly());
 
-  // For the root "/" we ignore search
+  // A stale index imports deleted bundles, so the cache is only a fallback;
+  // keyed by path so query params don't add entries. Only a 200 may replace
+  // the cached shell: a proxy redirect is status 0 and would be replayed.
   registerRoute(
-    /\/(\?.*)?$/,
-    new StaleWhileRevalidate({ matchOptions: { ignoreSearch: true } })
+    ({ request }) => request.mode === "navigate",
+    new NetworkFirst({
+      cacheName: NAVIGATION_CACHE,
+      networkTimeoutSeconds: NAVIGATION_TIMEOUT_SECONDS,
+      plugins: [
+        createNavigationFallbackPlugin(NAVIGATION_CACHE),
+        new CacheableResponsePlugin({ statuses: [200] }),
+        new ExpirationPlugin({
+          maxEntries: NAVIGATION_MAX_ENTRIES,
+          purgeOnQuotaError: true,
+        }),
+      ],
+    })
   );
 
   // For rest of the files (on Domolux domain only) try both cache and network.
@@ -137,18 +301,18 @@ const initPushNotifications = () => {
         return;
       }
       event.waitUntil(
-        self.registration
-          .showNotification(data.title, data)
-          .then((/* notification */) => {
-            firePushCallback(
-              {
-                type: "received",
-                tag: data.tag,
-                data: data.data,
-              },
-              data.data.jwt
-            );
-          })
+        self.registration.showNotification(data.title, data).then((
+          /* notification */
+        ) => {
+          firePushCallback(
+            {
+              type: "received",
+              tag: data.tag,
+              data: data.data,
+            },
+            data.data.jwt
+          );
+        })
       );
     }
   });
@@ -207,29 +371,37 @@ const catchHandler: RouteHandler = async (options) => {
   // eslint-disable-next-line no-console
   console.log("Using fallback for:", url);
 
-  return (await caches.match("/", { ignoreSearch: true })) || Response.error();
+  return (
+    (await caches.match("/", { cacheName: NAVIGATION_CACHE })) ||
+    Response.error()
+  );
 };
 
 self.addEventListener("install", (event) => {
-  // Delete all runtime caching, so that index.html has to be refetched.
-  // And add the new index.html back to the runtime cache
-  const cacheName = cacheNames.runtime;
+  // Cached indexes import the previous build's bundles.
   event.waitUntil(
-    caches.delete(cacheName).then(() =>
-      caches.open(cacheName).then((cache) => {
-        cache.add("/");
-      })
-    )
+    (async () => {
+      await Promise.all([
+        caches.delete(cacheNames.runtime),
+        caches.delete(NAVIGATION_CACHE),
+      ]);
+      try {
+        const cache = await caches.open(NAVIGATION_CACHE);
+        await cache.add("/");
+      } catch (_err) {
+        // Offline or restarting; the first navigation fills it.
+      }
+    })()
   );
 });
 
-self.addEventListener("activate", () => {
-  // Attach the service worker to any page of the app
-  // that didn't have a service worker loaded.
-  // Happens the first time they open the app without any
-  // service worker registered.
-  // This will serve code split bundles from SW.
-  clients.claim();
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    Promise.all([
+      self.registration.navigationPreload?.enable(),
+      clients.claim(),
+    ])
+  );
 });
 
 self.addEventListener("message", (message) => {

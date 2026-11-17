@@ -1,9 +1,8 @@
 import { css, html, LitElement, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators";
+import { customElement, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
 import "../../../components/ha-alert";
 import "../../../components/ha-card";
-import type { HomeAssistant } from "../../../types";
 import type {
   LovelaceCard,
   LovelaceCardEditor,
@@ -23,8 +22,6 @@ export class HuiClockCard extends LitElement implements LovelaceCard {
       type: "clock",
     };
   }
-
-  @property({ attribute: false }) public hass?: HomeAssistant;
 
   @state() private _config?: ClockCardConfig;
 
@@ -109,26 +106,28 @@ export class HuiClockCard extends LitElement implements LovelaceCard {
         })}
       >
         <div
-          class="time-wrapper ${this._config.clock_size
-            ? `size-${this._config.clock_size}`
-            : ""}"
+          class="time-wrapper ${
+            this._config.clock_size ? `size-${this._config.clock_size}` : ""
+          }"
         >
-          ${this._config.title !== undefined
-            ? html`<div class="time-title">${this._config.title}</div>`
-            : nothing}
-          ${this._config.clock_style === "analog"
-            ? html`
-                <hui-clock-card-analog
-                  .hass=${this.hass}
-                  .config=${this._config}
-                ></hui-clock-card-analog>
-              `
-            : html`
-                <hui-clock-card-digital
-                  .hass=${this.hass}
-                  .config=${this._config}
-                ></hui-clock-card-digital>
-              `}
+          ${
+            this._config.title !== undefined
+              ? html`<div class="time-title">${this._config.title}</div>`
+              : nothing
+          }
+          ${
+            this._config.clock_style === "analog"
+              ? html`
+                  <hui-clock-card-analog
+                    .config=${this._config}
+                  ></hui-clock-card-analog>
+                `
+              : html`
+                  <hui-clock-card-digital
+                    .config=${this._config}
+                  ></hui-clock-card-digital>
+                `
+          }
         </div>
       </ha-card>
     `;
@@ -141,6 +140,7 @@ export class HuiClockCard extends LitElement implements LovelaceCard {
 
     .no-background {
       background: none;
+      backdrop-filter: none;
       box-shadow: none;
       border: none;
     }

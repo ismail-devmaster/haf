@@ -64,6 +64,26 @@ describe("formatNumber", () => {
     assert.strictEqual(formatNumber("", defaultLocale), "0");
   });
 
+  it("Returns consistent results for interleaved calls with different options (formatter cache)", () => {
+    // Exercises the cached Intl.NumberFormat instances: alternating option
+    // shapes must each keep producing their own correct output.
+    for (let i = 0; i < 3; i++) {
+      assert.strictEqual(formatNumber(1234.5, defaultLocale), "1,234.5");
+      assert.strictEqual(
+        formatNumber(1234.5, defaultLocale, { minimumFractionDigits: 2 }),
+        "1,234.50"
+      );
+      assert.strictEqual(formatNumber("1234.50", defaultLocale), "1,234.50");
+      assert.strictEqual(
+        formatNumber(1234.5, {
+          ...defaultLocale,
+          number_format: NumberFormat.none,
+        }),
+        "1234.5"
+      );
+    }
+  });
+
   it("Formats number with options", () => {
     assert.strictEqual(
       formatNumber(1234.5, defaultLocale, {
@@ -98,6 +118,18 @@ describe("formatNumber", () => {
       ),
       "1234.5"
     );
+  });
+
+  it("Formats a numeric string with more than 100 decimal places", () => {
+    const num = `1.${"0".repeat(120)}`;
+    assert.strictEqual(formatNumber(num), `1.${"0".repeat(100)}`);
+  });
+
+  it("Limits fraction digits to 100 for a string numeric value with more decimal places", () => {
+    assert.deepEqual(getDefaultFormatOptions(`1.${"0".repeat(101)}`), {
+      minimumFractionDigits: 100,
+      maximumFractionDigits: 100,
+    });
   });
 
   it("Sets only the maximumFractionDigits format option when none are provided for a number value", () => {

@@ -3,6 +3,11 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { fireEvent } from "../../../../common/dom/fire_event";
 import "../../../../components/ha-ripple";
+import {
+  getCustomCardEntry,
+  isCustomType,
+  stripCustomPrefix,
+} from "../../../../data/lovelace_custom_cards";
 import type { LovelaceCardConfig } from "../../../../data/lovelace/config/card";
 import type { HomeAssistant } from "../../../../types";
 import "../../cards/hui-card";
@@ -52,38 +57,55 @@ export class HuiSuggestionCard extends LitElement {
   protected render(): TemplateResult {
     const { suggestion } = this;
     const hiddenCount = this._preview?.hiddenCount ?? 0;
+    const type = suggestion.config.type;
+    let cardName: string;
+    if (isCustomType(type)) {
+      const customType = stripCustomPrefix(type);
+      cardName = getCustomCardEntry(customType)?.name ?? customType;
+    } else {
+      cardName = this.hass.localize(
+        `ui.panel.lovelace.editor.card.${type}.name` as any
+      );
+    }
+    const label = suggestion.label
+      ? `${cardName} - ${suggestion.label}`
+      : cardName;
 
     return html`
       <div
         class="card"
         tabindex="0"
         role="button"
-        aria-label=${suggestion.label}
+        aria-label=${label}
         @keydown=${this._handleKeyDown}
       >
         <div class="overlay" @click=${this._handleClick}></div>
-        <div class="card-header">${suggestion.label}</div>
+        <div class="card-header">${label}</div>
         <div class="preview">
-          ${this._preview
-            ? html`
-                <hui-card
-                  .hass=${this.hass}
-                  .config=${this._preview.config}
-                  preview
-                ></hui-card>
-              `
-            : nothing}
+          ${
+            this._preview
+              ? html`
+                  <hui-card
+                    .hass=${this.hass}
+                    .config=${this._preview.config}
+                    preview
+                  ></hui-card>
+                `
+              : nothing
+          }
         </div>
-        ${hiddenCount > 0
-          ? html`
-              <div class="more-badge">
-                ${this.hass.localize(
-                  "ui.panel.lovelace.editor.cardpicker.more_cards",
-                  { count: hiddenCount }
-                )}
-              </div>
-            `
-          : nothing}
+        ${
+          hiddenCount > 0
+            ? html`
+                <div class="more-badge">
+                  ${this.hass.localize(
+                    "ui.panel.lovelace.editor.cardpicker.more_cards",
+                    { count: hiddenCount }
+                  )}
+                </div>
+              `
+            : nothing
+        }
         <ha-ripple></ha-ripple>
       </div>
     `;

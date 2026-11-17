@@ -8,7 +8,7 @@ import {
   subscribeServices,
 } from "home-assistant-js-websocket";
 import { fireEvent } from "../common/dom/fire_event";
-import { computeStateName } from "../common/entity/compute_state_name";
+import { computeEntityNameDisplayWithoutContext } from "../common/entity/compute_entity_name_display";
 import { promiseTimeout } from "../common/util/promise-timeout";
 import { subscribeAreaRegistry } from "../data/area/area_registry";
 import { broadcastConnectionStatus } from "../data/connection-status";
@@ -18,7 +18,10 @@ import {
   subscribeFrontendUserData,
 } from "../data/frontend";
 import { forwardHaptic } from "../data/haptics";
-import { serviceCallWillDisconnect } from "../data/service";
+import {
+  getServiceCallEntityIds,
+  serviceCallWillDisconnect,
+} from "../data/service";
 import {
   DateFormat,
   FirstWeekday,
@@ -27,10 +30,17 @@ import {
   TimeZone,
 } from "../data/translation";
 import { subscribeEntityRegistryDisplay } from "../data/ws-entity_registry_display";
+import { deepEqual } from "../common/util/deep-equal";
+import { preserveUnchangedRecord } from "../common/util/preserve-unchanged-record";
 import { subscribeFloorRegistry } from "../data/ws-floor_registry";
 import { subscribePanels } from "../data/ws-panels";
 import { translationMetadata } from "../resources/translations-metadata";
-import type { Constructor, HomeAssistant, ServiceCallResponse } from "../types";
+import type {
+  Constructor,
+  HomeAssistant,
+  ServiceCallRequest,
+  ServiceCallResponse,
+} from "../types";
 import {
   addBrandsAuth,
   clearBrandsTokenRefresh,
@@ -112,7 +122,7 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
             );
           }
           try {
-            return (await callService(
+            const response = (await callService(
               conn,
               domain,
               service,
@@ -120,11 +130,24 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
               target,
               returnResponse
             )) as ServiceCallResponse;
+            this._reportEntityControlToExternalApp(
+              domain,
+              service,
+              serviceData,
+              target
+            );
+            return response;
           } catch (err: any) {
             if (
               err.error?.code === ERR_CONNECTION_LOST &&
               serviceCallWillDisconnect(domain, service, serviceData)
             ) {
+              this._reportEntityControlToExternalApp(
+                domain,
+                service,
+                serviceData,
+                target
+              );
               return { context: { id: "" } };
             }
             if (this.hass?.debugConnection) {
@@ -216,7 +239,7 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
               value != null ? value : (stateObj.attributes[attribute] ?? ""),
           },
         ],
-        formatEntityName: (stateObj) => computeStateName(stateObj),
+        formatEntityName: computeEntityNameDisplayWithoutContext,
         ...getState(),
         ...this._pendingHass,
       };
@@ -268,6 +291,7 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
             entity_id: entity.ei,
             device_id: entity.di,
             area_id: entity.ai,
+            next_name_part: entity.np,
             labels: entity.lb,
             translation_key: entity.tk,
             platform: entity.pl,
@@ -282,7 +306,16 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
             display_precision: entity.dp,
           };
         }
-        this._updateHass({ entities });
+        const updatedEntities = preserveUnchangedRecord(
+          this.hass?.entities,
+          entities,
+          deepEqual
+        );
+        // When the display payload is unchanged (a registry event that doesn't
+        // touch it), skip the update entirely instead of churning a new hass.
+        if (updatedEntities !== this.hass?.entities) {
+          this._updateHass({ entities: updatedEntities });
+        }
       });
       const devicesFallbackTimeout = window.setTimeout(() => {
         if (this.hass && this.hass.devices === null) {
@@ -299,7 +332,14 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
         for (const device of deviceReg) {
           devices[device.id] = device;
         }
-        this._updateHass({ devices });
+        const updatedDevices = preserveUnchangedRecord(
+          this.hass?.devices,
+          devices,
+          deepEqual
+        );
+        if (updatedDevices !== this.hass?.devices) {
+          this._updateHass({ devices: updatedDevices });
+        }
       });
       const areasFallbackTimeout = window.setTimeout(() => {
         if (this.hass && this.hass.areas === null) {
@@ -316,7 +356,15 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
         for (const area of areaReg) {
           areas[area.area_id] = area;
         }
-        this._updateHass({ areas });
+        const updatedAreas = preserveUnchangedRecord(
+          this.hass?.areas,
+          areas,
+          deepEqual,
+          true
+        );
+        if (updatedAreas !== this.hass?.areas) {
+          this._updateHass({ areas: updatedAreas });
+        }
       });
       const floorsFallbackTimeout = window.setTimeout(() => {
         if (this.hass && this.hass.floors === null) {
@@ -333,7 +381,15 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
         for (const floor of floorReg) {
           floors[floor.floor_id] = floor;
         }
-        this._updateHass({ floors });
+        const updatedFloors = preserveUnchangedRecord(
+          this.hass?.floors,
+          floors,
+          deepEqual,
+          true
+        );
+        if (updatedFloors !== this.hass?.floors) {
+          this._updateHass({ floors: updatedFloors });
+        }
       });
       subscribeConfig(conn, (config) => this._updateHass({ config }));
       subscribeServices(conn, (services) => this._updateHass({ services }));
@@ -360,8 +416,7 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
       });
       clearInterval(this.__backendPingInterval);
 
-      // Fetch the brands access token on initial connect and schedule refresh
-      fetchAndScheduleBrandsAccessToken(this.hass!);
+      this._refreshBrandsAccessToken();
 
       this.__backendPingInterval = setInterval(() => {
         if (this.hass?.connected) {
@@ -387,18 +442,17 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
       this._updateHass({ connected: true });
       broadcastConnectionStatus("connected");
 
-      // Refresh the brands access token on reconnect and restart refresh schedule
-      fetchAndScheduleBrandsAccessToken(this.hass!);
+      this._refreshBrandsAccessToken();
 
       // on reconnect always fetch config as we might miss an update while we were disconnected
       // @ts-ignore
       this.hass!.callWS({ type: "get_config" }).then((config: HassConfig) => {
         if (config.safe_mode) {
-          // @ts-ignore Firefox supports forceGet
-          location.reload(true);
+          location.reload();
         }
         this._updateHass({ config });
         this.checkDataBaseMigration();
+        this.checkHttpPendingConfig();
       });
     }
 
@@ -408,5 +462,40 @@ export const connectionMixin = <T extends Constructor<HassBaseEl>>(
       broadcastConnectionStatus("disconnected");
       clearInterval(this.__backendPingInterval);
       clearBrandsTokenRefresh();
+    }
+
+    private async _refreshBrandsAccessToken() {
+      // The brands WS handler may not be registered yet after a server restart;
+      // fetchAndScheduleBrandsAccessToken retries internally. If the token
+      // changed, re-render so any brand <img> elements that rendered against a
+      // different (or missing) token recompute their src and re-fetch.
+      const changed = await fetchAndScheduleBrandsAccessToken(this.hass!);
+      if (changed) {
+        this._updateHass({});
+      }
+    }
+
+    private _reportEntityControlToExternalApp(
+      domain: string,
+      service: string,
+      serviceData?: ServiceCallRequest["serviceData"],
+      target?: ServiceCallRequest["target"]
+    ) {
+      const external = this.hass?.auth.external;
+      if (!external) {
+        return;
+      }
+      const entityIds = getServiceCallEntityIds(serviceData, target);
+      if (!entityIds.length) {
+        return;
+      }
+      try {
+        external.fireMessage({
+          type: "entity/controlled",
+          payload: { entity_ids: entityIds, domain, service },
+        });
+      } catch (_err) {
+        // Reporting is best effort and must not fail the service call.
+      }
     }
   };

@@ -1,15 +1,20 @@
+import type { ContextType } from "@lit/context";
 import { mdiMinus, mdiPlus } from "@mdi/js";
 import type { CSSResultGroup, PropertyValues } from "lit";
 import { LitElement, html } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { styleMap } from "lit/directives/style-map";
+import { consume } from "../../common/decorators/consume";
 import { UNIT_F } from "../../common/const";
 import type { HASSDomEvent } from "../../common/dom/fire_event";
+import { consumeLocalize } from "../../common/decorators/consume-context-entry";
 import { stateActive } from "../../common/entity/state_active";
 import { stateColorCss } from "../../common/entity/state_color";
 import { supportsFeature } from "../../common/entity/supports-feature";
 import { clamp } from "../../common/number/clamp";
+import type { LocalizeFunc } from "../../common/translations/localize";
 import { debounce } from "../../common/util/debounce";
+import { PendingValueSync } from "../../common/util/pending-value-sync";
 import "../../components/ha-big-number";
 import "../../components/ha-control-circular-slider";
 import "../../components/ha-outlined-icon-button";
@@ -17,7 +22,11 @@ import "../../components/ha-svg-icon";
 import { UNAVAILABLE } from "../../data/entity/entity";
 import type { WaterHeaterEntity } from "../../data/water_heater";
 import { WaterHeaterEntityFeature } from "../../data/water_heater";
-import type { HomeAssistant } from "../../types";
+import {
+  apiContext,
+  configContext,
+  formattersContext,
+} from "../../data/context";
 import {
   createStateControlCircularSliderController,
   stateControlCircularSliderStyle,
@@ -25,9 +34,23 @@ import {
 
 @customElement("ha-state-control-water_heater-temperature")
 export class HaStateControlWaterHeaterTemperature extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property({ attribute: false }) public stateObj!: WaterHeaterEntity;
+
+  @state()
+  @consume({ context: apiContext, subscribe: true })
+  private _api!: ContextType<typeof apiContext>;
+
+  @state()
+  @consume({ context: configContext, subscribe: true })
+  private _config!: ContextType<typeof configContext>;
+
+  @state()
+  @consume({ context: formattersContext, subscribe: true })
+  private _formatters!: ContextType<typeof formattersContext>;
+
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
 
   @property({ attribute: "show-current", type: Boolean })
   public showCurrent = false;
@@ -39,17 +62,30 @@ export class HaStateControlWaterHeaterTemperature extends LitElement {
 
   private _sizeController = createStateControlCircularSliderController(this);
 
+  private _pendingSync = new PendingValueSync();
+
   protected willUpdate(changedProp: PropertyValues<this>): void {
     super.willUpdate(changedProp);
-    if (changedProp.has("stateObj")) {
-      this._targetTemperature = this.stateObj.attributes.temperature;
+    if (!changedProp.has("stateObj")) {
+      return;
     }
+    if (changedProp.get("stateObj")?.entity_id !== this.stateObj.entity_id) {
+      this._debouncedCallService.cancel();
+      this._pendingSync.reset();
+      this._syncTargetTemperature();
+    } else if (this._pendingSync.shouldSync()) {
+      this._syncTargetTemperature();
+    }
+  }
+
+  private _syncTargetTemperature() {
+    this._targetTemperature = this.stateObj.attributes.temperature;
   }
 
   private get _step() {
     return (
       this.stateObj.attributes.target_temp_step ||
-      (this.hass.config.unit_system.temperature === UNIT_F ? 1 : 0.5)
+      (this._config.config.unit_system.temperature === UNIT_F ? 1 : 0.5)
     );
   }
 
@@ -65,6 +101,7 @@ export class HaStateControlWaterHeaterTemperature extends LitElement {
     const { value } = ev.detail;
     if (typeof value !== "number" || isNaN(value)) return;
     this._targetTemperature = value;
+    this._debouncedCallService.cancel();
     this._callService();
   }
 
@@ -77,10 +114,14 @@ export class HaStateControlWaterHeaterTemperature extends LitElement {
   private _debouncedCallService = debounce(() => this._callService(), 1000);
 
   private _callService() {
-    this.hass.callService("water_heater", "set_temperature", {
+    const data = {
       entity_id: this.stateObj!.entity_id,
       temperature: this._targetTemperature,
-    });
+    };
+    return this._pendingSync.run(
+      () => this._api.callService("water_heater", "set_temperature", data),
+      () => this._syncTargetTemperature()
+    );
   }
 
   private _handleButton(ev) {
@@ -91,6 +132,7 @@ export class HaStateControlWaterHeaterTemperature extends LitElement {
     temp = clamp(temp, this._min, this._max);
 
     this._targetTemperature = temp;
+    this._pendingSync.schedule();
     this._debouncedCallService();
   }
 
@@ -98,7 +140,7 @@ export class HaStateControlWaterHeaterTemperature extends LitElement {
     if (this.stateObj.state === UNAVAILABLE) {
       return html`
         <p class="label disabled">
-          ${this.hass.formatEntityState(this.stateObj, UNAVAILABLE)}
+          ${this._formatters.formatEntityState(this.stateObj, UNAVAILABLE)}
         </p>
       `;
     }
@@ -111,26 +153,41 @@ export class HaStateControlWaterHeaterTemperature extends LitElement {
       !this._targetTemperature
     ) {
       return html`
-        <p class="label">${this.hass.formatEntityState(this.stateObj)}</p>
+        <p class="label">
+          ${this._formatters.formatEntityState(this.stateObj)}
+        </p>
       `;
     }
 
     return html`
-      <p class="label">${this.hass.localize("ui.card.water_heater.target")}</p>
+      <p class="label">${this._localize("ui.card.water_heater.target")}</p>
     `;
   }
+
+  private _formatTarget = (temperature: number) =>
+    this._formatters.formatEntityAttributeValue(
+      this.stateObj,
+      "temperature",
+      temperature
+    );
 
   private _renderButtons() {
     return html`
       <div class="buttons">
         <ha-outlined-icon-button
           .step=${-this._step}
+          .label=${this._localize(
+            "ui.components.climate-control.temperature_down"
+          )}
           @click=${this._handleButton}
         >
           <ha-svg-icon .path=${mdiMinus}></ha-svg-icon>
         </ha-outlined-icon-button>
         <ha-outlined-icon-button
           .step=${this._step}
+          .label=${this._localize(
+            "ui.components.climate-control.temperature_up"
+          )}
           @click=${this._handleButton}
         >
           <ha-svg-icon .path=${mdiPlus}></ha-svg-icon>
@@ -148,8 +205,7 @@ export class HaStateControlWaterHeaterTemperature extends LitElement {
     return html`
       <ha-big-number
         .value=${temperature}
-        .unit=${this.hass.config.unit_system.temperature}
-        .hass=${this.hass}
+        .unit=${this._config.config.unit_system.temperature}
         .formatOptions=${formatOptions}
       ></ha-big-number>
     `;
@@ -162,9 +218,9 @@ export class HaStateControlWaterHeaterTemperature extends LitElement {
 
     return html`
       <p class="label">
-        ${this.hass.localize("ui.card.water_heater.currently")}
+        ${this._localize("ui.card.water_heater.currently")}
         <span>
-          ${this.hass.formatEntityAttributeValue(
+          ${this._formatters.formatEntityAttributeValue(
             this.stateObj,
             "current_temperature",
             temperature
@@ -207,6 +263,8 @@ export class HaStateControlWaterHeaterTemperature extends LitElement {
             .max=${this._max}
             .step=${this._step}
             .current=${this.stateObj.attributes.current_temperature}
+            .label=${this._localize("ui.card.water_heater.target_temperature")}
+            .formatValue=${this._formatTarget}
             @value-changed=${this._valueChanged}
             @value-changing=${this._valueChanging}
           >

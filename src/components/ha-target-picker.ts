@@ -1,6 +1,6 @@
+import type { ContextType } from "@lit/context";
 import "@home-assistant/webawesome/dist/components/popover/popover";
-import { consume } from "@lit/context";
-import { mdiPlus, mdiTextureBox } from "@mdi/js";
+import { mdiPlaylistMinus, mdiPlus, mdiTextureBox } from "@mdi/js";
 import Fuse from "fuse.js";
 import type { HassServiceTarget } from "home-assistant-js-websocket";
 import type { PropertyValues } from "lit";
@@ -8,6 +8,8 @@ import { LitElement, css, html, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
 import { styleMap } from "lit/directives/style-map";
 import memoizeOne from "memoize-one";
+import { consume } from "../common/decorators/consume";
+import { transform } from "../common/decorators/transform";
 import { ensureArray } from "../common/array/ensure-array";
 import type { HASSDomEvent } from "../common/dom/fire_event";
 import { fireEvent } from "../common/dom/fire_event";
@@ -21,12 +23,26 @@ import {
   type FloorComboBoxItem,
 } from "../data/area_floor_picker";
 import { getConfigEntries, type ConfigEntry } from "../data/config_entries";
-import { labelsContext } from "../data/context";
+import {
+  apiContext,
+  brandsAccessTokenContext,
+  configContext,
+  connectionContext,
+  internationalizationContext,
+  labelsContext,
+  registriesContext,
+  statesContext,
+  uiContext,
+} from "../data/context";
 import {
   deviceComboBoxKeys,
   getDevices,
   type DevicePickerItem,
 } from "../data/device/device_picker";
+import {
+  fetchDeviceCompositeSplits,
+  type DeviceCompositeSplits,
+} from "../data/device/device_registry";
 import type { HaEntityPickerEntityFilterFunc } from "../data/entity/entity";
 import {
   entityComboBoxKeys,
@@ -37,15 +53,12 @@ import { domainToName } from "../data/integration";
 import { getLabels, labelComboBoxKeys } from "../data/label/label_picker";
 import type { LabelRegistryEntry } from "../data/label/label_registry";
 import {
-  areaMeetsFilter,
-  deviceMeetsFilter,
-  entityRegMeetsFilter,
   getTargetComboBoxItemType,
+  type HassServiceTargetWithExclude,
   type TargetItem,
   type TargetType,
   type TargetTypeFloorless,
 } from "../data/target";
-import { SubscribeMixin } from "../mixins/subscribe-mixin";
 import { isHelperDomain } from "../panels/config/helpers/const";
 import { showHelperDetailDialog } from "../panels/config/helpers/show-dialog-helper-detail";
 import {
@@ -53,16 +66,33 @@ import {
   multiTermSortedSearch,
   type FuseWeightedKey,
 } from "../resources/fuseMultiTerm";
-import type { HomeAssistant, ValueChangedEvent } from "../types";
+import type {
+  HomeAssistant,
+  HomeAssistantUI,
+  ValueChangedEvent,
+} from "../types";
 import { brandsUrl } from "../util/brands-url";
 import type { HaDevicePickerDeviceFilterFunc } from "./device/ha-device-picker";
+import "./ha-button";
 import "./ha-generic-picker";
 import type { HaGenericPicker } from "./ha-generic-picker";
 import type { PickerComboBoxItem } from "./ha-picker-combo-box";
 import "./ha-svg-icon";
 import "./ha-tree-indicator";
+import "./list/ha-list-base";
 import "./target-picker/ha-target-picker-item-group";
-import "./target-picker/ha-target-picker-value-chip";
+import "./target-picker/ha-target-picker-item-row";
+import { showTargetDetailsDialog } from "./target-picker/dialog/show-dialog-target-details";
+import { TargetExclusionsController } from "./target-picker/target-exclusions-controller";
+import {
+  addToExclude,
+  applyExclusionChanges,
+  hasIncludedTargets,
+  removeFromExclude,
+  TARGET_TYPES,
+  targetItemKey,
+  withExclude,
+} from "./target-picker/target-exclusions";
 
 const SEPARATOR = "________";
 const CREATE_ID = "___create-new-entity___";
@@ -74,14 +104,10 @@ const isTargetType = (value: string): value is TargetType =>
   value === "floor";
 
 @customElement("ha-target-picker")
-export class HaTargetPicker extends SubscribeMixin(LitElement) {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
-  @property({ attribute: false }) public value?: HassServiceTarget;
+export class HaTargetPicker extends LitElement {
+  @property({ attribute: false }) public value?: HassServiceTargetWithExclude;
 
   @property() public helper?: string;
-
-  @property({ type: Boolean, reflect: true }) public compact = false;
 
   @property({ attribute: false }) public createDomains?: string[];
 
@@ -110,11 +136,25 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
   @property({ attribute: false })
   public entityFilter?: HaEntityPickerEntityFilterFunc;
 
+  /**
+   * Entities that pass the filters the page currently has on. Narrows the
+   * counts, unlike `entityFilter`, which says what can be picked at all.
+   */
+  @property({ attribute: false })
+  public activeFilter?: (entityId: string) => boolean;
+
   @property({ type: Boolean, reflect: true }) public disabled = false;
 
-  @property({ attribute: "add-on-top", type: Boolean }) public addOnTop = false;
+  /**
+   * Offer to exclude things from the target again, stored in `exclude`.
+   * Exclusions already in the value are shown either way.
+   */
+  @property({ type: Boolean, attribute: "allow-exclude" })
+  public allowExclude = false;
 
   @state() private _selectedSection?: TargetTypeFloorless;
+
+  @state() private _excludeSection?: TargetTypeFloorless;
 
   @state() private _replaceTarget?: TargetItem;
 
@@ -122,24 +162,139 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
 
   @state() private _configEntryLookup: Record<string, ConfigEntry> = {};
 
+  @state() private _compositeSplits?: DeviceCompositeSplits;
+
+  private _loadingCompositeSplits = false;
+
   @state()
   @consume({ context: labelsContext, subscribe: true })
   private _labelRegistry!: LabelRegistryEntry[];
 
+  @consume({ context: statesContext, subscribe: true })
+  private _states!: ContextType<typeof statesContext>;
+
+  @state()
+  @consume({ context: statesContext, subscribe: true })
+  @transform<HomeAssistant["states"], boolean>({
+    transformer: function (this: HaTargetPicker, states) {
+      return !!this._pendingEntityId && !!states?.[this._pendingEntityId];
+    },
+    watch: ["_pendingEntityId"],
+  })
+  private _pendingEntityLoaded = false;
+
+  @state()
+  @consume({ context: registriesContext, subscribe: true })
+  private _registries!: ContextType<typeof registriesContext>;
+
+  @state()
+  @consume({ context: internationalizationContext, subscribe: true })
+  private _i18n!: ContextType<typeof internationalizationContext>;
+
+  @state()
+  @consume({ context: uiContext, subscribe: true })
+  @transform<HomeAssistantUI, boolean | undefined>({
+    transformer: (ui) => ui?.themes?.darkMode,
+  })
+  private _darkMode?: boolean;
+
+  @consume({ context: configContext, subscribe: true })
+  private _config?: ContextType<typeof configContext>;
+
+  @consume({ context: apiContext, subscribe: true })
+  private _api?: ContextType<typeof apiContext>;
+
+  @consume({ context: connectionContext, subscribe: true })
+  private _connection?: ContextType<typeof connectionContext>;
+
+  @state()
+  @consume({ context: brandsAccessTokenContext, subscribe: true })
+  private _brandsAccessToken?: string;
+
   @query("ha-generic-picker") private _picker?: HaGenericPicker;
+
+  @query("ha-generic-picker.exclude") private _excludePicker?: HaGenericPicker;
 
   private _newTarget?: TargetItem;
 
-  private _getDevicesMemoized = memoizeOne(getDevices);
+  private _exclusions = new TargetExclusionsController(this);
+
+  private _getDevicesMemoized = memoizeOne(
+    (
+      states: HomeAssistant["states"],
+      registries: ContextType<typeof registriesContext>,
+      i18n: ContextType<typeof internationalizationContext>,
+      configEntryLookup: Record<string, ConfigEntry>,
+      includeDomains?: string[],
+      includeDeviceClasses?: string[],
+      deviceFilter?: HaDevicePickerDeviceFilterFunc,
+      entityFilter?: HaEntityPickerEntityFilterFunc,
+      excludeDevices?: string[],
+      value?: string,
+      idPrefix?: string
+    ) =>
+      getDevices({
+        states,
+        areas: registries.areas,
+        devices: registries.devices,
+        entities: registries.entities,
+        localize: i18n.localize,
+        language: i18n.locale.language,
+        translationMetadata: i18n.translationMetadata,
+        configEntryLookup,
+        includeDomains,
+        includeDeviceClasses,
+        deviceFilter,
+        entityFilter,
+        excludeDevices,
+        value,
+        idPrefix,
+        nested: true,
+      })
+  );
 
   private _getLabelsMemoized = memoizeOne(getLabels);
 
-  private _getEntitiesMemoized = memoizeOne(getEntities);
+  private _getEntitiesMemoized = memoizeOne(
+    (
+      states: HomeAssistant["states"],
+      registries: ContextType<typeof registriesContext>,
+      i18n: ContextType<typeof internationalizationContext>,
+      includeDomains?: string[],
+      excludeDomains?: string[],
+      entityFilter?: HaEntityPickerEntityFilterFunc,
+      includeDeviceClasses?: string[],
+      includeUnitOfMeasurement?: string[],
+      includeEntities?: string[],
+      excludeEntities?: string[],
+      value?: string,
+      idPrefix?: string
+    ) =>
+      getEntities({
+        states,
+        entities: registries.entities,
+        devices: registries.devices,
+        areas: registries.areas,
+        floors: registries.floors,
+        localize: i18n.localize,
+        language: i18n.language,
+        translationMetadata: i18n.translationMetadata,
+        includeDomains,
+        excludeDomains,
+        entityFilter,
+        includeDeviceClasses,
+        includeUnitOfMeasurement,
+        includeEntities,
+        excludeEntities,
+        value,
+        idPrefix,
+      })
+  );
 
   private _getAreasAndFloorsMemoized = memoizeOne(getAreasAndFloors);
 
   private get _showEntityId() {
-    return this.hass.userData?.showEntityIdPicker;
+    return this._config?.userData?.showEntityIdPicker;
   }
 
   private _fuseIndexes = {
@@ -159,19 +314,47 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
 
   @state() private _pendingEntityId?: string;
 
-  public willUpdate(changedProps: PropertyValues<this>) {
+  public willUpdate(changedProps: PropertyValues) {
     super.willUpdate(changedProps);
 
     if (!this.hasUpdated) {
       this._loadConfigEntries();
     }
 
+    const devices = this._registries?.devices;
+    const devicesChanged =
+      changedProps.has("_registries") &&
+      devices !==
+        (
+          changedProps.get("_registries") as
+            ContextType<typeof registriesContext> | undefined
+        )?.devices;
     if (
-      this._pendingEntityId &&
-      changedProps.has("hass") &&
-      this.hass.states !== changedProps.get("hass")?.states &&
-      this.hass.states[this._pendingEntityId]
+      (changedProps.has("value") || devicesChanged) &&
+      devices &&
+      this._compositeSplits === undefined &&
+      !this._loadingCompositeSplits &&
+      this.value?.device_id &&
+      ensureArray(this.value.device_id).some((deviceId) => !devices[deviceId])
     ) {
+      // A referenced device is missing from the registry; it might be a legacy
+      // composite device that was split. Fetch the split map to offer a fix.
+      this._loadCompositeSplits();
+    }
+
+    if (
+      changedProps.has("value") ||
+      changedProps.has("allowExclude") ||
+      changedProps.has("primaryEntitiesOnly") ||
+      changedProps.has("deviceFilter") ||
+      changedProps.has("includeDomains") ||
+      changedProps.has("includeDeviceClasses") ||
+      changedProps.has("entityFilter")
+    ) {
+      this._exclusions.resolve();
+    }
+
+    if (this._pendingEntityId && this._pendingEntityLoaded) {
       this._addTarget(this._pendingEntityId, "entity");
       this._pendingEntityId = undefined;
     }
@@ -181,106 +364,7 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
     Fuse.createIndex(keys, states);
 
   protected render() {
-    if (this.addOnTop) {
-      return html` ${this._renderPicker()} ${this._renderItems()} `;
-    }
     return html` ${this._renderItems()} ${this._renderPicker()} `;
-  }
-
-  private _renderValueChips() {
-    const entityIds = this.value?.entity_id
-      ? ensureArray(this.value.entity_id)
-      : [];
-    const deviceIds = this.value?.device_id
-      ? ensureArray(this.value.device_id)
-      : [];
-    const areaIds = this.value?.area_id ? ensureArray(this.value.area_id) : [];
-    const floorIds = this.value?.floor_id
-      ? ensureArray(this.value.floor_id)
-      : [];
-    const labelIds = this.value?.label_id
-      ? ensureArray(this.value.label_id)
-      : [];
-
-    if (
-      !entityIds.length &&
-      !deviceIds.length &&
-      !areaIds.length &&
-      !floorIds.length &&
-      !labelIds.length
-    ) {
-      return nothing;
-    }
-
-    return html`
-      <div class="items">
-        ${floorIds.length
-          ? floorIds.map(
-              (floor_id) => html`
-                <ha-target-picker-value-chip
-                  .hass=${this.hass}
-                  type="floor"
-                  .itemId=${floor_id}
-                  @remove-target-item=${this._handleRemove}
-                  @expand-target-item=${this._handleExpand}
-                ></ha-target-picker-value-chip>
-              `
-            )
-          : nothing}
-        ${areaIds.length
-          ? areaIds.map(
-              (area_id) => html`
-                <ha-target-picker-value-chip
-                  .hass=${this.hass}
-                  type="area"
-                  .itemId=${area_id}
-                  @remove-target-item=${this._handleRemove}
-                  @expand-target-item=${this._handleExpand}
-                ></ha-target-picker-value-chip>
-              `
-            )
-          : nothing}
-        ${deviceIds.length
-          ? deviceIds.map(
-              (device_id) => html`
-                <ha-target-picker-value-chip
-                  .hass=${this.hass}
-                  type="device"
-                  .itemId=${device_id}
-                  @remove-target-item=${this._handleRemove}
-                  @expand-target-item=${this._handleExpand}
-                ></ha-target-picker-value-chip>
-              `
-            )
-          : nothing}
-        ${entityIds.length
-          ? entityIds.map(
-              (entity_id) => html`
-                <ha-target-picker-value-chip
-                  .hass=${this.hass}
-                  type="entity"
-                  .itemId=${entity_id}
-                  @remove-target-item=${this._handleRemove}
-                  @expand-target-item=${this._handleExpand}
-                ></ha-target-picker-value-chip>
-              `
-            )
-          : nothing}
-        ${labelIds.length
-          ? labelIds.map(
-              (label_id) => html`
-                <ha-target-picker-value-chip
-                  .hass=${this.hass}
-                  type="label"
-                  .itemId=${label_id}
-                  @remove-target-item=${this._handleRemove}
-                  @expand-target-item=${this._handleExpand}
-                ></ha-target-picker-value-chip>
-              `
-            )
-          : nothing}
-      </div>
-    `;
   }
 
   private _renderValueGroups() {
@@ -298,148 +382,387 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
       ? ensureArray(this.value?.label_id)
       : [];
 
+    const noEffect = this._exclusions.exclusions?.noEffect ?? [];
+    const unplaced = this._exclusions.unplaced;
+    const perTarget = this._exclusions.perTarget;
+
     if (
       !entityIds.length &&
       !deviceIds.length &&
       !areaIds.length &&
       !floorIds.length &&
-      !labelIds.length
+      !labelIds.length &&
+      !noEffect.length &&
+      !unplaced.length
     ) {
       return nothing;
     }
 
     return html`
-      <div class="item-groups">
-        ${entityIds.length
-          ? html`
-              <ha-target-picker-item-group
-                @remove-target-item=${this._handleRemove}
-                @replace-target-item=${this._handleReplace}
-                type="entity"
-                .hass=${this.hass}
-                .items=${{ entity: entityIds }}
-                .deviceFilter=${this.deviceFilter}
-                .entityFilter=${this.entityFilter}
-                .includeDomains=${this.includeDomains}
-                .includeDeviceClasses=${this.includeDeviceClasses}
-                .primaryEntitiesOnly=${this.primaryEntitiesOnly}
-              >
-              </ha-target-picker-item-group>
-            `
-          : nothing}
-        ${deviceIds.length
-          ? html`
-              <ha-target-picker-item-group
-                @remove-target-item=${this._handleRemove}
-                @replace-target-item=${this._handleReplace}
-                type="device"
-                .hass=${this.hass}
-                .items=${{ device: deviceIds }}
-                .deviceFilter=${this.deviceFilter}
-                .entityFilter=${this.entityFilter}
-                .includeDomains=${this.includeDomains}
-                .includeDeviceClasses=${this.includeDeviceClasses}
-                .primaryEntitiesOnly=${this.primaryEntitiesOnly}
-              >
-              </ha-target-picker-item-group>
-            `
-          : nothing}
-        ${floorIds.length || areaIds.length
-          ? html`
-              <ha-target-picker-item-group
-                @remove-target-item=${this._handleRemove}
-                @replace-target-item=${this._handleReplace}
-                type="area"
-                .hass=${this.hass}
-                .items=${{
-                  floor: floorIds,
-                  area: areaIds,
-                }}
-                .deviceFilter=${this.deviceFilter}
-                .entityFilter=${this.entityFilter}
-                .includeDomains=${this.includeDomains}
-                .includeDeviceClasses=${this.includeDeviceClasses}
-                .primaryEntitiesOnly=${this.primaryEntitiesOnly}
-              >
-              </ha-target-picker-item-group>
-            `
-          : nothing}
-        ${labelIds.length
-          ? html`
-              <ha-target-picker-item-group
-                @remove-target-item=${this._handleRemove}
-                @replace-target-item=${this._handleReplace}
-                type="label"
-                .hass=${this.hass}
-                .items=${{ label: labelIds }}
-                .deviceFilter=${this.deviceFilter}
-                .entityFilter=${this.entityFilter}
-                .includeDomains=${this.includeDomains}
-                .includeDeviceClasses=${this.includeDeviceClasses}
-                .primaryEntitiesOnly=${this.primaryEntitiesOnly}
-              >
-              </ha-target-picker-item-group>
-            `
-          : nothing}
+      <div
+        class="item-groups"
+        @remove-target-exclusion=${this._handleRemoveExclusion}
+        @open-target-details=${this._openDetails}
+      >
+        ${
+          entityIds.length
+            ? html`
+                <ha-target-picker-item-group
+                  @remove-target-item=${this._handleRemove}
+                  @replace-target-item=${this._handleReplace}
+                  type="entity"
+                  .exclusions=${perTarget}
+                  .items=${{ entity: entityIds }}
+                  .deviceFilter=${this.deviceFilter}
+                  .entityFilter=${this.entityFilter}
+                  .activeFilter=${this.activeFilter}
+                  .includeDomains=${this.includeDomains}
+                  .includeDeviceClasses=${this.includeDeviceClasses}
+                  .primaryEntitiesOnly=${this.primaryEntitiesOnly}
+                >
+                </ha-target-picker-item-group>
+              `
+            : nothing
+        }
+        ${
+          deviceIds.length
+            ? html`
+                <ha-target-picker-item-group
+                  @remove-target-item=${this._handleRemove}
+                  @replace-target-item=${this._handleReplace}
+                  @migrate-target-item=${this._handleMigrate}
+                  type="device"
+                  .exclusions=${perTarget}
+                  .items=${{ device: deviceIds }}
+                  .deviceFilter=${this.deviceFilter}
+                  .entityFilter=${this.entityFilter}
+                  .activeFilter=${this.activeFilter}
+                  .includeDomains=${this.includeDomains}
+                  .includeDeviceClasses=${this.includeDeviceClasses}
+                  .primaryEntitiesOnly=${this.primaryEntitiesOnly}
+                  .compositeSplits=${this._compositeSplits}
+                >
+                </ha-target-picker-item-group>
+              `
+            : nothing
+        }
+        ${
+          floorIds.length || areaIds.length
+            ? html`
+                <ha-target-picker-item-group
+                  @remove-target-item=${this._handleRemove}
+                  @replace-target-item=${this._handleReplace}
+                  type="area"
+                  .exclusions=${perTarget}
+                  .items=${{
+                    floor: floorIds,
+                    area: areaIds,
+                  }}
+                  .deviceFilter=${this.deviceFilter}
+                  .entityFilter=${this.entityFilter}
+                  .activeFilter=${this.activeFilter}
+                  .includeDomains=${this.includeDomains}
+                  .includeDeviceClasses=${this.includeDeviceClasses}
+                  .primaryEntitiesOnly=${this.primaryEntitiesOnly}
+                >
+                </ha-target-picker-item-group>
+              `
+            : nothing
+        }
+        ${
+          labelIds.length
+            ? html`
+                <ha-target-picker-item-group
+                  @remove-target-item=${this._handleRemove}
+                  @replace-target-item=${this._handleReplace}
+                  type="label"
+                  .exclusions=${perTarget}
+                  .items=${{ label: labelIds }}
+                  .deviceFilter=${this.deviceFilter}
+                  .entityFilter=${this.entityFilter}
+                  .activeFilter=${this.activeFilter}
+                  .includeDomains=${this.includeDomains}
+                  .includeDeviceClasses=${this.includeDeviceClasses}
+                  .primaryEntitiesOnly=${this.primaryEntitiesOnly}
+                >
+                </ha-target-picker-item-group>
+              `
+            : nothing
+        }
+        ${this._renderExclusionList(
+          "ui.components.target-picker.exclusions",
+          unplaced
+        )}
+        ${this._renderExclusionList(
+          "ui.components.target-picker.exclusions_no_effect",
+          noEffect
+        )}
       </div>
     `;
   }
 
-  private _renderItems() {
+  private _renderExclusionList(
+    label:
+      | "ui.components.target-picker.exclusions"
+      | "ui.components.target-picker.exclusions_no_effect",
+    items: TargetItem[]
+  ) {
+    if (!items.length) {
+      return nothing;
+    }
     return html`
-      ${this.compact ? this._renderValueChips() : this._renderValueGroups()}
+      <div class="exclusion-list-label">${this._i18n.localize(label)}</div>
+      <ha-list-base>
+        ${items.map(
+          (item) =>
+            html`<ha-target-picker-item-row
+              exclusion
+              .type=${item.type}
+              .itemId=${item.id}
+            ></ha-target-picker-item-row>`
+        )}
+      </ha-list-base>
     `;
   }
 
+  private _renderItems() {
+    return html` ${this._renderValueGroups()} `;
+  }
+
   private _renderPicker() {
-    const sections = [
-      {
-        id: "entity",
-        label: this.hass.localize("ui.components.target-picker.type.entities"),
-      },
-      {
-        id: "device",
-        label: this.hass.localize("ui.components.target-picker.type.devices"),
-      },
-      {
-        id: "area",
-        label: this.hass.localize("ui.components.target-picker.type.areas"),
-      },
-      "separator" as const,
-      {
-        id: "label",
-        label: this.hass.localize("ui.components.target-picker.type.labels"),
-      },
-    ];
+    const sections = this._sections();
+    const showExclude = this.allowExclude && hasIncludedTargets(this.value);
 
     return html`
-      <div class="add-target-wrapper">
+      <div
+        class=${showExclude ? "add-target-wrapper exclude-shown" : "add-target-wrapper"}
+      >
         <ha-generic-picker
-          .hass=${this.hass}
+          popover-placement="bottom-start"
           .disabled=${this.disabled}
           .autofocus=${this.autofocus}
           .helper=${this.helper}
           .sections=${sections}
           .notFoundLabel=${this._noTargetFoundLabel}
-          .emptyLabel=${this.hass.localize(
+          .emptyLabel=${this._i18n.localize(
             "ui.components.target-picker.no_targets"
           )}
-          .sectionTitleFunction=${this._sectionTitleFunction}
           .selectedSection=${this._selectedSection}
           .popoverAnchor=${this._replaceTargetAnchor}
-          .rowRenderer=${this._renderRow}
+          .rowRenderer=${this._rowRenderer(this._brandsAccessToken)}
           .getItems=${this._getItems}
           @value-changed=${this._targetPicked}
           @picker-closed=${this._handlePickerClosed}
-          .addButtonLabel=${this.hass.localize(
+          .addButtonLabel=${this._i18n.localize(
             "ui.components.target-picker.add_target"
           )}
           .getAdditionalItems=${this._getAdditionalItems}
         >
         </ha-generic-picker>
+        ${
+          showExclude
+            ? html`
+                <ha-generic-picker
+                  class="exclude"
+                  popover-placement="bottom-start"
+                  .disabled=${this.disabled}
+                  .sections=${sections}
+                  .notFoundLabel=${this._noTargetFoundLabel}
+                  .emptyLabel=${this._i18n.localize(
+                    "ui.components.target-picker.no_targets"
+                  )}
+                  .selectedSection=${this._excludeSection}
+                  .rowRenderer=${this._rowRenderer(this._brandsAccessToken)}
+                  .getItems=${this._getExcludeItems}
+                  @value-changed=${this._excludePicked}
+                >
+                  <ha-button
+                    slot="field"
+                    size="s"
+                    appearance="plain"
+                    .disabled=${this.disabled}
+                    @click=${this._openExcludePicker}
+                  >
+                    <ha-svg-icon
+                      .path=${mdiPlaylistMinus}
+                      slot="start"
+                    ></ha-svg-icon>
+                    ${this._i18n.localize(
+                      "ui.components.target-picker.exclude_target"
+                    )}
+                  </ha-button>
+                </ha-generic-picker>
+              `
+            : nothing
+        }
       </div>
     `;
   }
+
+  private _sections() {
+    return [
+      {
+        id: "entity",
+        label: this._i18n.localize("ui.components.target-picker.type.entities"),
+      },
+      {
+        id: "device",
+        label: this._i18n.localize("ui.components.target-picker.type.devices"),
+      },
+      {
+        id: "area",
+        label: this._i18n.localize("ui.components.target-picker.type.areas"),
+      },
+      "separator" as const,
+      {
+        id: "label",
+        label: this._i18n.localize("ui.components.target-picker.type.labels"),
+      },
+    ];
+  }
+
+  // Without an exclude yet, what the target includes is only needed once the
+  // exclude picker opens, so it only offers what would take something out.
+  private async _openExcludePicker(ev: Event) {
+    this._excludePicker?.open(ev);
+    if (!this._exclusions.includedEntities) {
+      await this._exclusions.resolve({ force: true });
+      this._excludePicker?.refreshItems();
+    }
+  }
+
+  private _excludePicked(ev: ValueChangedEvent<string>) {
+    ev.stopPropagation();
+    const [rawType, id] = ev.detail.value.split(SEPARATOR);
+    if (!id || !isTargetType(rawType)) {
+      return;
+    }
+    const value = withExclude(
+      this.value,
+      addToExclude(this.value?.exclude, { type: rawType, id })
+    );
+    if (value) {
+      fireEvent(this, "value-changed", { value });
+    }
+  }
+
+  private _handleRemoveExclusion(
+    ev: HASSDomEvent<HASSDomEvents["remove-target-exclusion"]>
+  ) {
+    ev.stopPropagation();
+    fireEvent(this, "value-changed", {
+      value: withExclude(
+        this.value,
+        removeFromExclude(this.value?.exclude, ev.detail)
+      ),
+    });
+  }
+
+  private _openDetails(ev: HASSDomEvent<HASSDomEvents["open-target-details"]>) {
+    ev.stopPropagation();
+    const { type, id, title } = ev.detail;
+    const key = targetItemKey({ type, id });
+    const perTarget = this._exclusions.perTarget;
+    const exclusions = perTarget ? (perTarget[key] ?? []) : undefined;
+    const editable =
+      exclusions &&
+      this.allowExclude &&
+      !this.disabled &&
+      this._exclusions.complete;
+    showTargetDetailsDialog(this, {
+      title,
+      type,
+      itemId: id,
+      deviceFilter: this.deviceFilter,
+      entityFilter: this.entityFilter,
+      activeFilter: this.activeFilter,
+      includeDomains: this.includeDomains,
+      includeDeviceClasses: this.includeDeviceClasses,
+      primaryEntitiesOnly: this.primaryEntitiesOnly,
+      exclusions,
+      exclude: this.value?.exclude,
+      expandGroup: this._exclusions.expandGroup,
+      explainExclusion: editable
+        ? (item) => this._exclusions.explainExclusion(key, item)
+        : undefined,
+      exclusionsChanged: editable
+        ? (initial, current) => {
+            fireEvent(this, "value-changed", {
+              value: withExclude(
+                this.value,
+                applyExclusionChanges(this.value?.exclude, initial, current)
+              ),
+            });
+          }
+        : undefined,
+    });
+  }
+
+  // What the exclude picker hides along with its children: what is already
+  // excluded, and what is included except devices, whose child devices can
+  // still be excluded on their own (see `_excludePickerIncludedDevices`).
+  private _excludePickerHidden = memoizeOne(
+    (value?: HassServiceTargetWithExclude): HassServiceTarget => {
+      const hidden: HassServiceTarget = {};
+      TARGET_TYPES.forEach((type) => {
+        const key = `${type}_id` as const;
+        const ids = [
+          ...(key === "floor_id" || key === "device_id" || !value?.[key]
+            ? []
+            : ensureArray(value[key])),
+          ...(value?.exclude?.[key] ? ensureArray(value.exclude[key]) : []),
+        ];
+        if (ids.length) {
+          hidden[key] = ids;
+        }
+      });
+      return hidden;
+    }
+  );
+
+  private _excludePickerIncludedDevices = memoizeOne(
+    (value?: HassServiceTargetWithExclude): string[] | undefined =>
+      value?.device_id ? ensureArray(value.device_id) : undefined
+  );
+
+  // Only offers what overlaps with what the target includes.
+  private _excludeEntityFilter = memoizeOne(
+    (
+      entityFilter: HaEntityPickerEntityFilterFunc | undefined,
+      included: string[] | undefined
+    ): HaEntityPickerEntityFilterFunc | undefined => {
+      if (!included) {
+        return entityFilter;
+      }
+      const includedSet = new Set(included);
+      return (stateObj) =>
+        includedSet.has(stateObj.entity_id) &&
+        (!entityFilter || entityFilter(stateObj));
+    }
+  );
+
+  private _getExcludeItems = (searchString: string, section: string) => {
+    this._excludeSection = section as TargetTypeFloorless | undefined;
+
+    return this._getItemsMemoized(
+      this._i18n,
+      this._excludeEntityFilter(
+        this.entityFilter,
+        this._exclusions.includedEntities
+      ),
+      this.deviceFilter,
+      this.includeDomains,
+      this.includeDeviceClasses,
+      this._excludePickerHidden(this.value),
+      undefined,
+      searchString,
+      this._configEntryLookup,
+      this._states,
+      this._registries,
+      this._excludeSection,
+      this._excludePickerIncludedDevices(this.value)
+    );
+  };
 
   private _targetPicked(ev: ValueChangedEvent<string>) {
     ev.stopPropagation();
@@ -513,7 +836,9 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
       currentTarget.id
     );
 
-    return this._addTargetToValue(valueWithoutCurrent, newTarget);
+    return this._withoutOrphanExclude(
+      this._addTargetToValue(valueWithoutCurrent, newTarget)
+    );
   }
 
   private _addTargetToValue(
@@ -530,14 +855,19 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
       return value;
     }
 
-    return value
-      ? {
-          ...value,
-          [typeId]: value[typeId]
-            ? [...ensureArray(value[typeId]), target.id]
-            : target.id,
-        }
-      : { [typeId]: target.id };
+    if (!value) {
+      return { [typeId]: target.id };
+    }
+    const newValue = {
+      ...value,
+      [typeId]: value[typeId]
+        ? [...ensureArray(value[typeId]), target.id]
+        : target.id,
+    };
+    // Something added on purpose shouldn't stay excluded.
+    return newValue.exclude
+      ? withExclude(newValue, removeFromExclude(newValue.exclude, target))
+      : newValue;
   }
 
   private _createNewDomainElement = (domain: string) => {
@@ -545,7 +875,7 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
       domain,
       dialogClosedCallback: (item) => {
         if (item.entityId) {
-          if (this.hass.states[item.entityId]) {
+          if (this._states?.[item.entityId]) {
             this._addTarget(item.entityId, "entity");
           } else {
             this._pendingEntityId = item.entityId;
@@ -558,154 +888,8 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
   private _handleRemove(ev: HASSDomEvent<HASSDomEvents["remove-target-item"]>) {
     const { type, id } = ev.detail;
     fireEvent(this, "value-changed", {
-      value: this._removeItem(this.value, type, id),
+      value: this._withoutOrphanExclude(this._removeItem(this.value, type, id)),
     });
-  }
-
-  private _handleExpand(ev: HASSDomEvent<HASSDomEvents["expand-target-item"]>) {
-    const type = ev.detail.type;
-    const itemId = ev.detail.id;
-    const newAreas: string[] = [];
-    const newDevices: string[] = [];
-    const newEntities: string[] = [];
-
-    if (type === "floor") {
-      Object.values(this.hass.areas).forEach((area) => {
-        if (
-          area.floor_id === itemId &&
-          !this.value!.area_id?.includes(area.area_id) &&
-          areaMeetsFilter(
-            area,
-            this.hass.devices,
-            this.hass.entities,
-            this.deviceFilter,
-            this.includeDomains,
-            this.includeDeviceClasses,
-            this.hass.states,
-            this.entityFilter
-          )
-        ) {
-          newAreas.push(area.area_id);
-        }
-      });
-    } else if (type === "area") {
-      Object.values(this.hass.devices).forEach((device) => {
-        if (
-          device.area_id === itemId &&
-          !this.value!.device_id?.includes(device.id) &&
-          deviceMeetsFilter(
-            device,
-            this.hass.entities,
-            this.deviceFilter,
-            this.includeDomains,
-            this.includeDeviceClasses,
-            this.hass.states,
-            this.entityFilter
-          )
-        ) {
-          newDevices.push(device.id);
-        }
-      });
-      Object.values(this.hass.entities).forEach((entity) => {
-        if (
-          entity.area_id === itemId &&
-          !this.value!.entity_id?.includes(entity.entity_id) &&
-          entityRegMeetsFilter(
-            entity,
-            false,
-            this.includeDomains,
-            this.includeDeviceClasses,
-            this.hass.states,
-            this.entityFilter
-          )
-        ) {
-          newEntities.push(entity.entity_id);
-        }
-      });
-    } else if (type === "device") {
-      Object.values(this.hass.entities).forEach((entity) => {
-        if (
-          entity.device_id === itemId &&
-          !this.value!.entity_id?.includes(entity.entity_id) &&
-          entityRegMeetsFilter(
-            entity,
-            false,
-            this.includeDomains,
-            this.includeDeviceClasses,
-            this.hass.states,
-            this.entityFilter
-          )
-        ) {
-          newEntities.push(entity.entity_id);
-        }
-      });
-    } else if (type === "label") {
-      Object.values(this.hass.areas).forEach((area) => {
-        if (
-          area.labels.includes(itemId) &&
-          !this.value!.area_id?.includes(area.area_id) &&
-          areaMeetsFilter(
-            area,
-            this.hass.devices,
-            this.hass.entities,
-            this.deviceFilter,
-            this.includeDomains,
-            this.includeDeviceClasses,
-            this.hass.states,
-            this.entityFilter
-          )
-        ) {
-          newAreas.push(area.area_id);
-        }
-      });
-      Object.values(this.hass.devices).forEach((device) => {
-        if (
-          device.labels.includes(itemId) &&
-          !this.value!.device_id?.includes(device.id) &&
-          deviceMeetsFilter(
-            device,
-            this.hass.entities,
-            this.deviceFilter,
-            this.includeDomains,
-            this.includeDeviceClasses,
-            this.hass.states,
-            this.entityFilter
-          )
-        ) {
-          newDevices.push(device.id);
-        }
-      });
-      Object.values(this.hass.entities).forEach((entity) => {
-        if (
-          entity.labels.includes(itemId) &&
-          !this.value!.entity_id?.includes(entity.entity_id) &&
-          entityRegMeetsFilter(
-            entity,
-            true,
-            this.includeDomains,
-            this.includeDeviceClasses,
-            this.hass.states,
-            this.entityFilter
-          )
-        ) {
-          newEntities.push(entity.entity_id);
-        }
-      });
-    } else {
-      return;
-    }
-    let value = this.value;
-    if (newEntities.length) {
-      value = this._addItems(value, "entity_id", newEntities);
-    }
-    if (newDevices.length) {
-      value = this._addItems(value, "device_id", newDevices);
-    }
-    if (newAreas.length) {
-      value = this._addItems(value, "area_id", newAreas);
-    }
-    value = this._removeItem(value, type, itemId);
-    fireEvent(this, "value-changed", { value });
   }
 
   private _handleReplace(
@@ -747,17 +931,6 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
     this._replaceTargetAnchor = undefined;
   }
 
-  private _addItems(
-    value: this["value"],
-    type: string,
-    ids: string[]
-  ): this["value"] {
-    return {
-      ...value,
-      [type]: value![type] ? ensureArray(value![type])!.concat(ids) : ids,
-    };
-  }
-
   private _removeItem(
     value: this["value"],
     type: TargetType,
@@ -768,70 +941,28 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
     const newVal = ensureArray(value![typeId])!.filter(
       (val) => String(val) !== id
     );
-    if (newVal.length) {
-      return {
-        ...value,
-        [typeId]: newVal,
-      };
-    }
     const val = { ...value }!;
-    delete val[typeId];
-    if (Object.keys(val).length) {
-      return val;
+    if (newVal.length) {
+      val[typeId] = newVal;
+    } else {
+      delete val[typeId];
+    }
+    return val;
+  }
+
+  private _withoutOrphanExclude(value: this["value"]): this["value"] {
+    // An exclude on its own is not a target.
+    if (value && Object.keys(value).some((key) => key !== "exclude")) {
+      return value;
     }
     return undefined;
   }
-
-  private _sectionTitleFunction = ({
-    firstIndex,
-    lastIndex,
-    firstItem,
-    secondItem,
-    itemsCount,
-  }: {
-    firstIndex: number;
-    lastIndex: number;
-    firstItem: PickerComboBoxItem | string;
-    secondItem: PickerComboBoxItem | string;
-    itemsCount: number;
-  }) => {
-    if (
-      firstItem === undefined ||
-      secondItem === undefined ||
-      typeof firstItem === "string" ||
-      (typeof secondItem === "string" && secondItem !== "padding") ||
-      (firstIndex === 0 && lastIndex === itemsCount - 1)
-    ) {
-      return undefined;
-    }
-
-    const type = getTargetComboBoxItemType(firstItem as PickerComboBoxItem);
-    const translationType:
-      | "areas"
-      | "entities"
-      | "devices"
-      | "labels"
-      | undefined =
-      type === "area" || type === "floor"
-        ? "areas"
-        : type === "entity"
-          ? "entities"
-          : type && type !== "empty"
-            ? `${type}s`
-            : undefined;
-
-    return translationType
-      ? this.hass.localize(
-          `ui.components.target-picker.type.${translationType}`
-        )
-      : undefined;
-  };
 
   private _getItems = (searchString: string, section: string) => {
     this._selectedSection = section as TargetTypeFloorless | undefined;
 
     return this._getItemsMemoized(
-      this.hass.localize,
+      this._i18n,
       this.entityFilter,
       this.deviceFilter,
       this.includeDomains,
@@ -840,13 +971,15 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
       this._replaceTarget,
       searchString,
       this._configEntryLookup,
+      this._states,
+      this._registries,
       this._selectedSection
     );
   };
 
   private _getItemsMemoized = memoizeOne(
     (
-      localize: HomeAssistant["localize"],
+      i18n: ContextType<typeof internationalizationContext>,
       entityFilter: this["entityFilter"],
       deviceFilter: this["deviceFilter"],
       includeDomains: this["includeDomains"],
@@ -855,8 +988,13 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
       replaceTarget: TargetItem | undefined,
       searchTerm: string,
       configEntryLookup: Record<string, ConfigEntry>,
-      filterType?: TargetTypeFloorless
+      states: HomeAssistant["states"],
+      registries: ContextType<typeof registriesContext>,
+      filterType?: TargetTypeFloorless,
+      // Hidden without hiding their child devices.
+      hiddenDeviceIds?: string[]
     ) => {
+      const localize = i18n.localize;
       const replacingEntityId =
         replaceTarget?.type === "entity" ? replaceTarget.id : undefined;
       const replacingDeviceId =
@@ -869,15 +1007,14 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
         replaceTarget?.type === "label" ? replaceTarget.id : undefined;
 
       const items: (
-        | string
-        | FloorComboBoxItem
-        | EntityComboBoxItem
-        | PickerComboBoxItem
+        string | FloorComboBoxItem | EntityComboBoxItem | PickerComboBoxItem
       )[] = [];
 
       if (!filterType || filterType === "entity") {
         let entityItems = this._getEntitiesMemoized(
-          this.hass,
+          states,
+          registries,
+          i18n,
           includeDomains,
           undefined,
           entityFilter,
@@ -915,33 +1052,75 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
       }
 
       if (!filterType || filterType === "device") {
+        const selectedDeviceIds = targetValue?.device_id
+          ? replacingDeviceId
+            ? ensureArray(targetValue.device_id).filter(
+                (deviceId) => deviceId !== replacingDeviceId
+              )
+            : ensureArray(targetValue.device_id)
+          : undefined;
+        // A selected parent device already targets its children, so exclude
+        // those children from the picker too (mirrors selecting a floor
+        // removing its areas from the list).
+        const excludeDeviceIds =
+          selectedDeviceIds || hiddenDeviceIds
+            ? [
+                ...(hiddenDeviceIds ?? []),
+                ...(selectedDeviceIds ?? []),
+                ...(selectedDeviceIds
+                  ? Object.values(registries.devices)
+                      .filter(
+                        (device) =>
+                          device.parent_device_id !== null &&
+                          selectedDeviceIds.includes(device.parent_device_id)
+                      )
+                      .map((device) => device.id)
+                  : []),
+              ]
+            : undefined;
         let deviceItems = this._getDevicesMemoized(
-          this.hass,
+          states,
+          registries,
+          i18n,
           configEntryLookup,
           includeDomains,
-          undefined,
           includeDeviceClasses,
           deviceFilter,
           entityFilter,
-          targetValue?.device_id
-            ? replacingDeviceId
-              ? ensureArray(targetValue.device_id).filter(
-                  (deviceId) => deviceId !== replacingDeviceId
-                )
-              : ensureArray(targetValue.device_id)
-            : undefined,
+          excludeDeviceIds,
           replacingDeviceId,
           `device${SEPARATOR}`
-        ).sort(this._sortBySortingLabel);
+        );
+        // getDevices already returns child devices nested under their parent
+        // with the top-level devices sorted; keep that order rather than
+        // re-sorting by label, which would separate children from their parent.
 
         if (searchTerm) {
+          // Keep the nested parent-then-children order (sort=false), matching
+          // the areas group; the default sorted search would reorder matches by
+          // relevance and pull children above their parent.
           deviceItems = this._filterGroup(
             "device",
             deviceItems,
             searchTerm,
-            deviceComboBoxKeys
+            deviceComboBoxKeys,
+            false
           );
         }
+
+        // Recompute the tree "last child" flag over the (possibly filtered)
+        // list so the last visible child of each parent draws its end connector.
+        deviceItems = deviceItems.map((item, index) => {
+          if (!(item as DevicePickerItem).is_child) {
+            return item;
+          }
+          const nextItem = deviceItems[index + 1] as
+            DevicePickerItem | undefined;
+          return {
+            ...item,
+            last: !nextItem || !nextItem.is_child,
+          };
+        });
 
         if (!filterType && deviceItems.length) {
           // show group title
@@ -953,11 +1132,11 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
 
       if (!filterType || filterType === "area") {
         let areasAndFloors = this._getAreasAndFloorsMemoized(
-          this.hass.states,
-          this.hass.floors,
-          this.hass.areas,
-          this.hass.devices,
-          this.hass.entities,
+          states,
+          registries.floors,
+          registries.areas,
+          registries.devices,
+          registries.entities,
           memoizeOne((value: AreaFloorValue): string =>
             [value.type, value.id].join(SEPARATOR)
           ),
@@ -1018,10 +1197,10 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
 
       if (!filterType || filterType === "label") {
         let labels = this._getLabelsMemoized(
-          this.hass.states,
-          this.hass.areas,
-          this.hass.devices,
-          this.hass.entities,
+          states,
+          registries.areas,
+          registries.devices,
+          registries.entities,
           this._labelRegistry,
           includeDomains,
           undefined,
@@ -1072,7 +1251,6 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
       return multiTermSortedSearch(
         items,
         searchTerm,
-        weightedKeys,
         (item) => item.id,
         fuseIndex
       );
@@ -1083,30 +1261,32 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
     });
   }
 
-  private _getAdditionalItems = () => this._getCreateItems(this.createDomains);
+  private _getAdditionalItems = () =>
+    this._getCreateItems(this.createDomains, this._i18n.localize);
 
   private _getCreateItems = memoizeOne(
-    (createDomains: this["createDomains"]) => {
+    (
+      createDomains: this["createDomains"],
+      localize: ContextType<typeof internationalizationContext>["localize"]
+    ) => {
       if (!createDomains?.length) {
         return [];
       }
 
       return createDomains.map((domain) => {
-        const primary = this.hass.localize(
+        const primary = localize(
           "ui.components.entity.entity-picker.create_helper",
           {
             domain: isHelperDomain(domain)
-              ? this.hass.localize(`ui.panel.config.helpers.types.${domain}`)
-              : domainToName(this.hass.localize, domain),
+              ? localize(`ui.panel.config.helpers.types.${domain}`)
+              : domainToName(localize, domain),
           }
         );
 
         return {
           id: CREATE_ID + domain,
           primary: primary,
-          secondary: this.hass.localize(
-            "ui.components.entity.entity-picker.new_entity"
-          ),
+          secondary: localize("ui.components.entity.entity-picker.new_entity"),
           icon_path: mdiPlus,
         } satisfies EntityComboBoxItem;
       });
@@ -1114,19 +1294,61 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
   );
 
   private async _loadConfigEntries() {
-    const configEntries = await getConfigEntries(this.hass);
+    if (!this._api) {
+      return;
+    }
+    const configEntries = await getConfigEntries(this._api);
     this._configEntryLookup = Object.fromEntries(
       configEntries.map((entry) => [entry.entry_id, entry])
     );
   }
+
+  private async _loadCompositeSplits() {
+    if (!this._api || !this._connection) {
+      return;
+    }
+    this._loadingCompositeSplits = true;
+    try {
+      this._compositeSplits = await fetchDeviceCompositeSplits(
+        this._connection.connection,
+        this._api.callWS
+      );
+    } catch (_err) {
+      this._compositeSplits = {};
+    } finally {
+      this._loadingCompositeSplits = false;
+    }
+  }
+
+  private _handleMigrate(
+    ev: HASSDomEvent<HASSDomEvents["migrate-target-item"]>
+  ) {
+    const { id, replacements } = ev.detail;
+    let value = this._removeItem(this.value, "device", id);
+    for (const replacement of replacements) {
+      value = this._addTargetToValue(value, {
+        type: "device",
+        id: replacement,
+      });
+    }
+    fireEvent(this, "value-changed", {
+      value: this._withoutOrphanExclude(value),
+    });
+  }
+
+  // A new renderer when the brands token arrives, so open lists redraw icons.
+  private _rowRenderer = memoizeOne(
+    (_brandsAccessToken: string | undefined) =>
+      (item: Parameters<HaTargetPicker["_renderRow"]>[0]) =>
+        this._renderRow(item)
+  );
 
   private _renderRow = (
     item:
       | PickerComboBoxItem
       | (FloorComboBoxItem & { last?: boolean | undefined })
       | EntityComboBoxItem
-      | DevicePickerItem,
-    index: number
+      | DevicePickerItem
   ) => {
     if (!item) {
       return nothing;
@@ -1136,10 +1358,12 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
     let hasFloor = false;
     let rtl = false;
     let showEntityId = false;
-    if (type === "area" || type === "floor") {
+    const isChildDeviceRow =
+      type === "device" && !!(item as DevicePickerItem).is_child;
+    if (type === "area" || type === "floor" || isChildDeviceRow) {
       rtl = computeRTL(
-        this.hass.language,
-        this.hass.translationMetadata.translations
+        this._i18n.language,
+        this._i18n.translationMetadata.translations
       );
       hasFloor =
         type === "area" && !!(item as FloorComboBoxItem).area?.floor_id;
@@ -1151,100 +1375,109 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
 
     return html`
       <ha-combo-box-item
-        id=${`list-item-${index}`}
-        tabindex="-1"
-        .type=${type === "empty" ? "text" : "button"}
         class=${type === "empty" ? "empty" : ""}
-        style=${(item as FloorComboBoxItem).type === "area" && hasFloor
-          ? "--md-list-item-leading-space: var(--ha-space-12);"
-          : ""}
+        style=${
+          ((item as FloorComboBoxItem).type === "area" && hasFloor) ||
+          isChildDeviceRow
+            ? "--ha-combo-box-item-padding-inline-start: var(--ha-space-12);"
+            : ""
+        }
       >
-        ${(item as FloorComboBoxItem).type === "area" && hasFloor
-          ? html`
-              <ha-tree-indicator
-                style=${styleMap({
-                  width: "var(--ha-space-12)",
-                  position: "absolute",
-                  top: "0",
-                  left: rtl ? undefined : "var(--ha-space-1)",
-                  right: rtl ? "var(--ha-space-1)" : undefined,
-                  transform: rtl ? "scaleX(-1)" : "",
-                })}
-                .end=${(
-                  item as FloorComboBoxItem & { last?: boolean | undefined }
-                ).last}
-                slot="start"
-              ></ha-tree-indicator>
-            `
-          : nothing}
-        ${item.icon
-          ? html`<ha-icon slot="start" .icon=${item.icon}></ha-icon>`
-          : item.icon_path
-            ? html`<ha-svg-icon
-                slot="start"
-                .path=${item.icon_path}
-              ></ha-svg-icon>`
-            : type === "entity" && (item as EntityComboBoxItem).stateObj
-              ? html`
-                  <state-badge
-                    slot="start"
-                    .stateObj=${(item as EntityComboBoxItem).stateObj}
-                    .hass=${this.hass}
-                  ></state-badge>
-                `
-              : type === "device" && (item as DevicePickerItem).domain
+        ${
+          ((item as FloorComboBoxItem).type === "area" && hasFloor) ||
+          isChildDeviceRow
+            ? html`
+                <ha-tree-indicator
+                  style=${styleMap({
+                    width: "var(--ha-space-12)",
+                    position: "absolute",
+                    top: "0",
+                    height: "100%",
+                    left: rtl ? undefined : "var(--ha-space-1)",
+                    right: rtl ? "var(--ha-space-1)" : undefined,
+                    transform: rtl ? "scaleX(-1)" : "",
+                  })}
+                  .end=${(item as { last?: boolean }).last}
+                  slot="start"
+                ></ha-tree-indicator>
+              `
+            : nothing
+        }
+        ${
+          item.icon
+            ? html`<ha-icon slot="start" .icon=${item.icon}></ha-icon>`
+            : item.icon_path
+              ? html`<ha-svg-icon
+                  slot="start"
+                  .path=${item.icon_path}
+                ></ha-svg-icon>`
+              : type === "entity" && (item as EntityComboBoxItem).stateObj
                 ? html`
-                    <img
+                    <state-badge
                       slot="start"
-                      alt=""
-                      crossorigin="anonymous"
-                      referrerpolicy="no-referrer"
-                      src=${brandsUrl(
-                        {
-                          domain: (item as DevicePickerItem).domain!,
-                          type: "icon",
-                          darkOptimized: this.hass.themes.darkMode,
-                        },
-                        this.hass.auth.data.hassUrl
-                      )}
-                    />
+                      .stateObj=${(item as EntityComboBoxItem).stateObj}
+                    ></state-badge>
                   `
-                : type === "floor"
-                  ? html`<ha-floor-icon
-                      slot="start"
-                      .floor=${(item as FloorComboBoxItem).floor!}
-                    ></ha-floor-icon>`
-                  : type === "area"
-                    ? html`<ha-svg-icon
+                : type === "device" && (item as DevicePickerItem).domain
+                  ? html`
+                      <img
                         slot="start"
-                        .path=${item.icon_path || mdiTextureBox}
-                      ></ha-svg-icon>`
-                    : nothing}
+                        alt=""
+                        crossorigin="anonymous"
+                        referrerpolicy="no-referrer"
+                        src=${brandsUrl(
+                          {
+                            domain: (item as DevicePickerItem).domain!,
+                            type: "icon",
+                            darkOptimized: this._darkMode,
+                          },
+                          this._config?.auth?.data.hassUrl
+                        )}
+                      />
+                    `
+                  : type === "floor"
+                    ? html`<ha-floor-icon
+                        slot="start"
+                        .floor=${(item as FloorComboBoxItem).floor!}
+                      ></ha-floor-icon>`
+                    : type === "area"
+                      ? html`<ha-svg-icon
+                          slot="start"
+                          .path=${item.icon_path || mdiTextureBox}
+                        ></ha-svg-icon>`
+                      : nothing
+        }
         <span slot="headline">${item.primary}</span>
-        ${item.secondary
-          ? html`<span slot="supporting-text">${item.secondary}</span>`
-          : nothing}
-        ${(item as EntityComboBoxItem).stateObj && showEntityId
-          ? html`
-              <span slot="supporting-text" class="code">
-                ${(item as EntityComboBoxItem).stateObj?.entity_id}
-              </span>
-            `
-          : nothing}
-        ${(item as EntityComboBoxItem).domain_name &&
-        (type !== "entity" || !showEntityId)
-          ? html`
-              <div slot="trailing-supporting-text" class="domain">
-                ${(item as EntityComboBoxItem).domain_name}
-              </div>
-            `
-          : nothing}
+        ${
+          item.secondary
+            ? html`<span slot="supporting-text">${item.secondary}</span>`
+            : nothing
+        }
+        ${
+          (item as EntityComboBoxItem).stateObj && showEntityId
+            ? html`
+                <span slot="supporting-text" class="code">
+                  ${(item as EntityComboBoxItem).stateObj?.entity_id}
+                </span>
+              `
+            : nothing
+        }
+        ${
+          (item as EntityComboBoxItem).domain_name &&
+          (type !== "entity" || !showEntityId)
+            ? html`
+                <div slot="trailing-supporting-text" class="domain">
+                  ${(item as EntityComboBoxItem).domain_name}
+                </div>
+              `
+            : nothing
+        }
       </ha-combo-box-item>
     `;
   };
 
   private _noTargetFoundLabel = (search: string) =>
-    this.hass.localize("ui.components.target-picker.no_target_found", {
+    this._i18n.localize("ui.components.target-picker.no_target_found", {
       term: html`<b>‘${search}’</b>`,
     });
 
@@ -1252,7 +1485,7 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
     caseInsensitiveStringCompare(
       (entityA as PickerComboBoxItem).sorting_label!,
       (entityB as PickerComboBoxItem).sorting_label!,
-      this.hass?.locale.language ?? navigator.language
+      this._i18n?.locale.language ?? navigator.language
     );
 
   static styles = css`
@@ -1266,16 +1499,29 @@ export class HaTargetPicker extends SubscribeMixin(LitElement) {
       width: 100%;
     }
 
-    .items {
-      z-index: 2;
-      display: flex;
+    /* Side by side, both pickers shrink to their buttons. Their popovers
+       still take the full width, which the section chips need. */
+    .add-target-wrapper.exclude-shown {
       flex-wrap: wrap;
-      padding: var(--ha-space-2) 0;
       gap: var(--ha-space-2);
+      container-type: inline-size;
     }
+
+    .add-target-wrapper.exclude-shown ha-generic-picker {
+      width: auto;
+      --ha-generic-picker-width: max(100cqw, 250px);
+    }
+
+    .exclusion-list-label {
+      padding: var(--ha-space-1) var(--ha-space-2);
+      background-color: var(--ha-color-surface-low);
+      font-weight: var(--ha-font-weight-bold);
+      color: var(--secondary-text-color);
+    }
+
     .item-groups {
       overflow: hidden;
-      border: 2px solid var(--divider-color);
+      border: var(--ha-border-width-sm) solid var(--divider-color);
       border-radius: var(--ha-border-radius-lg);
     }
   `;
@@ -1288,8 +1534,9 @@ declare global {
 
   interface HASSDomEvents {
     "remove-target-item": TargetItem;
-    "expand-target-item": TargetItem;
     "replace-target-item": TargetItem;
+    "migrate-target-item": { id: string; replacements: string[] };
     "remove-target-group": string;
+    "remove-target-exclusion": TargetItem;
   }
 }

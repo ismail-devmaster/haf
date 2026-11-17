@@ -1,16 +1,20 @@
+import type { ContextType } from "@lit/context";
 import { css, html, LitElement, nothing } from "lit";
-import { customElement, property } from "lit/decorators";
+import { customElement, property, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
 import { styleMap } from "lit/directives/style-map";
+import { consume } from "../../common/decorators/consume";
 import type { BasePerson } from "../../data/person";
 import { computeUserInitials } from "../../data/user";
-import type { HomeAssistant } from "../../types";
+import { connectionContext } from "../../data/context";
 
 @customElement("ha-person-badge")
 class PersonBadge extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property({ attribute: false }) public person?: BasePerson;
+
+  @state()
+  @consume({ context: connectionContext, subscribe: true })
+  private _connection?: ContextType<typeof connectionContext>;
 
   protected render() {
     if (!this.person) {
@@ -19,10 +23,10 @@ class PersonBadge extends LitElement {
 
     const picture = this.person.picture;
 
-    if (picture) {
+    if (picture && this._connection) {
       return html`<div
         style=${styleMap({
-          backgroundImage: `url(${this.hass.hassUrl(picture)})`,
+          backgroundImage: `url(${this._connection.hassUrl(picture)})`,
         })}
         class="picture"
       ></div>`;
@@ -45,7 +49,7 @@ class PersonBadge extends LitElement {
       width: 100%;
       height: 100%;
       background-size: cover;
-      border-radius: var(--ha-border-radius-circle);
+      border-radius: var(--ha-picture-border-radius);
     }
     .initials {
       display: inline-flex;
@@ -54,7 +58,7 @@ class PersonBadge extends LitElement {
       box-sizing: border-box;
       width: 100%;
       height: 100%;
-      border-radius: var(--ha-border-radius-circle);
+      border-radius: var(--ha-picture-border-radius);
       background-color: var(--light-primary-color);
       text-decoration: none;
       color: var(--text-light-primary-color, var(--primary-text-color));

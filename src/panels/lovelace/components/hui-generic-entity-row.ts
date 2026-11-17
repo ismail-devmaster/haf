@@ -1,16 +1,11 @@
 import type { PropertyValues } from "lit";
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property } from "lit/decorators";
+import { customElement, eventOptions, property, query } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
 import { ifDefined } from "lit/directives/if-defined";
 import { DOMAINS_INPUT_ROW } from "../../../common/const";
-import { uid } from "../../../common/util/uid";
 import { stopPropagation } from "../../../common/dom/stop_propagation";
-import { toggleAttribute } from "../../../common/dom/toggle_attribute";
 import { computeDomain } from "../../../common/entity/compute_domain";
-import { computeAreaName } from "../../../common/entity/compute_area_name";
-import { getEntityContext } from "../../../common/entity/context/get_entity_context";
-import { formatDateTimeWithSeconds } from "../../../common/datetime/format_date_time";
 import "../../../components/entity/state-badge";
 import "../../../components/ha-relative-time";
 import "../../../components/ha-tooltip";
@@ -21,6 +16,7 @@ import { actionHandler } from "../common/directives/action-handler-directive";
 import { handleAction } from "../common/handle-action";
 import { hasAction, hasAnyAction } from "../common/has-action";
 import { createEntityNotFoundWarning } from "./hui-warning";
+import "../../../state-display/state-display";
 
 @customElement("hui-generic-entity-row")
 export class HuiGenericEntityRow extends LitElement {
@@ -40,7 +36,9 @@ export class HuiGenericEntityRow extends LitElement {
   @property({ attribute: "catch-interaction", type: Boolean })
   public catchInteraction?;
 
-  private _secondaryInfoElementId = "-" + uid();
+  @query(".row > slot") private _controlSlot?: HTMLSlotElement;
+
+  private _pressedControl = false;
 
   protected render() {
     if (!this.hass || !this.config) {
@@ -52,8 +50,8 @@ export class HuiGenericEntityRow extends LitElement {
 
     if (!stateObj) {
       return html`
-        <hui-warning .hass=${this.hass}>
-          ${createEntityNotFoundWarning(this.hass, this.config.entity)}
+        <hui-warning>
+          ${createEntityNotFoundWarning(this.hass.localize, this.hass.config)}
         </hui-warning>
       `;
     }
@@ -70,6 +68,8 @@ export class HuiGenericEntityRow extends LitElement {
     return html`
       <div
         class="row ${classMap({ pointer })}"
+        @pointerdown=${this._handlePointerDown}
+        @click=${this._handleClick}
         @action=${this._handleAction}
         .actionHandler=${actionHandler({
           hasHold: hasAction(this.config!.hold_action),
@@ -82,167 +82,86 @@ export class HuiGenericEntityRow extends LitElement {
         )}
       >
         <state-badge
-          .hass=${this.hass}
           .stateObj=${stateObj}
           .overrideIcon=${this.config.icon}
           .overrideImage=${this.config.image}
           .stateColor=${this.config.state_color}
+          .color=${this.config.color}
         ></state-badge>
-        ${!this.hideName
-          ? html`<div
-              class="info ${classMap({ "text-content": !hasSecondary })}"
-              .title=${name}
-            >
-              ${name}
-              ${hasSecondary
-                ? html`
-                    <div class="secondary">
-                      ${this.secondaryText ||
-                      (this.config.secondary_info === "entity-id"
-                        ? stateObj.entity_id
-                        : this.config.secondary_info === "last-changed"
-                          ? html`
-                              <ha-tooltip
-                                for="last-changed${this
-                                  ._secondaryInfoElementId}"
-                                placement="right"
-                              >
-                                ${formatDateTimeWithSeconds(
-                                  new Date(stateObj.last_changed),
-                                  this.hass.locale,
-                                  this.hass.config
-                                )}
-                              </ha-tooltip>
-                              <ha-relative-time
-                                id="last-changed${this._secondaryInfoElementId}"
-                                .hass=${this.hass}
-                                .datetime=${stateObj.last_changed}
-                                capitalize
-                              ></ha-relative-time>
-                            `
-                          : this.config.secondary_info === "last-updated"
-                            ? html`
-                                <ha-tooltip
-                                  for="last-updated${this
-                                    ._secondaryInfoElementId}"
-                                  placement="right"
-                                >
-                                  ${formatDateTimeWithSeconds(
-                                    new Date(stateObj.last_updated),
-                                    this.hass.locale,
-                                    this.hass.config
-                                  )}
-                                </ha-tooltip>
-                                <ha-relative-time
-                                  id="last-updated${this
-                                    ._secondaryInfoElementId}"
-                                  .hass=${this.hass}
-                                  .datetime=${stateObj.last_updated}
-                                  capitalize
-                                ></ha-relative-time>
-                              `
-                            : this.config.secondary_info === "last-triggered"
-                              ? stateObj.attributes.last_triggered
-                                ? html`
-                                    <ha-tooltip
-                                      for="last-triggered${this
-                                        ._secondaryInfoElementId}"
-                                      placement="right"
-                                    >
-                                      ${formatDateTimeWithSeconds(
-                                        new Date(
-                                          stateObj.attributes.last_triggered
-                                        ),
-                                        this.hass.locale,
-                                        this.hass.config
-                                      )}
-                                    </ha-tooltip>
-                                    <ha-relative-time
-                                      id="last-triggered${this
-                                        ._secondaryInfoElementId}"
-                                      .hass=${this.hass}
-                                      .datetime=${stateObj.attributes
-                                        .last_triggered}
-                                      capitalize
-                                    ></ha-relative-time>
-                                  `
-                                : this.hass.localize(
-                                    "ui.panel.lovelace.cards.entities.never_triggered"
-                                  )
-                              : this.config.secondary_info === "position" &&
-                                  stateObj.attributes.current_position !==
-                                    undefined
-                                ? `${this.hass.localize(
-                                    "ui.card.cover.position"
-                                  )}: ${stateObj.attributes.current_position}`
-                                : this.config.secondary_info ===
-                                      "tilt-position" &&
-                                    stateObj.attributes
-                                      .current_tilt_position !== undefined
-                                  ? `${this.hass.localize(
-                                      "ui.card.cover.tilt_position"
-                                    )}: ${
-                                      stateObj.attributes.current_tilt_position
-                                    }`
-                                  : this.config.secondary_info ===
-                                        "brightness" &&
-                                      stateObj.attributes.brightness
-                                    ? html`${Math.round(
-                                        (stateObj.attributes.brightness / 255) *
-                                          100
-                                      )}
-                                      %`
-                                    : this.config.secondary_info === "state"
-                                      ? html`${this.hass.formatEntityState(
-                                          stateObj
-                                        )}`
-                                      : this.config.secondary_info === "area"
-                                        ? (this._getArea(stateObj) ?? nothing)
-                                        : nothing)}
-                    </div>
-                  `
-                : nothing}
-            </div>`
-          : nothing}
-        ${(this.catchInteraction ?? !DOMAINS_INPUT_ROW.includes(domain))
-          ? html`
-              <div class="text-content value">
-                <div class="state"><slot></slot></div>
-              </div>
-            `
-          : html`<slot
-              @touchcancel=${stopPropagation}
-              @touchend=${stopPropagation}
-              @keydown=${stopPropagation}
-              @click=${stopPropagation}
-              @action=${stopPropagation}
-            ></slot>`}
+        ${
+          !this.hideName
+            ? html`<div
+                class="info ${classMap({ "text-content": !hasSecondary })}"
+                .title=${name}
+              >
+                ${name}
+                ${
+                  hasSecondary
+                    ? html`
+                        <div class="secondary">
+                          ${
+                            this.secondaryText ||
+                            html`<state-display
+                              .stateObj=${stateObj}
+                              .content=${this.config.secondary_info}
+                              .timeFormat=${this.config.time_format}
+                              .name=${name}
+                              timestamp-tooltip
+                            >
+                            </state-display>`
+                          }
+                        </div>
+                      `
+                    : nothing
+                }
+              </div>`
+            : nothing
+        }
+        ${
+          (this.catchInteraction ?? !DOMAINS_INPUT_ROW.includes(domain))
+            ? html`
+                <div class="text-content value">
+                  <div class="state"><slot></slot></div>
+                </div>
+              `
+            : html`<slot
+                @touchcancel=${stopPropagation}
+                @touchend=${stopPropagation}
+                @keydown=${stopPropagation}
+                @click=${stopPropagation}
+                @action=${stopPropagation}
+              ></slot>`
+        }
       </div>
     `;
   }
 
   protected updated(changedProps: PropertyValues<this>): void {
     super.updated(changedProps);
-    toggleAttribute(
-      this,
+    this.toggleAttribute(
       "no-secondary",
       !this.secondaryText && !this.config?.secondary_info
     );
   }
 
-  private _handleAction(ev: ActionHandlerEvent) {
-    handleAction(this, this.hass!, this.config!, ev.detail.action!);
+  private _handlePointerDown(ev: PointerEvent) {
+    this._pressedControl = this._isControlEvent(ev);
   }
 
-  private _getArea(stateObj) {
-    const context = getEntityContext(
-      stateObj,
-      this.hass!.entities,
-      this.hass!.devices,
-      this.hass!.areas,
-      this.hass!.floors
-    );
-    return context.area ? computeAreaName(context.area) : undefined;
+  @eventOptions({ capture: true })
+  private _handleClick(ev: MouseEvent) {
+    if (this._pressedControl && ev.detail > 0 && !this._isControlEvent(ev)) {
+      ev.stopImmediatePropagation();
+    }
+    this._pressedControl = false;
+  }
+
+  private _isControlEvent(ev: Event) {
+    return !!this._controlSlot && ev.composedPath().includes(this._controlSlot);
+  }
+
+  private _handleAction(ev: ActionHandlerEvent) {
+    handleAction(this, this.hass!, this.config!, ev.detail.action!);
   }
 
   static styles = css`

@@ -3,6 +3,7 @@ import type { PropertyValues, TemplateResult } from "lit";
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
+import type { ConfigPath } from "../../../common/util/config-path";
 import { fireEvent } from "../../../common/dom/fire_event";
 import { computeRTL } from "../../../common/util/compute_rtl";
 import "../../../components/ha-alert";
@@ -22,7 +23,7 @@ export class PanelView extends LitElement implements LovelaceViewElement {
 
   @property({ attribute: false }) public lovelace?: Lovelace;
 
-  @property({ type: Number }) public index?: number;
+  @property({ attribute: false }) public path?: ConfigPath;
 
   @property({ attribute: false }) public isStrategy = false;
 
@@ -50,8 +51,7 @@ export class PanelView extends LitElement implements LovelaceViewElement {
     }
 
     const oldLovelace = changedProperties.get("lovelace") as
-      | Lovelace
-      | undefined;
+      Lovelace | undefined;
 
     if (
       (!changedProperties.has("cards") &&
@@ -64,36 +64,40 @@ export class PanelView extends LitElement implements LovelaceViewElement {
 
   protected render(): TemplateResult {
     return html`
-      ${this.cards!.length > 1
-        ? html`<ha-alert alert-type="warning"
-            >${this.hass!.localize(
-              "ui.panel.lovelace.editor.view.panel_mode.warning_multiple_cards"
-            )}</ha-alert
-          >`
-        : ""}
+      ${
+        this.cards!.length > 1
+          ? html`<ha-alert alert-type="warning"
+              >${this.hass!.localize(
+                "ui.panel.lovelace.editor.view.panel_mode.warning_multiple_cards"
+              )}</ha-alert
+            >`
+          : ""
+      }
       ${this._card}
-      ${this.lovelace?.editMode && this.cards.length === 0
-        ? html`
-            <ha-button
-              size="large"
-              @click=${this._addCard}
-              class=${classMap({
-                rtl: computeRTL(
-                  this.hass!.language,
-                  this.hass!.translationMetadata.translations
-                ),
-              })}
-            >
-              <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
-              ${this.hass!.localize("ui.panel.lovelace.editor.edit_card.add")}
-            </ha-button>
-          `
-        : ""}
+      ${
+        this.lovelace?.editMode && this.cards.length === 0
+          ? html`
+              <ha-button
+                size="l"
+                @click=${this._addCard}
+                class=${classMap({
+                  rtl: computeRTL(
+                    this.hass!.language,
+                    this.hass!.translationMetadata.translations
+                  ),
+                })}
+              >
+                <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
+                ${this.hass!.localize("ui.panel.lovelace.editor.edit_card.add")}
+              </ha-button>
+            `
+          : ""
+      }
     `;
   }
 
   private _addCard(): void {
-    fireEvent(this, "ll-create-card");
+    fireEvent(this, "ll-create-card", { path: [...this.path!, "cards"] });
   }
 
   private _createCard(): void {
@@ -114,7 +118,7 @@ export class PanelView extends LitElement implements LovelaceViewElement {
     const wrapper = document.createElement("hui-card-options");
     wrapper.hass = this.hass;
     wrapper.lovelace = this.lovelace;
-    wrapper.path = [this.index!, 0];
+    wrapper.path = [...this.path!, "cards", 0];
     wrapper.hidePosition = true;
     card.preview = true;
     wrapper.appendChild(card);

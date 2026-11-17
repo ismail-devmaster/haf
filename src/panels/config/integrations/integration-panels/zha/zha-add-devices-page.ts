@@ -1,3 +1,4 @@
+import type { Connection } from "home-assistant-js-websocket";
 import type { CSSResultGroup, PropertyValues, TemplateResult } from "lit";
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators";
@@ -42,6 +43,11 @@ class ZHAAddDevicesPage extends LitElement {
 
   private _wakeLock?: Promise<WakeLockSentinel>;
 
+  private _connection?: Connection;
+
+  // Set for the search in flight, so a pending subscription can tell it ended
+  private _search?: object;
+
   public connectedCallback(): void {
     super.connectedCallback();
     if (this.route && this.route.path && this.route.path !== "") {
@@ -76,96 +82,107 @@ class ZHAAddDevicesPage extends LitElement {
       <hass-subpage
         .hass=${this.hass}
         .narrow=${this.narrow}
+        back-path="/config/zha/dashboard"
         .header=${this.hass.localize("ui.panel.config.zha.add_device")}
       >
         <ha-button
           appearance="plain"
-          size="small"
+          size="s"
           slot="toolbar-icon"
           @click=${this._toggleLogs}
           >${this._showLogs ? "Hide logs" : "Show logs"}</ha-button
         >
         <div class="searching">
-          ${this._active
-            ? html`
-                <h1>
-                  ${this.hass!.localize(
-                    "ui.panel.config.zha.add_device_page.spinner"
-                  )}
-                </h1>
-                <ha-spinner aria-label="Searching"></ha-spinner>
-              `
-            : html`
-                <div>
-                  <ha-button
-                    appearance="plain"
-                    @click=${this._subscribe}
-                    class="search-button"
-                  >
+          ${
+            this._active
+              ? html`
+                  <h1>
                     ${this.hass!.localize(
-                      "ui.panel.config.zha.add_device_page.search_again"
+                      "ui.panel.config.zha.add_device_page.spinner"
                     )}
-                  </ha-button>
-                </div>
-              `}
+                  </h1>
+                  <ha-spinner
+                    aria-label=${this.hass!.localize(
+                      "ui.panel.config.zha.add_device_page.spinner"
+                    )}
+                  ></ha-spinner>
+                `
+              : html`
+                  <div>
+                    <ha-button
+                      appearance="plain"
+                      @click=${this._subscribe}
+                      class="search-button"
+                    >
+                      ${this.hass!.localize(
+                        "ui.panel.config.zha.add_device_page.search_again"
+                      )}
+                    </ha-button>
+                  </div>
+                `
+          }
         </div>
         ${this._error ? html` <div class="error">${this._error}</div> ` : ""}
         <div class="content">
-          ${Object.keys(this._discoveredDevices).length < 1
-            ? html`
-                <div class="discovery-text">
-                  <h4>
-                    ${this.hass.localize(
-                      "ui.panel.config.zha.add_device_page.pairing_mode",
-                      {
-                        documentation_link: html`
-                          <a
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            href=${documentationUrl(
-                              this.hass,
-                              "/integrations/zha#adding-devices"
-                            )}
-                            >${this.hass.localize(
-                              "ui.panel.config.zha.add_device_page.pairing_mode_link"
-                            )}</a
-                          >
-                        `,
-                      }
-                    )}
-                  </h4>
-                  <h4>
-                    ${this.hass!.localize(
-                      this._active
-                        ? "ui.panel.config.zha.add_device_page.discovered_text"
-                        : "ui.panel.config.zha.add_device_page.no_devices_found"
-                    )}
-                  </h4>
-                </div>
-              `
-            : html`
-                ${Object.values(this._discoveredDevices).map(
-                  (device) => html`
-                    <zha-device-pairing-status-card
-                      class="card"
-                      .hass=${this.hass}
-                      .device=${device}
-                      .narrow=${this.narrow}
-                      .showHelp=${this._showHelp}
-                    ></zha-device-pairing-status-card>
-                  `
-                )}
-              `}
+          ${
+            Object.keys(this._discoveredDevices).length < 1
+              ? html`
+                  <div class="discovery-text">
+                    <h4>
+                      ${this.hass.localize(
+                        "ui.panel.config.zha.add_device_page.pairing_mode",
+                        {
+                          documentation_link: html`
+                            <a
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              href=${documentationUrl(
+                                this.hass,
+                                "/integrations/zha#adding-devices"
+                              )}
+                              >${this.hass.localize(
+                                "ui.panel.config.zha.add_device_page.pairing_mode_link"
+                              )}</a
+                            >
+                          `,
+                        }
+                      )}
+                    </h4>
+                    <h4>
+                      ${this.hass!.localize(
+                        this._active
+                          ? "ui.panel.config.zha.add_device_page.discovered_text"
+                          : "ui.panel.config.zha.add_device_page.no_devices_found"
+                      )}
+                    </h4>
+                  </div>
+                `
+              : html`
+                  ${Object.values(this._discoveredDevices).map(
+                    (device) => html`
+                      <zha-device-pairing-status-card
+                        class="card"
+                        .hass=${this.hass}
+                        .device=${device}
+                        .narrow=${this.narrow}
+                        .showHelp=${this._showHelp}
+                      ></zha-device-pairing-status-card>
+                    `
+                  )}
+                `
+          }
         </div>
-        ${this._showLogs
-          ? html`<ha-textarea
-              readonly
-              class="log"
-              resize="auto"
-              .value=${this._formattedEvents}
-            >
-            </ha-textarea>`
-          : ""}
+        ${
+          this._showLogs
+            ? html`<ha-textarea
+                readonly
+                class="log"
+                resize="auto"
+                .value=${this._formattedEvents}
+              >
+              </ha-textarea>`
+            : ""
+        }
       </hass-subpage>
     `;
   }
@@ -183,41 +200,72 @@ class ZHAAddDevicesPage extends LitElement {
     }
   }
 
-  private _unsubscribe(): void {
+  // The backend ends the subscription when the connection drops, and it is not
+  // sent again, so end the search here and show "Search again"
+  private _connectionLost = () => {
+    this._unsubscribe();
+  };
+
+  private _unsubscribe(): Promise<void> {
     this._active = false;
+    this._search = undefined;
+    this._connection?.removeEventListener("disconnected", this._connectionLost);
+    this._connection = undefined;
     if (this._addDevicesTimeoutHandle) {
       clearTimeout(this._addDevicesTimeoutHandle);
     }
+    let unsubscribed = Promise.resolve();
     if (this._subscribed) {
-      this._subscribed.then((unsub) => unsub());
+      unsubscribed = this._subscribed.then(
+        (unsub) => unsub(),
+        // A subscription that was cancelled or lost with the connection has
+        // nothing to unsubscribe
+        () => undefined
+      );
       this._subscribed = undefined;
     }
     this._wakeLock?.then((wakeLock) => wakeLock.release());
-  }
-
-  private _deactivate(): void {
-    this._active = false;
-    if (this._addDevicesTimeoutHandle) {
-      clearTimeout(this._addDevicesTimeoutHandle);
-    }
-    this._wakeLock?.then((wakeLock) => wakeLock.release());
+    return unsubscribed;
   }
 
   private _subscribe(): void {
     if (!this.hass) {
       return;
     }
+    // "Try again" lands here with the previous subscription still open.
+    // Only subscribe once it is closed, so the backend ends that debug logging
+    // session before starting the next one
+    const unsubscribed = this._unsubscribe();
     this._active = true;
+    const search = {};
+    this._search = search;
     const data: any = { type: "zha/devices/permit", duration: 254 };
     if (this._ieeeAddress) {
       data.ieee = this._ieeeAddress;
     }
-    this._subscribed = this.hass.connection.subscribeMessage(
-      (message) => this._handleMessage(message),
-      data
-    );
+    const connection = this.hass.connection;
+    this._connection = connection;
+    connection.addEventListener("disconnected", this._connectionLost);
+    this._subscribed = unsubscribed
+      // A failed unsubscribe leaves nothing to wait for
+      .catch(() => undefined)
+      .then(() =>
+        // Each subscription opens the network for joining and turns on ZHA
+        // debug logging, so don't send it again after a reconnect
+        connection.subscribeMessage(
+          (message) => this._handleMessage(message),
+          data,
+          {
+            resubscribe: false,
+            // While offline, subscribeMessage waits for the connection. Don't
+            // open the network if this search ended in the meantime
+            preCheck: () => this._search === search,
+          }
+        )
+      );
     this._addDevicesTimeoutHandle = setTimeout(
-      () => this._deactivate(),
+      // End the subscription with the search, so debug logging ends too
+      () => this._unsubscribe(),
       254000
     );
     if ("wakeLock" in navigator) {

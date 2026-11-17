@@ -6,6 +6,8 @@ import { customElement, property, query, state } from "lit/decorators";
 import { capitalizeFirstLetter } from "../../../../../common/string/capitalize-first-letter";
 import "../../../../../components/ha-card";
 import "../../../../../components/ha-icon-button";
+import "../../../../../components/ha-log-viewer";
+import type { HaLogViewer } from "../../../../../components/ha-log-viewer";
 import "../../../../../components/ha-select";
 import type { HaSelectSelectEvent } from "../../../../../components/ha-select";
 import type { ZWaveJSLogConfig } from "../../../../../data/zwave_js";
@@ -32,29 +34,26 @@ class ZWaveJSLogs extends SubscribeMixin(LitElement) {
 
   @state() private _logConfig?: ZWaveJSLogConfig;
 
-  @query("textarea", true) private _textarea?: HTMLTextAreaElement;
+  @query("ha-log-viewer") private _logViewer?: HaLogViewer;
 
   public hassSubscribe(): (UnsubscribeFunc | Promise<UnsubscribeFunc>)[] {
     return [
       subscribeZWaveJSLogs(this.hass, this.configEntryId, (update) => {
-        if (!this.hasUpdated) {
-          return;
-        }
         if (update.type === "log_message") {
-          if (Array.isArray(update.log_message.message)) {
-            for (const line of update.log_message.message) {
-              this._textarea!.value += `${line}\n`;
-            }
-          } else {
-            this._textarea!.value += `${update.log_message.message}\n`;
-          }
+          this._logViewer?.addLines(
+            Array.isArray(update.log_message.message)
+              ? update.log_message.message
+              : [update.log_message.message]
+          );
         } else {
           this._logConfig = update.log_config;
         }
       }).then((unsub) => {
-        this._textarea!.value += `${this.hass.localize(
-          "ui.panel.config.zwave_js.logs.subscribed_to_logs"
-        )}\n`;
+        this._logViewer?.addLines([
+          this.hass.localize(
+            "ui.panel.config.zwave_js.logs.subscribed_to_logs"
+          ),
+        ]);
         return unsub;
       }),
     ];
@@ -66,8 +65,9 @@ class ZWaveJSLogs extends SubscribeMixin(LitElement) {
         .hass=${this.hass}
         .narrow=${this.narrow}
         .header=${this.hass.localize("ui.panel.config.zwave_js.logs.caption")}
-        back-path="/config/zwave_js/dashboard?config_entry=${this
-          .configEntryId}"
+        back-path="/config/zwave_js/dashboard?config_entry=${
+          this.configEntryId
+        }"
       >
         <div class="container">
           <ha-card>
@@ -77,29 +77,31 @@ class ZWaveJSLogs extends SubscribeMixin(LitElement) {
               </h1>
             </div>
             <div class="card-content">
-              ${this._logConfig
-                ? html`
-                    <ha-select
-                      .label=${this.hass.localize(
-                        "ui.panel.config.zwave_js.logs.log_level"
-                      )}
-                      .value=${this._logConfig.level}
-                      @selected=${this._dropdownSelected}
-                      .options=${[
-                        "error",
-                        "warn",
-                        "info",
-                        "verbose",
-                        "debug",
-                        "silly",
-                      ].map((level) => ({
-                        value: level,
-                        label: capitalizeFirstLetter(level),
-                      }))}
-                    >
-                    </ha-select>
-                  `
-                : ""}
+              ${
+                this._logConfig
+                  ? html`
+                      <ha-select
+                        .label=${this.hass.localize(
+                          "ui.panel.config.zwave_js.logs.log_level"
+                        )}
+                        .value=${this._logConfig.level}
+                        @selected=${this._dropdownSelected}
+                        .options=${[
+                          "error",
+                          "warn",
+                          "info",
+                          "verbose",
+                          "debug",
+                          "silly",
+                        ].map((level) => ({
+                          value: level,
+                          label: capitalizeFirstLetter(level),
+                        }))}
+                      >
+                      </ha-select>
+                    `
+                  : ""
+              }
             </div>
             <ha-icon-button
               .label=${this.hass.localize(
@@ -109,7 +111,7 @@ class ZWaveJSLogs extends SubscribeMixin(LitElement) {
               .path=${mdiDownload}
             ></ha-icon-button>
           </ha-card>
-          <textarea readonly></textarea>
+          <ha-log-viewer></ha-log-viewer>
         </div>
       </hass-subpage>
     `;
@@ -133,7 +135,7 @@ class ZWaveJSLogs extends SubscribeMixin(LitElement) {
   private _downloadLogs() {
     fileDownload(
       `data:text/plain;charset=utf-8,${encodeURIComponent(
-        this._textarea!.value
+        this._logViewer!.lines.join("\n")
       )}`,
       `zwave_js.log`
     );
@@ -148,10 +150,11 @@ class ZWaveJSLogs extends SubscribeMixin(LitElement) {
       return;
     }
     setZWaveJSLogLevel(this.hass!, this.configEntryId, selected);
-    this._textarea!.value += `${this.hass.localize(
-      "ui.panel.config.zwave_js.logs.log_level_changed",
-      { level: capitalizeFirstLetter(selected) }
-    )}\n`;
+    this._logViewer?.addLines([
+      this.hass.localize("ui.panel.config.zwave_js.logs.log_level_changed", {
+        level: capitalizeFirstLetter(selected),
+      }),
+    ]);
   }
 
   static get styles(): CSSResultArray {
@@ -164,11 +167,6 @@ class ZWaveJSLogs extends SubscribeMixin(LitElement) {
           height: 100%;
           box-sizing: border-box;
           padding: 16px;
-        }
-        textarea {
-          flex-grow: 1;
-          padding: 16px;
-          font-family: var(--ha-font-family-code);
         }
         ha-card {
           margin: 16px 0;

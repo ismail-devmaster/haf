@@ -1,5 +1,7 @@
+import type { LocalizeFunc } from "../common/translations/localize";
+import { timeCacheEntityPromiseFunc } from "../common/util/time-cache-entity-promise-func";
 import type { HomeAssistant } from "../types";
-import type { MediaPlayerItem } from "./media-player";
+import type { MediaPlayerItem, SearchMediaResult } from "./media-player";
 
 export interface ResolvedMediaSource {
   url: string;
@@ -7,7 +9,7 @@ export interface ResolvedMediaSource {
 }
 
 export const resolveMediaSource = (
-  hass: HomeAssistant,
+  hass: Pick<HomeAssistant, "callWS">,
   media_content_id: string
 ) =>
   hass.callWS<ResolvedMediaSource>({
@@ -15,13 +17,43 @@ export const resolveMediaSource = (
     media_content_id,
   });
 
+// Resolved URLs are signed and valid for 24 hours (CONTENT_AUTH_EXPIRY_TIME in
+// core). Resolving again returns a different signature, which would defeat the
+// browser cache, so reuse the resolved URL for just under its validity.
+export const RESOLVE_CACHE_TIME = 23 * 60 * 60 * 1000; // 23 hours
+
+export const resolveMediaSourceWithCache = (
+  hass: Pick<HomeAssistant, "callWS" | "hassUrl">,
+  media_content_id: string
+): Promise<ResolvedMediaSource> =>
+  timeCacheEntityPromiseFunc(
+    "_resolvedMediaSource",
+    RESOLVE_CACHE_TIME,
+    resolveMediaSource,
+    hass,
+    media_content_id
+  );
+
 export const browseLocalMediaPlayer = (
-  hass: HomeAssistant,
+  callWS: HomeAssistant["callWS"],
   mediaContentId?: string
 ): Promise<MediaPlayerItem> =>
-  hass.callWS<MediaPlayerItem>({
+  callWS<MediaPlayerItem>({
     type: "media_source/browse_media",
     media_content_id: mediaContentId,
+  });
+
+export const searchMedia = (
+  callWS: HomeAssistant["callWS"],
+  mediaContentId: string | undefined,
+  searchQuery: string,
+  mediaFilterClasses?: string[]
+): Promise<SearchMediaResult> =>
+  callWS<SearchMediaResult>({
+    type: "media_source/search_media",
+    media_content_id: mediaContentId,
+    search_query: searchQuery,
+    media_filter_classes: mediaFilterClasses,
   });
 
 export const MANUAL_MEDIA_SOURCE_PREFIX = "__MANUAL_ENTRY__";
@@ -38,34 +70,47 @@ export const isLocalMediaSourceContentId = (mediaId: string) =>
 export const isImageUploadMediaSourceContentId = (mediaId: string) =>
   mediaId.startsWith("media-source://image_upload");
 
+export const getImageEntityIdFromMediaSourceContentId = (
+  mediaId: string
+): string | undefined =>
+  mediaId.startsWith("media-source://image/image.")
+    ? mediaId.slice("media-source://image/".length)
+    : undefined;
+
 export const uploadLocalMedia = async (
-  hass: HomeAssistant,
+  fetchWithAuth: HomeAssistant["fetchWithAuth"],
+  localize: LocalizeFunc,
   media_content_id: string,
   file: File
 ) => {
   const fd = new FormData();
   fd.append("media_content_id", media_content_id);
   fd.append("file", file);
-  const resp = await hass.fetchWithAuth(
-    "/api/media_source/local_source/upload",
-    {
-      method: "POST",
-      body: fd,
-    }
-  );
+  const resp = await fetchWithAuth("/api/media_source/local_source/upload", {
+    method: "POST",
+    body: fd,
+  });
   if (resp.status === 413) {
-    throw new Error(`Uploaded file is too large (${file.name})`);
+    throw new Error(
+      localize("ui.common.upload_file_too_large", {
+        name: file.name,
+      })
+    );
   } else if (resp.status !== 200) {
-    throw new Error("Unknown error");
+    throw new Error(localize("ui.common.unknown_error"));
   }
   return resp.json();
 };
 
 export const removeLocalMedia = async (
-  hass: HomeAssistant,
+  callWS: HomeAssistant["callWS"],
   media_content_id: string
 ) =>
-  hass.callWS({
+  callWS({
     type: "media_source/local_source/remove",
     media_content_id,
   });
+
+export const isStreamingMedia = (url: string): boolean =>
+  url.includes("/api/image_proxy_stream") ||
+  url.includes("/api/camera_proxy_stream");

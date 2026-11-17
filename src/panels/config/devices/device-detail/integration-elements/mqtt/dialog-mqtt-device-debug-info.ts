@@ -2,10 +2,8 @@ import type { CSSResultGroup, TemplateResult } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators";
 import { computeDeviceNameDisplay } from "../../../../../../common/entity/compute_device_name";
-import { computeStateName } from "../../../../../../common/entity/compute_state_name";
 import { fireEvent } from "../../../../../../common/dom/fire_event";
 import "../../../../../../components/ha-dialog-footer";
-import "../../../../../../components/ha-formfield";
 import "../../../../../../components/ha-switch";
 import "../../../../../../components/ha-dialog";
 import "../../../../../../components/ha-button";
@@ -56,8 +54,7 @@ class DialogMQTTDeviceDebugInfo extends LitElement {
           {
             device: computeDeviceNameDisplay(
               this._params.device,
-              this.hass.localize,
-              this.hass.states
+              this.hass.localize
             ),
           }
         )}
@@ -69,55 +66,51 @@ class DialogMQTTDeviceDebugInfo extends LitElement {
           )}
         </h4>
         <div>
-          <ha-formfield
-            .label=${this.hass!.localize(
+          <ha-switch
+            .checked=${this._showDeserialized}
+            @change=${this._showDeserializedChanged}
+            autofocus
+            >${this.hass!.localize(
               "ui.dialogs.mqtt_device_debug_info.deserialize"
-            )}
+            )}</ha-switch
           >
-            <ha-switch
-              .checked=${this._showDeserialized}
-              @change=${this._showDeserializedChanged}
-              autofocus
-            >
-            </ha-switch>
-          </ha-formfield>
         </div>
         <div>
-          <ha-formfield
-            .label=${this.hass!.localize(
+          <ha-switch
+            .checked=${this._showAsYaml}
+            @change=${this._showAsYamlChanged}
+            >${this.hass!.localize(
               "ui.dialogs.mqtt_device_debug_info.show_as_yaml"
-            )}
+            )}</ha-switch
           >
-            <ha-switch
-              .checked=${this._showAsYaml}
-              @change=${this._showAsYamlChanged}
-            >
-            </ha-switch>
-          </ha-formfield>
         </div>
         <h4>
           ${this.hass!.localize("ui.dialogs.mqtt_device_debug_info.entities")}
         </h4>
         <ul class="entitylist">
-          ${this._debugInfo.entities.length
-            ? this._renderEntities()
-            : html`
-                ${this.hass!.localize(
-                  "ui.dialogs.mqtt_device_debug_info.no_entity_debug_info"
-                )}
-              `}
+          ${
+            this._debugInfo.entities.length
+              ? this._renderEntities()
+              : html`
+                  ${this.hass!.localize(
+                    "ui.dialogs.mqtt_device_debug_info.no_entity_debug_info"
+                  )}
+                `
+          }
         </ul>
         <h4>
           ${this.hass!.localize("ui.dialogs.mqtt_device_debug_info.triggers")}
         </h4>
         <ul class="triggerlist">
-          ${this._debugInfo.triggers.length
-            ? this._renderTriggers()
-            : html`
-                ${this.hass!.localize(
-                  "ui.dialogs.mqtt_device_debug_info.no_trigger_debug_info"
-                )}
-              `}
+          ${
+            this._debugInfo.triggers.length
+              ? this._renderTriggers()
+              : html`
+                  ${this.hass!.localize(
+                    "ui.dialogs.mqtt_device_debug_info.no_trigger_debug_info"
+                  )}
+                `
+          }
         </ul>
         <ha-dialog-footer slot="footer">
           <ha-button slot="primaryAction" @click=${this._close}>
@@ -151,7 +144,9 @@ class DialogMQTTDeviceDebugInfo extends LitElement {
       ${this._debugInfo!.entities.map(
         (entity) => html`
           <li class="entitylistitem">
-            ${computeStateName(this.hass.states[entity.entity_id])}
+            ${this.hass.formatEntityName(this.hass.states[entity.entity_id], {
+              type: "entity",
+            })}
             (<code>${entity.entity_id}</code>)
             <br />MQTT discovery data:
             <ul class="discoverydata">
@@ -161,7 +156,6 @@ class DialogMQTTDeviceDebugInfo extends LitElement {
               </li>
               <li>
                 <mqtt-discovery-payload
-                  .hass=${this.hass}
                   .payload=${entity.discovery_data.payload}
                   .showAsYaml=${this._showAsYaml}
                   .summary=${"Payload"}
@@ -230,12 +224,11 @@ class DialogMQTTDeviceDebugInfo extends LitElement {
             <ul class="discoverydata">
               <li>
                 Topic:
-                <code>${trigger.discovery_data.topic}</code>
+                <code>${trigger.discovery_data?.topic}</code>
               </li>
               <li>
                 <mqtt-discovery-payload
-                  .hass=${this.hass}
-                  .payload=${trigger.discovery_data.payload}
+                  .payload=${trigger.discovery_data?.payload ?? ""}
                   .showAsYaml=${this._showAsYaml}
                   .summary=${"Payload"}
                 >

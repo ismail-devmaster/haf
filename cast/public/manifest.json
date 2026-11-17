@@ -1,6 +1,10 @@
 {
   "background_color": "#FFFFFF",
+<<<<<<< HEAD
   "description": "Show Domolux on your Chromecast or Google Assistant devices with a screen.",
+=======
+  "description": "Show Home Assistant on your Chromecast or Google Home devices with a screen.",
+>>>>>>> dev
   "dir": "ltr",
   "display": "standalone",
   "icons": [

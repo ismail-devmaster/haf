@@ -1,7 +1,23 @@
 import type { TemplateResult } from "lit";
 import type { LocalizeFunc } from "../../../src/common/translations/localize";
-import type { LovelaceConfig } from "../../../src/data/lovelace/config/types";
+import type { ManualAutomationConfig } from "../../../src/data/automation";
+import type { LovelaceRawConfig } from "../../../src/data/lovelace/config/types";
 import type { EntityInput } from "../../../src/fake_data/entities/types";
+import type { ThemeSettings } from "../../../src/types";
+import type { DemoArea } from "../stubs/area_registry";
+import type { DemoFloor } from "../stubs/floor_registry";
+
+export type DemoTheme = ThemeSettings | (() => Record<string, string> | null);
+
+export interface DemoAutomation {
+  config: ManualAutomationConfig & { id: string; alias: string };
+  /** Defaults to the alias as slug */
+  entityId?: string;
+  state?: "on" | "off";
+  icon?: string;
+  /** Minutes ago */
+  lastTriggered?: number;
+}
 
 export interface DemoConfig {
   index?: number;
@@ -9,9 +25,11 @@ export interface DemoConfig {
   authorName: string;
   authorUrl: string;
   description?:
-    | string
-    | ((localize: LocalizeFunc) => string | TemplateResult<1>);
-  lovelace: (localize: LocalizeFunc) => LovelaceConfig;
+    string | ((localize: LocalizeFunc) => string | TemplateResult<1>);
+  lovelace: (localize: LocalizeFunc) => LovelaceRawConfig;
   entities: (localize: LocalizeFunc) => EntityInput[];
-  theme: () => Record<string, string> | null;
+  automations?: DemoAutomation[];
+  floors?: DemoFloor[];
+  areas?: DemoArea[];
+  theme: DemoTheme;
 }

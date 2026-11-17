@@ -77,6 +77,7 @@ echo Core is used from ${coreUrl}
 echo Static frontend files are served internally on http://localhost:${staticPort}
 
 # build the frontend so it connects to the passed core
+<<<<<<< HEAD
 HASS_URL="$coreUrl" ./script/develop &
 develop_pid=$!
 
@@ -101,3 +102,46 @@ trap cleanup EXIT INT TERM
 proxy_status=0
 wait "$proxy_pid" || proxy_status=$?
 exit "$proxy_status"
+=======
+HASS_URL="$coreUrl" ./node_modules/.bin/gulp develop-app &
+develop_pid=$!
+
+# serve the frontend
+./node_modules/.bin/serve -p $frontendPort --single --no-port-switching --config ../script/serve-config.json ./hass_frontend &
+serve_pid=$!
+
+stop_children() {
+    trap - EXIT INT TERM HUP
+    kill "$develop_pid" "$serve_pid" 2>/dev/null || true
+    wait "$develop_pid" 2>/dev/null || true
+    wait "$serve_pid" 2>/dev/null || true
+}
+
+trap stop_children EXIT
+trap 'stop_children; exit 130' INT
+trap 'stop_children; exit 143' TERM
+trap 'stop_children; exit 129' HUP
+
+while kill -0 "$develop_pid" 2>/dev/null && kill -0 "$serve_pid" 2>/dev/null; do
+    sleep 1
+done
+
+develop_status=
+serve_status=
+if ! kill -0 "$develop_pid" 2>/dev/null; then
+    if wait "$develop_pid"; then develop_status=0; else develop_status=$?; fi
+fi
+if ! kill -0 "$serve_pid" 2>/dev/null; then
+    if wait "$serve_pid"; then serve_status=0; else serve_status=$?; fi
+fi
+
+if [ -n "$develop_status" ] && [ "$develop_status" -ne 0 ]; then
+    status=$develop_status
+elif [ -n "$serve_status" ]; then
+    status=$serve_status
+else
+    status=$develop_status
+fi
+
+exit "$status"
+>>>>>>> dev

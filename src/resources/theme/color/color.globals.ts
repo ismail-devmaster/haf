@@ -194,6 +194,7 @@ export const colorStyles = css`
     --state-binary_sensor-battery-on-color: var(--red-color);
     --state-binary_sensor-carbon_monoxide-on-color: var(--red-color);
     --state-binary_sensor-gas-on-color: var(--red-color);
+    --state-binary_sensor-glass_break-on-color: var(--red-color);
     --state-binary_sensor-heat-on-color: var(--red-color);
     --state-binary_sensor-lock-on-color: var(--red-color);
     --state-binary_sensor-moisture-on-color: var(--red-color);
@@ -309,8 +310,6 @@ export const colorStyles = css`
     --mdc-dialog-scroll-divider-color: var(--divider-color);
     --mdc-dialog-heading-ink-color: var(--primary-text-color);
     --mdc-dialog-content-ink-color: var(--primary-text-color);
-    --mdc-top-app-bar-fixed-box-shadow: var(--bar-box-shadow);
-
     --mdc-text-field-idle-line-color: var(--input-idle-line-color);
     --mdc-text-field-hover-line-color: var(--input-hover-line-color);
     --mdc-text-field-disabled-line-color: var(--input-disabled-line-color);

@@ -38,10 +38,11 @@ import {
 } from "../common/const";
 import { supportsFeature } from "../common/entity/supports-feature";
 import { round } from "../common/number/round";
+import type { LocalizeFunc } from "../common/translations/localize";
 import "../components/ha-svg-icon";
-import type { HomeAssistant } from "../types";
+import type { HomeAssistant, HomeAssistantFormatters } from "../types";
 
-export const enum WeatherEntityFeature {
+export enum WeatherEntityFeature {
   FORECAST_DAILY = 1,
   FORECAST_HOURLY = 2,
   FORECAST_TWICE_DAILY = 4,
@@ -55,13 +56,19 @@ export interface ForecastAttribute {
   temperature: number;
   datetime: string;
   templow?: number;
+  apparent_temperature?: number;
+  dew_point?: number;
   precipitation?: number;
   precipitation_probability?: number;
   humidity?: number;
+  cloud_coverage?: number;
+  uv_index?: number;
   condition?: string;
   is_daytime?: boolean;
   pressure?: number;
-  wind_speed?: string;
+  wind_bearing?: number | string;
+  wind_gust_speed?: number;
+  wind_speed?: number;
 }
 
 export type ForecastPrecipitationType = "amount" | "probability";
@@ -76,13 +83,18 @@ export const getForecastPrecipitation = (
 
 interface WeatherEntityAttributes extends HassEntityAttributeBase {
   attribution?: string;
+  apparent_temperature?: number;
+  cloud_coverage?: number;
+  dew_point?: number;
   humidity?: number;
   forecast?: ForecastAttribute[];
-  is_daytime?: boolean;
+  ozone?: number;
   pressure?: number;
   temperature?: number;
+  uv_index?: number;
   visibility?: number;
   wind_bearing?: number | string;
+  wind_gust_speed?: number;
   wind_speed?: number;
   precipitation_unit: string;
   pressure_unit: string;
@@ -93,7 +105,7 @@ interface WeatherEntityAttributes extends HassEntityAttributeBase {
 
 export interface ForecastEvent {
   type: "hourly" | "daily" | "twice_daily";
-  forecast: [ForecastAttribute] | null;
+  forecast: ForecastAttribute[] | null;
 }
 
 export interface WeatherEntity extends HassEntityBase {
@@ -148,6 +160,7 @@ export const weatherAttrIcons = {
   humidity: mdiWaterPercent,
   wind_bearing: mdiWeatherWindy,
   wind_speed: mdiWeatherWindy,
+  wind_gust_speed: mdiWeatherWindy,
   pressure: mdiGauge,
   temperature: mdiThermometer,
   uv_index: mdiSunWireless,
@@ -220,19 +233,20 @@ const getWindBearing = (bearing: number | string): string => {
 };
 
 export const getWind = (
-  hass: HomeAssistant,
+  formatEntityAttributeValue: HomeAssistantFormatters["formatEntityAttributeValue"],
+  localize: LocalizeFunc,
   stateObj: WeatherEntity,
   speed?: number,
   bearing?: number | string
 ): string => {
   const speedText =
     speed !== undefined && speed !== null
-      ? hass.formatEntityAttributeValue(stateObj, "wind_speed", speed)
+      ? formatEntityAttributeValue(stateObj, "wind_speed", speed)
       : "-";
   if (bearing !== undefined && bearing !== null) {
     const cardinalDirection = getWindBearing(bearing);
     return `${speedText} (${
-      hass.localize(
+      localize(
         `ui.card.weather.cardinal_direction.${cardinalDirection.toLowerCase()}`
       ) || cardinalDirection
     })`;
@@ -266,6 +280,7 @@ export const getWeatherUnit = (
       return (
         stateObj.attributes.temperature_unit || config.unit_system.temperature
       );
+    case "wind_gust_speed":
     case "wind_speed":
       return stateObj.attributes.wind_speed_unit || `${lengthUnit}/h`;
     case "cloud_coverage":
@@ -278,13 +293,14 @@ export const getWeatherUnit = (
 };
 
 export const getSecondaryWeatherAttribute = (
-  hass: HomeAssistant,
+  formatEntityAttributeValue: HomeAssistantFormatters["formatEntityAttributeValue"],
+  localize: LocalizeFunc,
   stateObj: WeatherEntity,
   forecast: ForecastAttribute[],
   temperatureFractionDigits?: number
 ): TemplateResult | undefined => {
   const extrema = getWeatherExtrema(
-    hass,
+    formatEntityAttributeValue,
     stateObj,
     forecast,
     temperatureFractionDigits
@@ -316,17 +332,22 @@ export const getSecondaryWeatherAttribute = (
   const roundedValue = round(value, 1);
 
   return html`
-    ${weatherAttrIcon
-      ? html`
-          <ha-svg-icon class="attr-icon" .path=${weatherAttrIcon}></ha-svg-icon>
-        `
-      : hass!.localize(`ui.card.weather.attributes.${attribute}`)}
-    ${hass.formatEntityAttributeValue(stateObj, attribute, roundedValue)}
+    ${
+      weatherAttrIcon
+        ? html`
+            <ha-svg-icon
+              class="attr-icon"
+              .path=${weatherAttrIcon}
+            ></ha-svg-icon>
+          `
+        : localize(`ui.card.weather.attributes.${attribute}`)
+    }
+    ${formatEntityAttributeValue(stateObj, attribute, roundedValue)}
   `;
 };
 
 const getWeatherExtrema = (
-  hass: HomeAssistant,
+  formatEntityAttributeValue: HomeAssistantFormatters["formatEntityAttributeValue"],
   stateObj: WeatherEntity,
   forecast: ForecastAttribute[],
   temperatureFractionDigits?: number
@@ -343,19 +364,25 @@ const getWeatherExtrema = (
     if (new Date(fc.datetime).getDate() !== today) {
       break;
     }
-    if (!tempHigh || fc.temperature > tempHigh) {
+    if (fc.temperature == null) {
+      continue;
+    }
+    if (tempHigh === undefined || fc.temperature > tempHigh) {
       tempHigh =
         temperatureFractionDigits === undefined
           ? fc.temperature
           : round(fc.temperature, temperatureFractionDigits);
     }
-    if (fc.templow !== undefined && (!tempLow || fc.templow < tempLow)) {
+    if (fc.templow != null && (tempLow === undefined || fc.templow < tempLow)) {
       tempLow =
         temperatureFractionDigits === undefined
           ? fc.templow
           : round(fc.templow, temperatureFractionDigits);
     }
-    if (!fc.templow && (!tempLow || fc.temperature < tempLow)) {
+    if (
+      fc.templow == null &&
+      (tempLow === undefined || fc.temperature < tempLow)
+    ) {
       tempLow =
         temperatureFractionDigits === undefined
           ? fc.temperature
@@ -363,18 +390,22 @@ const getWeatherExtrema = (
     }
   }
 
-  if (!tempLow && !tempHigh) {
+  if (tempLow === undefined && tempHigh === undefined) {
     return undefined;
   }
 
   return html`
-    ${tempHigh
-      ? hass.formatEntityAttributeValue(stateObj, "temperature", tempHigh)
-      : ""}
-    ${tempLow && tempHigh ? " / " : ""}
-    ${tempLow
-      ? hass.formatEntityAttributeValue(stateObj, "temperature", tempLow)
-      : ""}
+    ${
+      tempHigh !== undefined
+        ? formatEntityAttributeValue(stateObj, "temperature", tempHigh)
+        : ""
+    }
+    ${tempLow !== undefined && tempHigh !== undefined ? " / " : ""}
+    ${
+      tempLow !== undefined
+        ? formatEntityAttributeValue(stateObj, "temperature", tempLow)
+        : ""
+    }
   `;
 };
 
@@ -553,9 +584,10 @@ export const getWeatherStateIcon = (
   if (userDefinedIcon) {
     return html`
       <div
-        style="background-size: cover;${styleMap({
+        style=${styleMap({
+          "background-size": "cover",
           "background-image": userDefinedIcon,
-        })}"
+        })}
       ></div>
     `;
   }

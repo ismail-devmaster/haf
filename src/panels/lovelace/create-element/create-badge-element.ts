@@ -1,5 +1,6 @@
 import type { LovelaceBadgeConfig } from "../../../data/lovelace/config/badge";
 import "../badges/hui-entity-badge";
+import "../badges/hui-error-badge";
 import {
   createLovelaceElement,
   getLovelaceElementClass,
@@ -8,6 +9,7 @@ import {
 
 const ALWAYS_LOADED_TYPES = new Set(["error", "entity"]);
 const LAZY_LOAD_TYPES = {
+  alert: () => import("../badges/hui-alert-badge"),
   "entity-filter": () => import("../badges/hui-entity-filter-badge"),
   shortcut: () => import("../badges/hui-shortcut-badge"),
   "state-label": () => import("../badges/hui-state-label-badge"),

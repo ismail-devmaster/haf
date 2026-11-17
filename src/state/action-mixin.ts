@@ -20,9 +20,12 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
     }
 
     private async _handleAction(
-      ev: HASSDomEvent<{ config: ActionConfigParams; action: string }>
+      ev: HASSDomEvent<HASSDomEvents["hass-action"]>
     ) {
       if (!this.hass) return;
-      handleAction(this, this.hass, ev.detail.config, ev.detail.action);
+      // Act from the element that fired the action so events such as
+      // `ll-custom` still reach the listeners between it and the app root.
+      const node = (ev.composedPath()[0] as HTMLElement | undefined) ?? this;
+      handleAction(node, this.hass, ev.detail.config, ev.detail.action);
     }
   };

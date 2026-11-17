@@ -3,8 +3,8 @@ import { LitElement, css, html } from "lit";
 import { customElement, property } from "lit/decorators";
 import { fireEvent } from "../../../../../../common/dom/fire_event";
 import "../../../../../../components/ha-icon-next";
-import "../../../../../../components/ha-md-list";
-import "../../../../../../components/ha-md-list-item";
+import "../../../../../../components/item/ha-list-item-button";
+import "../../../../../../components/list/ha-list-base";
 import type { HomeAssistant } from "../../../../../../types";
 import type { MatterAddDeviceStep } from "../dialog-matter-add-device";
 import { sharedStyles } from "./matter-add-device-shared-styles";
@@ -23,14 +23,8 @@ class MatterAddDeviceExisting extends LitElement {
         </p>
       </div>
 
-      <ha-md-list>
-        <ha-md-list-item
-          interactive
-          type="button"
-          .step=${"google_home"}
-          @click=${this._onItemClick}
-          @keydown=${this._onItemClick}
-        >
+      <ha-list-base>
+        <ha-list-item-button .step=${"google_home"} @click=${this._onItemClick}>
           <img
             src="/static/images/logo_google_home.png"
             alt=""
@@ -43,14 +37,8 @@ class MatterAddDeviceExisting extends LitElement {
             )}
           </span>
           <ha-icon-next slot="end"></ha-icon-next>
-        </ha-md-list-item>
-        <ha-md-list-item
-          interactive
-          type="button"
-          .step=${"apple_home"}
-          @click=${this._onItemClick}
-          @keydown=${this._onItemClick}
-        >
+        </ha-list-item-button>
+        <ha-list-item-button .step=${"apple_home"} @click=${this._onItemClick}>
           <img
             src="/static/images/logo_apple_home.png"
             alt=""
@@ -63,32 +51,25 @@ class MatterAddDeviceExisting extends LitElement {
             )}
           </span>
           <ha-icon-next slot="end"></ha-icon-next>
-        </ha-md-list-item>
-        <ha-md-list-item
-          interactive
-          type="button"
-          .step=${"generic"}
-          @click=${this._onItemClick}
-          @keydown=${this._onItemClick}
-        >
-          <div class="logo" slot="start">
-            <ha-svg-icon path=${mdiHomeAutomation}></ha-svg-icon>
-          </div>
+        </ha-list-item-button>
+        <ha-list-item-button .step=${"generic"} @click=${this._onItemClick}>
+          <ha-svg-icon
+            class="logo-icon"
+            slot="start"
+            .path=${mdiHomeAutomation}
+          ></ha-svg-icon>
           <span slot="headline">
             ${this.hass.localize(
               `ui.dialogs.matter-add-device.existing.answer_generic`
             )}
           </span>
           <ha-icon-next slot="end"></ha-icon-next>
-        </ha-md-list-item>
-      </ha-md-list>
+        </ha-list-item-button>
+      </ha-list-base>
     `;
   }
 
   private _onItemClick(ev) {
-    if (ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") {
-      return;
-    }
     const item = ev.currentTarget as any;
     const step = item.step as MatterAddDeviceStep;
     fireEvent(this, "step-selected", { step });
@@ -109,8 +90,12 @@ class MatterAddDeviceExisting extends LitElement {
         justify-content: center;
         object-fit: contain;
       }
-      .logo ha-svg-icon {
+      /* 36px icon + padding + border = the 48px logo box */
+      .logo-icon {
         --mdc-icon-size: 36px;
+        padding: 5px;
+        border-radius: var(--ha-border-radius-lg);
+        border: 1px solid var(--divider-color);
       }
     `,
   ];

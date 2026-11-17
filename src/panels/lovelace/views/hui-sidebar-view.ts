@@ -2,6 +2,7 @@ import { mdiArrowLeft, mdiArrowRight, mdiPlus } from "@mdi/js";
 import type { PropertyValues, TemplateResult } from "lit";
 import { LitElement, css, html } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
+import type { ConfigPath } from "../../../common/util/config-path";
 import { fireEvent } from "../../../common/dom/fire_event";
 import "../../../components/ha-button";
 import type { LovelaceViewElement } from "../../../data/lovelace";
@@ -11,7 +12,7 @@ import type { HuiBadge } from "../badges/hui-badge";
 import "../badges/hui-view-badges";
 import type { HuiCard } from "../cards/hui-card";
 import type { HuiCardOptions } from "../components/hui-card-options";
-import { replaceCard } from "../editor/config-util";
+import { setAtPath } from "../editor/lovelace-path";
 import type { Lovelace } from "../types";
 
 @customElement("hui-sidebar-view")
@@ -20,7 +21,7 @@ export class SideBarView extends LitElement implements LovelaceViewElement {
 
   @property({ attribute: false }) public lovelace?: Lovelace;
 
-  @property({ type: Number }) public index?: number;
+  @property({ attribute: false }) public path?: ConfigPath;
 
   @property({ attribute: false }) public isStrategy = false;
 
@@ -44,12 +45,12 @@ export class SideBarView extends LitElement implements LovelaceViewElement {
     super.connectedCallback();
     this._mql = window.matchMedia("(min-width: 760px)");
     this._mqlListenerRef = this._createCards.bind(this);
-    this._mql.addListener(this._mqlListenerRef);
+    this._mql.addEventListener("change", this._mqlListenerRef);
   }
 
   public disconnectedCallback() {
     super.disconnectedCallback();
-    this._mql?.removeListener(this._mqlListenerRef!);
+    this._mql?.removeEventListener("change", this._mqlListenerRef!);
     this._mqlListenerRef = undefined;
     this._mql = undefined;
   }
@@ -77,8 +78,7 @@ export class SideBarView extends LitElement implements LovelaceViewElement {
     }
 
     const oldLovelace = changedProperties.get("lovelace") as
-      | Lovelace
-      | undefined;
+      Lovelace | undefined;
 
     if (
       (!changedProperties.has("cards") &&
@@ -92,28 +92,29 @@ export class SideBarView extends LitElement implements LovelaceViewElement {
   protected render(): TemplateResult {
     return html`
       <hui-view-badges
-        .hass=${this.hass}
         .badges=${this.badges}
         .lovelace=${this.lovelace}
-        .viewIndex=${this.index}
+        .path=${[...this.path!, "badges"]}
         show-add-label
       ></hui-view-badges>
       <div
         class="container ${this.lovelace?.editMode ? "edit-mode" : ""}"
       ></div>
-      ${this.lovelace?.editMode
-        ? html`
-            <ha-button size="large" @click=${this._addCard}>
-              <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
-              ${this.hass!.localize("ui.panel.lovelace.editor.edit_card.add")}
-            </ha-button>
-          `
-        : ""}
+      ${
+        this.lovelace?.editMode
+          ? html`
+              <ha-button size="l" @click=${this._addCard}>
+                <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
+                ${this.hass!.localize("ui.panel.lovelace.editor.edit_card.add")}
+              </ha-button>
+            `
+          : ""
+      }
     `;
   }
 
   private _addCard(): void {
-    fireEvent(this, "ll-create-card");
+    fireEvent(this, "ll-create-card", { path: [...this.path!, "cards"] });
   }
 
   private _createCards(): void {
@@ -156,7 +157,7 @@ export class SideBarView extends LitElement implements LovelaceViewElement {
         element = document.createElement("hui-card-options");
         element.hass = this.hass;
         element.lovelace = this.lovelace;
-        element.path = [this.index!, idx];
+        element.path = [...this.path!, "cards", idx];
         card.preview = true;
         const movePositionButton = document.createElement("ha-icon-button");
         movePositionButton.slot = "buttons";
@@ -168,7 +169,7 @@ export class SideBarView extends LitElement implements LovelaceViewElement {
         movePositionButton.appendChild(moveIcon);
         movePositionButton.addEventListener("click", () => {
           this.lovelace!.saveConfig(
-            replaceCard(this.lovelace!.config, [this.index!, idx], {
+            setAtPath(this.lovelace!.config, [...this.path!, "cards", idx], {
               ...cardConfig!,
               view_layout: {
                 position:

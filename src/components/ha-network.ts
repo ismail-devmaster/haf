@@ -3,6 +3,7 @@ import type { CSSResultGroup, TemplateResult } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { fireEvent } from "../common/dom/fire_event";
+import type { HASSDomCurrentTargetEvent } from "../common/dom/fire_event";
 import type {
   Adapter,
   IPv4ConfiguredAddress,
@@ -10,8 +11,9 @@ import type {
   NetworkConfig,
 } from "../data/network";
 import { haStyle } from "../resources/styles";
-import type { HomeAssistant } from "../types";
 import "./ha-checkbox";
+import { consumeLocalize } from "../common/decorators/consume-context-entry";
+import type { LocalizeFunc } from "../common/translations/localize";
 import type { HaCheckbox } from "./ha-checkbox";
 import "./ha-settings-row";
 import "./ha-svg-icon";
@@ -41,11 +43,13 @@ declare global {
 }
 @customElement("ha-network")
 export class HaNetwork extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property({ attribute: false }) public networkConfig?: NetworkConfig;
 
   @state() private _expanded?: boolean;
+
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
 
   protected render() {
     if (this.networkConfig === undefined) {
@@ -56,45 +60,51 @@ export class HaNetwork extends LitElement {
       <ha-checkbox
         @change=${this._handleAutoConfigureCheckboxClick}
         .checked=${!configured_adapters.length}
-        .hint=${!configured_adapters.length
-          ? this.hass.localize(
-              "ui.panel.config.network.adapter.auto_configure_manual_hint"
-            )
-          : ""}
+        .hint=${
+          !configured_adapters.length
+            ? this._localize(
+                "ui.panel.config.network.adapter.auto_configure_manual_hint"
+              )
+            : ""
+        }
       >
-        ${this.hass.localize("ui.panel.config.network.adapter.auto_configure")}
+        ${this._localize("ui.panel.config.network.adapter.auto_configure")}
         <div class="description">
-          ${this.hass.localize("ui.panel.config.network.adapter.detected")}:
+          ${this._localize("ui.panel.config.network.adapter.detected")}:
           ${format_auto_detected_interfaces(this.networkConfig.adapters)}
         </div>
       </ha-checkbox>
-      ${configured_adapters.length || this._expanded
-        ? this.networkConfig.adapters.map(
-            (adapter) =>
-              html`<ha-checkbox
-                id=${adapter.name}
-                @change=${this._handleAdapterCheckboxClick}
-                .checked=${configured_adapters.includes(adapter.name)}
-                .adapter=${adapter.name}
-              >
-                ${this.hass.localize(
-                  "ui.panel.config.network.adapter.adapter"
-                )}:
-                ${adapter.name}
-                ${adapter.default
-                  ? html`<ha-svg-icon .path=${mdiStar}></ha-svg-icon>
-                      (${this.hass.localize("ui.common.default")})`
-                  : nothing}
-                <div class="description">
-                  ${format_addresses([...adapter.ipv4, ...adapter.ipv6])}
-                </div>
-              </ha-checkbox>`
-          )
-        : nothing}
+      ${
+        configured_adapters.length || this._expanded
+          ? this.networkConfig.adapters.map(
+              (adapter) =>
+                html`<ha-checkbox
+                  id=${adapter.name}
+                  @change=${this._handleAdapterCheckboxClick}
+                  .checked=${configured_adapters.includes(adapter.name)}
+                  .adapter=${adapter.name}
+                >
+                  ${this._localize("ui.panel.config.network.adapter.adapter")}:
+                  ${adapter.name}
+                  ${
+                    adapter.default
+                      ? html`<ha-svg-icon .path=${mdiStar}></ha-svg-icon>
+                          (${this._localize("ui.common.default")})`
+                      : nothing
+                  }
+                  <div class="description">
+                    ${format_addresses([...adapter.ipv4, ...adapter.ipv6])}
+                  </div>
+                </ha-checkbox>`
+            )
+          : nothing
+      }
     `;
   }
 
-  private _handleAutoConfigureCheckboxClick(ev: Event) {
+  private _handleAutoConfigureCheckboxClick(
+    ev: HASSDomCurrentTargetEvent<HaCheckbox>
+  ) {
     const checkbox = ev.currentTarget as HaCheckbox;
     if (this.networkConfig === undefined) {
       return;
@@ -120,7 +130,9 @@ export class HaNetwork extends LitElement {
     });
   }
 
-  private _handleAdapterCheckboxClick(ev: Event) {
+  private _handleAdapterCheckboxClick(
+    ev: HASSDomCurrentTargetEvent<HaCheckbox>
+  ) {
     const checkbox = ev.currentTarget as HaCheckbox;
     const adapter_name = checkbox.id;
     if (this.networkConfig === undefined) {

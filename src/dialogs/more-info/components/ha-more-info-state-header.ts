@@ -1,25 +1,34 @@
 import type { TemplateResult } from "lit";
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators";
+import { classMap } from "lit/directives/class-map";
+import { consume } from "../../../common/decorators/consume";
 import "../../../components/ha-absolute-time";
 import "../../../components/ha-relative-time";
+import type { HomeAssistantFormatters } from "../../../types";
+import { formattersContext } from "../../../data/context";
 import { UNAVAILABLE, UNKNOWN } from "../../../data/entity/entity";
 import type { LightEntity } from "../../../data/light";
 import { SENSOR_DEVICE_CLASS_TIMESTAMP } from "../../../data/sensor";
 import "../../../panels/lovelace/components/hui-timestamp-display";
-import type { HomeAssistant } from "../../../types";
 
 @customElement("ha-more-info-state-header")
 export class HaMoreInfoStateHeader extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property({ attribute: false }) public stateObj!: LightEntity;
 
   @property({ attribute: false }) public stateOverride?: string;
 
   @property({ attribute: false }) public changedOverride?: number;
 
+  @property({ attribute: false }) public changedTextOverride?: string;
+
+  @property({ attribute: false }) public stateAccent = false;
+
   @state() private _absoluteTime = false;
+
+  @state()
+  @consume({ context: formattersContext, subscribe: true })
+  private _formatters!: HomeAssistantFormatters;
 
   private _localizeState(): TemplateResult | string {
     if (
@@ -29,7 +38,6 @@ export class HaMoreInfoStateHeader extends LitElement {
     ) {
       return html`
         <hui-timestamp-display
-          .hass=${this.hass}
           .ts=${new Date(this.stateObj.state)}
           format="relative"
           capitalize
@@ -37,7 +45,7 @@ export class HaMoreInfoStateHeader extends LitElement {
       `;
     }
 
-    return this.hass.formatEntityState(this.stateObj);
+    return this._formatters?.formatEntityState(this.stateObj) ?? "";
   }
 
   private _toggleAbsolute() {
@@ -48,28 +56,41 @@ export class HaMoreInfoStateHeader extends LitElement {
     const stateDisplay = this.stateOverride ?? this._localizeState();
 
     return html`
-      <p class="state">${stateDisplay}</p>
+      <p class=${classMap({ state: true, accent: this.stateAccent })}>
+        ${stateDisplay}
+      </p>
       <div class="time-row">
-        <p class="last-changed" @click=${this._toggleAbsolute}>
-          ${this._absoluteTime
-            ? html`
-                <ha-absolute-time
-                  .hass=${this.hass}
-                  .datetime=${this.changedOverride ??
-                  this.stateObj.last_changed}
-                ></ha-absolute-time>
-              `
-            : html`
-                <ha-relative-time
-                  .hass=${this.hass}
-                  .datetime=${this.changedOverride ??
-                  this.stateObj.last_changed}
-                  capitalize
-                ></ha-relative-time>
-              `}
-        </p>
+        ${
+          this.changedTextOverride
+            ? html`<p class="last-changed secondary" aria-hidden="true">
+                ${this.changedTextOverride}
+              </p>`
+            : html`<p class="last-changed" @click=${this._toggleAbsolute}>
+                ${
+                  this._absoluteTime
+                    ? html`
+                        <ha-absolute-time
+                          .datetime=${
+                            this.changedOverride ?? this.stateObj.last_changed
+                          }
+                        ></ha-absolute-time>
+                      `
+                    : html`
+                        <ha-relative-time
+                          .datetime=${
+                            this.changedOverride ?? this.stateObj.last_changed
+                          }
+                          capitalize
+                        ></ha-relative-time>
+                      `
+                }
+              </p>`
+        }
         <slot name="after-time"></slot>
       </div>
+      <span class="visually-hidden" aria-live="polite"
+        >${this.changedTextOverride ?? ""}</span
+      >
     `;
   }
 
@@ -106,8 +127,23 @@ export class HaMoreInfoStateHeader extends LitElement {
       padding: var(--ha-space-1) 0;
       cursor: pointer;
       user-select: none;
-      -webkit-user-select: none;
       -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    }
+    .visually-hidden {
+      position: absolute;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      height: 1px;
+      width: 1px;
+      margin: -1px;
+      padding: 0;
+      border: 0;
+    }
+    .state.accent {
+      color: var(--primary-color);
+    }
+    .last-changed.secondary {
+      cursor: default;
     }
   `;
 }

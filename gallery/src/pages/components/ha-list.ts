@@ -2,10 +2,12 @@ import {
   mdiAccount,
   mdiChevronRight,
   mdiCog,
+  mdiDelete,
   mdiHome,
   mdiInformationOutline,
   mdiMapMarker,
   mdiOpenInNew,
+  mdiPencil,
   mdiViewDashboard,
   mdiWifi,
 } from "@mdi/js";
@@ -13,6 +15,8 @@ import type { TemplateResult } from "lit";
 import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators";
 import "../../../../src/components/ha-card";
+import "../../../../src/components/ha-icon-button";
+import "../../../../src/components/ha-icon-next";
 import "../../../../src/components/ha-svg-icon";
 import "../../../../src/components/item/ha-list-item-base";
 import "../../../../src/components/item/ha-list-item-button";
@@ -20,7 +24,6 @@ import "../../../../src/components/item/ha-list-item-option";
 import "../../../../src/components/list/ha-list-base";
 import "../../../../src/components/list/ha-list-nav";
 import "../../../../src/components/list/ha-list-selectable";
-import type { HaListSelectedDetail } from "../../../../src/components/list/types";
 
 type Appearance = "line" | "checkbox";
 type Position = "start" | "end";
@@ -30,9 +33,55 @@ const positions: Position[] = ["start", "end"];
 const selectedStates = [false, true];
 const disabledStates = [false, true];
 
+interface TreeChild {
+  key: string;
+  label: string;
+}
+
+interface TreeGroup {
+  key: string;
+  label: string;
+  children: TreeChild[];
+}
+
+const treeGroups: TreeGroup[] = [
+  {
+    key: "binary_sensor",
+    label: "Binary sensor",
+    children: [
+      { key: "door", label: "Door" },
+      { key: "motion", label: "Motion" },
+      { key: "window", label: "Window" },
+    ],
+  },
+  {
+    key: "cover",
+    label: "Cover",
+    children: [
+      { key: "garage", label: "Garage" },
+      { key: "shutter", label: "Shutter" },
+    ],
+  },
+];
+
+interface TreeRow {
+  group: TreeGroup;
+  child?: TreeChild;
+}
+
+const treeRows: TreeRow[] = treeGroups.flatMap((group) => [
+  { group },
+  ...group.children.map((child) => ({ group, child })),
+]);
+
+const treeKey = (group: TreeGroup, child: TreeChild) =>
+  `${group.key}/${child.key}`;
+
 @customElement("demo-components-ha-list")
 export class DemoHaList extends LitElement {
   @state() private _buttonClicks = 0;
+
+  @state() private _lastAction = "none";
 
   @state() private _single: number | Set<number> = -1;
 
@@ -41,6 +90,8 @@ export class DemoHaList extends LitElement {
   @state() private _multiCheckStart: number | Set<number> = new Set();
 
   @state() private _multiCheckEnd: number | Set<number> = new Set();
+
+  @state() private _tree = new Set<string>();
 
   private _options = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon"];
 
@@ -140,6 +191,20 @@ export class DemoHaList extends LitElement {
           <ha-list-item-base headline="Disabled row" disabled>
             <ha-svg-icon slot="start" .path=${mdiHome}></ha-svg-icon>
           </ha-list-item-base>
+          <ha-list-item-base
+            headline="Truncated by default, a long headline stays on one line and ends with an ellipsis"
+            supporting-text="Long supporting text is truncated as well, so every row in the list keeps the same height"
+          >
+            <ha-svg-icon slot="start" .path=${mdiHome}></ha-svg-icon>
+          </ha-list-item-base>
+          <ha-list-item-base
+            wrap-headline
+            wrap-supporting-text
+            headline="With wrap-headline, a long headline wraps onto as many lines as it needs"
+            supporting-text="With wrap-supporting-text, long supporting text wraps too, which suits settings with a description"
+          >
+            <ha-svg-icon slot="start" .path=${mdiHome}></ha-svg-icon>
+          </ha-list-item-base>
         </ha-list-base>
       </ha-card>
 
@@ -175,6 +240,51 @@ export class DemoHaList extends LitElement {
         </ha-list-base>
       </ha-card>
 
+      <ha-card header="Row with actions in the end slot">
+        <p class="card-text">
+          Last action: <code>${this._lastAction}</code>. The action buttons are
+          separate controls; icons and the divider activate the row.
+        </p>
+        <ha-list-base aria-label="Rows with actions">
+          <ha-list-item-button data-action="row" @click=${this._onActionClick}>
+            <ha-svg-icon slot="start" .path=${mdiHome}></ha-svg-icon>
+            <span slot="headline">Button row</span>
+            <span slot="supporting-text">Click the row or an action</span>
+            <ha-icon-next slot="end"></ha-icon-next>
+            <div slot="end" class="vertical-divider"></div>
+            <ha-icon-button
+              slot="end"
+              data-action="edit"
+              .path=${mdiPencil}
+              label="Edit"
+              @click=${this._onActionClick}
+            ></ha-icon-button>
+            <ha-icon-button
+              slot="end"
+              data-action="delete"
+              .path=${mdiDelete}
+              label="Delete"
+              @click=${this._onActionClick}
+            ></ha-icon-button>
+          </ha-list-item-button>
+          <ha-list-item-button href="#components/ha-list">
+            <ha-svg-icon slot="start" .path=${mdiMapMarker}></ha-svg-icon>
+            <span slot="headline">Link row</span>
+            <span slot="supporting-text"
+              >Cmd/Ctrl-click on the icon or chevron opens a new tab</span
+            >
+            <ha-icon-button
+              slot="end"
+              data-action="link-edit"
+              .path=${mdiPencil}
+              label="Edit"
+              @click=${this._onActionClick}
+            ></ha-icon-button>
+            <ha-icon-next slot="end"></ha-icon-next>
+          </ha-list-item-button>
+        </ha-list-base>
+      </ha-card>
+
       <h2>ha-list-selectable + ha-list-item-option</h2>
       <p>
         Selectable list (<code>role="listbox"</code>). Items must be
@@ -185,7 +295,7 @@ export class DemoHaList extends LitElement {
       <ha-card header="Single select, appearance=line">
         <ha-list-selectable
           aria-label="Single select"
-          @ha-list-selected=${this._onSingle}
+          @ha-list-item-selected=${this._onSingle}
         >
           ${this._options.map(
             (o, i) => html`
@@ -205,7 +315,8 @@ export class DemoHaList extends LitElement {
         <ha-list-selectable
           multi
           aria-label="Multi select line"
-          @ha-list-selected=${this._onMultiLine}
+          @ha-list-item-selected=${this._onMultiLineSelected}
+          @ha-list-item-deselected=${this._onMultiLineDeselected}
         >
           ${this._options.map(
             (o, i) => html`
@@ -227,7 +338,8 @@ export class DemoHaList extends LitElement {
         <ha-list-selectable
           multi
           aria-label="Multi checkbox start"
-          @ha-list-selected=${this._onMultiCheckStart}
+          @ha-list-item-selected=${this._onMultiCheckStartSelected}
+          @ha-list-item-deselected=${this._onMultiCheckStartDeselected}
         >
           ${this._options.map(
             (o, i) => html`
@@ -243,8 +355,7 @@ export class DemoHaList extends LitElement {
           )}
         </ha-list-selectable>
         <pre>
-selected: ${JSON.stringify(this._toJson(this._multiCheckStart))}</pre
-        >
+selected: ${JSON.stringify(this._toJson(this._multiCheckStart))}</pre>
       </ha-card>
 
       <ha-card
@@ -253,7 +364,8 @@ selected: ${JSON.stringify(this._toJson(this._multiCheckStart))}</pre
         <ha-list-selectable
           multi
           aria-label="Multi checkbox end"
-          @ha-list-selected=${this._onMultiCheckEnd}
+          @ha-list-item-selected=${this._onMultiCheckEndSelected}
+          @ha-list-item-deselected=${this._onMultiCheckEndDeselected}
         >
           ${this._options.map(
             (o, i) => html`
@@ -270,8 +382,46 @@ selected: ${JSON.stringify(this._toJson(this._multiCheckStart))}</pre
           )}
         </ha-list-selectable>
         <pre>
-selected: ${JSON.stringify(this._toJson(this._multiCheckEnd))}</pre
+selected: ${JSON.stringify(this._toJson(this._multiCheckEnd))}</pre>
+      </ha-card>
+
+      <ha-card header="Controlled selection with indeterminate groups">
+        <ha-list-selectable
+          multi
+          controlled
+          aria-label="Controlled tree"
+          @ha-list-item-selected=${this._onTreeToggle}
+          @ha-list-item-deselected=${this._onTreeToggle}
         >
+          ${treeGroups.map((group) => {
+            const groupState = this._groupState(group);
+            return html`
+              <ha-list-item-option
+                appearance="checkbox"
+                selection-position="end"
+                .value=${group.key}
+                ?selected=${groupState === "all"}
+                ?indeterminate=${groupState === "some"}
+              >
+                <span slot="headline">${group.label}</span>
+              </ha-list-item-option>
+              ${group.children.map(
+                (child) => html`
+                  <ha-list-item-option
+                    class="child"
+                    appearance="checkbox"
+                    selection-position="end"
+                    .value=${treeKey(group, child)}
+                    ?selected=${this._tree.has(treeKey(group, child))}
+                  >
+                    <span slot="headline">${child.label}</span>
+                  </ha-list-item-option>
+                `
+              )}
+            `;
+          })}
+        </ha-list-selectable>
+        <pre>selected: ${JSON.stringify([...this._tree])}</pre>
       </ha-card>
 
       <ha-card header="Option: all combinations">
@@ -343,24 +493,105 @@ selected: ${JSON.stringify(this._toJson(this._multiCheckEnd))}</pre
     return value instanceof Set ? [...value] : value;
   }
 
+  private _onActionClick = (ev: MouseEvent) => {
+    ev.stopPropagation();
+    this._lastAction =
+      (ev.currentTarget as HTMLElement).dataset.action ?? "none";
+  };
+
   private _onButtonClick = () => {
     this._buttonClicks++;
   };
 
-  private _onSingle = (ev: CustomEvent<HaListSelectedDetail>) => {
-    this._single = ev.detail.index;
+  private _withIndex(
+    value: number | Set<number>,
+    index: number,
+    selected: boolean
+  ): Set<number> {
+    const next = new Set(value instanceof Set ? value : []);
+    if (selected) {
+      next.add(index);
+    } else {
+      next.delete(index);
+    }
+    return next;
+  }
+
+  private _groupState(group: TreeGroup): "none" | "some" | "all" {
+    const selected = group.children.filter((child) =>
+      this._tree.has(treeKey(group, child))
+    ).length;
+    if (selected === 0) {
+      return "none";
+    }
+    return selected === group.children.length ? "all" : "some";
+  }
+
+  private _onTreeToggle = (ev: CustomEvent<number>) => {
+    const row = treeRows[ev.detail];
+    if (!row) {
+      return;
+    }
+    const next = new Set(this._tree);
+    if (row.child) {
+      const key = treeKey(row.group, row.child);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+    } else {
+      const select = this._groupState(row.group) !== "all";
+      row.group.children.forEach((child) => {
+        const key = treeKey(row.group, child);
+        if (select) {
+          next.add(key);
+        } else {
+          next.delete(key);
+        }
+      });
+    }
+    this._tree = next;
   };
 
-  private _onMultiLine = (ev: CustomEvent<HaListSelectedDetail>) => {
-    this._multiLine = ev.detail.index;
+  private _onSingle = (ev: CustomEvent<number>) => {
+    this._single = ev.detail;
   };
 
-  private _onMultiCheckStart = (ev: CustomEvent<HaListSelectedDetail>) => {
-    this._multiCheckStart = ev.detail.index;
+  private _onMultiLineSelected = (ev: CustomEvent<number>) => {
+    this._multiLine = this._withIndex(this._multiLine, ev.detail, true);
   };
 
-  private _onMultiCheckEnd = (ev: CustomEvent<HaListSelectedDetail>) => {
-    this._multiCheckEnd = ev.detail.index;
+  private _onMultiLineDeselected = (ev: CustomEvent<number>) => {
+    this._multiLine = this._withIndex(this._multiLine, ev.detail, false);
+  };
+
+  private _onMultiCheckStartSelected = (ev: CustomEvent<number>) => {
+    this._multiCheckStart = this._withIndex(
+      this._multiCheckStart,
+      ev.detail,
+      true
+    );
+  };
+
+  private _onMultiCheckStartDeselected = (ev: CustomEvent<number>) => {
+    this._multiCheckStart = this._withIndex(
+      this._multiCheckStart,
+      ev.detail,
+      false
+    );
+  };
+
+  private _onMultiCheckEndSelected = (ev: CustomEvent<number>) => {
+    this._multiCheckEnd = this._withIndex(this._multiCheckEnd, ev.detail, true);
+  };
+
+  private _onMultiCheckEndDeselected = (ev: CustomEvent<number>) => {
+    this._multiCheckEnd = this._withIndex(
+      this._multiCheckEnd,
+      ev.detail,
+      false
+    );
   };
 
   static styles = css`
@@ -381,6 +612,15 @@ selected: ${JSON.stringify(this._toJson(this._multiCheckEnd))}</pre
     }
     ha-card {
       max-width: 560px;
+    }
+    .card-text {
+      margin: 0;
+      padding: 0 var(--ha-space-4) var(--ha-space-2);
+    }
+    .vertical-divider {
+      align-self: stretch;
+      width: 1px;
+      background: var(--divider-color);
     }
     pre {
       padding: var(--ha-space-4);
@@ -404,6 +644,9 @@ selected: ${JSON.stringify(this._toJson(this._multiCheckEnd))}</pre
     }
     .drag-handle {
       cursor: grab;
+    }
+    .child::part(base) {
+      padding-inline-start: var(--ha-space-12);
     }
   `;
 }

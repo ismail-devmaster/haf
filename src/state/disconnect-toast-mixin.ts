@@ -1,21 +1,33 @@
 import type { PropertyValues } from "lit";
 import type { UnsubscribeFunc } from "home-assistant-js-websocket";
+import type { BootstrapProgress } from "../data/bootstrap_integrations";
 import {
-  STATE_NOT_RUNNING,
-  STATE_RUNNING,
-  STATE_STARTING,
-} from "home-assistant-js-websocket";
-import type { BootstrapIntegrationsTimings } from "../data/bootstrap_integrations";
-import { subscribeBootstrapIntegrations } from "../data/bootstrap_integrations";
-import { domainToName } from "../data/integration";
+  computeStartupProgress,
+  startupTransition,
+  subscribeBootstrapProgress,
+} from "../data/bootstrap_integrations";
 import type { Constructor } from "../types";
-import { showToast } from "../util/toast";
+import { HOST_ACTION_TOAST_ID, showToast } from "../util/toast";
 import type { HassBaseEl } from "./hass-base-mixin";
 import { navigate } from "../common/navigate";
+import { showStartupProgressDialog } from "../dialogs/startup-progress/show-dialog-startup-progress";
+
+const CONNECTION_LOST_TOAST_ID = "connection-lost";
+const SERVER_STARTUP_TOAST_ID = "server-startup";
 
 export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
   class extends superClass {
-    private _subscribedBootstrapIntegrations?: Promise<UnsubscribeFunc>;
+    private _subscribedBootstrapProgress?: Promise<UnsubscribeFunc>;
+
+    private _startupProgress?: BootstrapProgress;
+
+    private _startupProgressVisible = false;
+
+    private _startupFinishPending = false;
+
+    private _startupProgressEl?: HTMLElementTagNameMap["ha-startup-progress"];
+
+    private _startupProgressResize?: ResizeObserver;
 
     private _disconnectedTimeout?: number;
 
@@ -23,6 +35,7 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
       super.firstUpdated(changedProps);
       // Need to load in advance because when disconnected, can't dynamically load code.
       setTimeout(() => import("../managers/notification-manager"), 5000);
+      setTimeout(() => import("../components/ha-startup-progress"), 5000);
     }
 
     updated(changedProperties: PropertyValues<this>) {
@@ -32,6 +45,7 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
         return;
       }
       if (oldHass?.config?.state !== this.hass!.config.state) {
+<<<<<<< HEAD
         if (this.hass!.config.state === STATE_NOT_RUNNING) {
           showToast(this, {
             message:
@@ -60,8 +74,19 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
             message: this.hass!.localize("ui.notification_toast.started"),
             duration: 5000,
           });
+=======
+        const transition = startupTransition(
+          oldHass?.config?.state,
+          this.hass!.config.state
+        );
+        if (transition === "show") {
+          this._showStartupProgress();
+        } else if (transition === "finish") {
+          this._requestFinishStartupProgress();
+>>>>>>> dev
         }
       }
+      this._updateStartupProgress();
       if (
         this.hass!.config.safe_mode &&
         oldHass?.config?.safe_mode !== this.hass!.config.safe_mode
@@ -89,12 +114,19 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
 
     protected hassReconnected() {
       super.hassReconnected();
+      // A reboot toast is obsolete once we are connected again
+      showToast(this, {
+        id: HOST_ACTION_TOAST_ID,
+        message: "",
+        duration: 0,
+      });
       if (this._disconnectedTimeout) {
         clearTimeout(this._disconnectedTimeout);
         this._disconnectedTimeout = undefined;
         return;
       }
       showToast(this, {
+        id: CONNECTION_LOST_TOAST_ID,
         message: "",
         duration: 0,
       });
@@ -106,6 +138,7 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
       this._disconnectedTimeout = window.setTimeout(() => {
         this._disconnectedTimeout = undefined;
         showToast(this, {
+          id: CONNECTION_LOST_TOAST_ID,
           message: this.hass!.localize("ui.notification_toast.connection_lost"),
           duration: -1,
           dismissable: false,
@@ -113,69 +146,102 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
       }, 1000);
     }
 
-    private _handleMessage(message: BootstrapIntegrationsTimings): void {
-      if (this.hass!.config.state !== STATE_NOT_RUNNING) {
+    private _showStartupProgress() {
+      this._unsubscribeBootstrapProgress();
+      this._startupProgress = undefined;
+      this._startupFinishPending = false;
+      this._startupProgressVisible = true;
+      this._subscribedBootstrapProgress = subscribeBootstrapProgress(
+        this.hass!.connection,
+        (message) => {
+          this._startupProgress = message;
+          if (this._startupFinishPending && message.phase === "running") {
+            this._finishStartupProgress();
+          }
+        }
+      );
+      this._updateStartupProgress();
+    }
+
+    private async _updateStartupProgress() {
+      if (!this._startupProgressVisible) {
         return;
       }
-
-      if (Object.keys(message).length === 0) {
-        showToast(this, {
-          message:
-            this.hass!.localize("ui.notification_toast.wrapping_up_startup") ||
-            `Wrapping up startup. Not everything will be available until it is finished.`,
-          duration: -1,
-          dismissable: false,
-          action: {
-            text:
-              this.hass!.localize("ui.notification_toast.dismiss") || "Dismiss",
-            action: () => {
-              this._unsubscribeBootstrapIntegrations();
-            },
-          },
-        });
+      await import("../components/ha-startup-progress");
+      // Hidden or finished while the component was loading.
+      if (!this._startupProgressVisible) {
         return;
       }
+      if (!this._startupProgressEl) {
+        this._startupProgressEl = document.createElement("ha-startup-progress");
+        this._startupProgressEl.addEventListener(
+          "startup-progress-dismissed",
+          () => this._hideStartupProgress()
+        );
+        // Lifts the toast stack above the card so neither covers the other.
+        this._startupProgressResize = new ResizeObserver(() =>
+          this.style.setProperty(
+            "--ha-startup-progress-offset",
+            `calc(${this._startupProgressEl?.offsetHeight ?? 0}px + var(--ha-space-2))`
+          )
+        );
+        this._startupProgressResize.observe(this._startupProgressEl);
+      }
+      // The launch screen render swap clears the root, detaching the card.
+      if (!this._startupProgressEl.isConnected) {
+        this.renderRoot.appendChild(this._startupProgressEl);
+      }
+      this._startupProgressEl.detailsAvailable =
+        !!this.renderRoot.querySelector("home-assistant-main");
+    }
 
-      // Show the integration that has been starting for the longest time
-      const integration = Object.entries(message).sort(
-        ([, a], [, b]) => b - a
-      )[0][0];
+    // Keeps the subscription, so the completion toast still reflects late failures.
+    private _hideStartupProgress() {
+      this._startupProgressVisible = false;
+      this._startupProgressResize?.disconnect();
+      this._startupProgressResize = undefined;
+      this.style.removeProperty("--ha-startup-progress-offset");
+      this._startupProgressEl?.remove();
+      this._startupProgressEl = undefined;
+    }
 
+    // Core can reach RUNNING before its final snapshot with the failures arrives.
+    private _requestFinishStartupProgress() {
+      if (this._startupProgress?.phase === "running") {
+        this._finishStartupProgress();
+      } else {
+        this._startupFinishPending = true;
+      }
+    }
+
+    private _finishStartupProgress() {
+      this._startupFinishPending = false;
+      const { failed } = computeStartupProgress(
+        this._startupProgress,
+        this.hass!.config.state
+      );
+      this._hideStartupProgress();
+      this._unsubscribeBootstrapProgress();
+      const issues = failed.length;
       showToast(this, {
-        id: "integration_starting",
-        message:
-          this.hass!.localize("ui.notification_toast.integration_starting", {
-            integration: domainToName(this.hass!.localize, integration),
-          }) ||
-          `Starting ${integration}. Not everything will be available until it is finished.`,
-        duration: -1,
-        dismissable: false,
+        id: SERVER_STARTUP_TOAST_ID,
+        message: issues
+          ? this.hass!.localize("ui.notification_toast.started_with_issues", {
+              count: issues,
+            })
+          : this.hass!.localize("ui.notification_toast.started"),
+        duration: issues ? 10000 : 5000,
         action: {
-          text:
-            this.hass!.localize("ui.notification_toast.dismiss") || "Dismiss",
-          action: () => {
-            this._unsubscribeBootstrapIntegrations();
-          },
+          text: this.hass!.localize("ui.notification_toast.details"),
+          action: () => showStartupProgressDialog(this),
         },
       });
     }
 
-    private _unsubscribeBootstrapIntegrations() {
-      if (this._subscribedBootstrapIntegrations) {
-        this._subscribedBootstrapIntegrations.then((unsub) => unsub());
-        this._subscribedBootstrapIntegrations = undefined;
+    private _unsubscribeBootstrapProgress() {
+      if (this._subscribedBootstrapProgress) {
+        this._subscribedBootstrapProgress.then((unsub) => unsub());
+        this._subscribedBootstrapProgress = undefined;
       }
-    }
-
-    private _subscribeBootstrapIntegrations() {
-      if (!this.hass) {
-        return;
-      }
-      this._subscribedBootstrapIntegrations = subscribeBootstrapIntegrations(
-        this.hass!,
-        (message) => {
-          this._handleMessage(message);
-        }
-      );
     }
   };

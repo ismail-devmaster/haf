@@ -12,6 +12,7 @@ import type { HaSelector } from "../../../components/ha-selector/ha-selector";
 import type { HaActionSelector } from "../../../components/ha-selector/ha-selector-action";
 import type { HaConditionSelector } from "../../../components/ha-selector/ha-selector-condition";
 import "../../../components/ha-yaml-editor";
+import type { HaYamlEditor } from "../../../components/ha-yaml-editor";
 import type { Field } from "../../../data/script";
 import { SELECTOR_SELECTOR_BUILDING_BLOCKS } from "../../../data/selector/selector_selector";
 import { haStyle } from "../../../resources/styles";
@@ -35,6 +36,8 @@ export default class HaScriptFieldSelectorEditor extends LitElement {
   @property({ type: Boolean, attribute: "yaml-mode" }) public yamlMode = false;
 
   @state() private _uiError?: Record<string, string>;
+
+  @query("ha-yaml-editor") public yamlEditor?: HaYamlEditor;
 
   @state() private _yamlError?: undefined | "yaml_error" | "key_not_unique";
 
@@ -78,29 +81,33 @@ export default class HaScriptFieldSelectorEditor extends LitElement {
     const data = { selector: this.field.selector, default: this.field.default };
 
     return html`
-      ${this.yamlMode
-        ? html`${this._yamlError
-              ? html`<ha-alert alert-type="error">
-                  ${this.hass.localize(
-                    `ui.panel.config.script.editor.field.${this._yamlError}`
-                  )}
-                </ha-alert>`
-              : nothing}
-            <ha-yaml-editor
-              .defaultValue=${data}
-              @value-changed=${this._onYamlChange}
-            ></ha-yaml-editor>`
-        : html`<ha-form
-            .schema=${schema}
-            .data=${data}
-            .error=${this._uiError}
-            .hass=${this.hass}
-            .disabled=${this.disabled}
-            .computeLabel=${this._computeLabelCallback}
-            .computeError=${this._computeError}
-            @value-changed=${this._valueChanged}
-            .narrow=${this.narrow}
-          ></ha-form>`}
+      ${
+        this.yamlMode
+          ? html`${
+                this._yamlError
+                  ? html`<ha-alert alert-type="error">
+                      ${this.hass.localize(
+                        `ui.panel.config.script.editor.field.${this._yamlError}`
+                      )}
+                    </ha-alert>`
+                  : nothing
+              }
+              <ha-yaml-editor
+                .defaultValue=${data}
+                @value-changed=${this._onYamlChange}
+              ></ha-yaml-editor>`
+          : html`<ha-form
+              .schema=${schema}
+              .data=${data}
+              .error=${this._uiError}
+              .hass=${this.hass}
+              .disabled=${this.disabled}
+              .computeLabel=${this._computeLabelCallback}
+              .computeError=${this._computeError}
+              @value-changed=${this._valueChanged}
+              .narrow=${this.narrow}
+            ></ha-form>`
+      }
     `;
   }
 

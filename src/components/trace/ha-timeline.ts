@@ -2,11 +2,17 @@ import { mdiCircleOutline } from "@mdi/js";
 import type { TemplateResult } from "lit";
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators";
+import { consumeLocalize } from "../../common/decorators/consume-context-entry";
+import type { LocalizeFunc } from "../../common/translations/localize";
 import { buttonLinkStyle } from "../../resources/styles";
 import "../ha-svg-icon";
 
 @customElement("ha-timeline")
 export class HaTimeline extends LitElement {
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
+
   @property({ type: Boolean, reflect: true }) public label = false;
 
   @property({ type: Boolean, reflect: true }) public raised = false;
@@ -25,31 +31,42 @@ export class HaTimeline extends LitElement {
   protected render() {
     return html`
       <div class="timeline-start">
-        ${this.label
-          ? ""
-          : html`
-              <ha-svg-icon .path=${this.icon || mdiCircleOutline}></ha-svg-icon>
-            `}
+        ${
+          this.label
+            ? ""
+            : html`
+                <ha-svg-icon
+                  .path=${this.icon || mdiCircleOutline}
+                ></ha-svg-icon>
+              `
+        }
         ${this.lastItem ? "" : html`<div class="line"></div>`}
       </div>
       <div class="content">
         <slot></slot>
-        ${!this.moreItems
-          ? ""
-          : html`
-              <div>
-                ${this._showMore ||
-                // If there is only 1 item hidden behind "show more", just show it
-                // instead of showing the more info link. We're not animals.
-                this.moreItems.length === 1
-                  ? this.moreItems
-                  : html`
-                      <button class="link" @click=${this._handleShowMore}>
-                        Show ${this.moreItems.length} more items
-                      </button>
-                    `}
-              </div>
-            `}
+        ${
+          !this.moreItems
+            ? ""
+            : html`
+                <div>
+                  ${
+                    this._showMore ||
+                    // If there is only 1 item hidden behind "show more", just show it
+                    // instead of showing the more info link. We're not animals.
+                    this.moreItems.length === 1
+                      ? this.moreItems
+                      : html`
+                          <button class="link" @click=${this._handleShowMore}>
+                            ${this._localize(
+                              "ui.panel.config.automation.trace.messages.show_more_items",
+                              { count: this.moreItems.length }
+                            )}
+                          </button>
+                        `
+                  }
+                </div>
+              `
+        }
       </div>
     `;
   }

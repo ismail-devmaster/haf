@@ -1,7 +1,7 @@
 import type { HassEntity } from "home-assistant-js-websocket";
 import type { CSSResultGroup, TemplateResult } from "lit";
 import { css, html, LitElement } from "lit";
-import { customElement, property } from "lit/decorators";
+import { customElement, property, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
 import { computeDomain } from "../common/entity/compute_domain";
 import "../components/entity/state-info";
@@ -12,11 +12,22 @@ import {
 } from "../data/sensor";
 import "../panels/lovelace/components/hui-timestamp-display";
 import { haStyle } from "../resources/styles";
-import type { HomeAssistant } from "../types";
+import { consume } from "../common/decorators/consume";
+import { transform } from "../common/decorators/transform";
+import { formattersContext } from "../data/context";
+import type { HomeAssistantFormatters } from "../types";
 
 @customElement("state-card-display")
 class StateCardDisplay extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
+  @state()
+  @consume({ context: formattersContext, subscribe: true })
+  @transform<
+    HomeAssistantFormatters,
+    HomeAssistantFormatters["formatEntityState"] | undefined
+  >({
+    transformer: (formatters) => formatters?.formatEntityState,
+  })
+  private _formatEntityState?: HomeAssistantFormatters["formatEntityState"];
 
   @property({ attribute: false }) public stateObj!: HassEntity;
 
@@ -28,11 +39,7 @@ class StateCardDisplay extends LitElement {
   protected render(): TemplateResult {
     return html`
       <div class="horizontal justified layout">
-        <state-info
-          .hass=${this.hass}
-          .stateObj=${this.stateObj}
-          .inDialog=${this.inDialog}
-        >
+        <state-info .stateObj=${this.stateObj} .inDialog=${this.inDialog}>
         </state-info>
         <div
           class="state ${classMap({
@@ -40,22 +47,25 @@ class StateCardDisplay extends LitElement {
               "unit_of_measurement" in this.stateObj.attributes,
           })}"
         >
-          ${computeDomain(this.stateObj.entity_id) === "sensor" &&
-          SENSOR_TIMESTAMP_DEVICE_CLASSES.includes(
-            this.stateObj.attributes.device_class
-          ) &&
-          this.stateObj.state !== UNAVAILABLE &&
-          this.stateObj.state !== UNKNOWN
-            ? html`<hui-timestamp-display
-                .hass=${this.hass}
-                .ts=${new Date(this.stateObj.state)}
-                .format=${this.stateObj.attributes.device_class ===
-                SENSOR_DEVICE_CLASS_UPTIME
-                  ? "total"
-                  : "datetime"}
-                capitalize
-              ></hui-timestamp-display>`
-            : this.hass.formatEntityState(this.stateObj)}
+          ${
+            computeDomain(this.stateObj.entity_id) === "sensor" &&
+            SENSOR_TIMESTAMP_DEVICE_CLASSES.includes(
+              this.stateObj.attributes.device_class
+            ) &&
+            this.stateObj.state !== UNAVAILABLE &&
+            this.stateObj.state !== UNKNOWN
+              ? html`<hui-timestamp-display
+                  .ts=${new Date(this.stateObj.state)}
+                  .format=${
+                    this.stateObj.attributes.device_class ===
+                    SENSOR_DEVICE_CLASS_UPTIME
+                      ? "total"
+                      : "datetime"
+                  }
+                  capitalize
+                ></hui-timestamp-display>`
+              : this._formatEntityState?.(this.stateObj)
+          }
         </div>
       </div>
     `;
@@ -83,6 +93,8 @@ class StateCardDisplay extends LitElement {
         }
         .state.has-unit_of_measurement {
           white-space: nowrap;
+          direction: ltr;
+          justify-content: var(--float-end, right);
         }
       `,
     ];

@@ -1,29 +1,36 @@
-import { mdiDragHorizontalVariant } from "@mdi/js";
+import { mdiDragHorizontalVariant, mdiPlus } from "@mdi/js";
 import { LitElement, css, html, nothing } from "lit";
-import { customElement, property } from "lit/decorators";
+import { customElement, property, query, state } from "lit/decorators";
+import { ifDefined } from "lit/directives/if-defined";
 import { repeat } from "lit/directives/repeat";
 import memoizeOne from "memoize-one";
+import { consume } from "../../common/decorators/consume";
 import { ensureArray } from "../../common/array/ensure-array";
 import { fireEvent } from "../../common/dom/fire_event";
 import { caseInsensitiveStringCompare } from "../../common/string/compare";
+import { internationalizationContext } from "../../data/context";
 import type { SelectOption, SelectSelector } from "../../data/selector";
-import type { HomeAssistant } from "../../types";
+import type { HomeAssistantInternationalization } from "../../types";
 import "../chips/ha-chip-set";
 import "../chips/ha-input-chip";
 import "../ha-checkbox";
 import "../ha-dropdown-item";
-import "../ha-formfield";
 import "../ha-generic-picker";
+import type { HaGenericPicker } from "../ha-generic-picker";
+import "../ha-button";
 import "../ha-input-helper-text";
 import "../ha-select";
 import "../ha-select-box";
 import "../ha-sortable";
+import "../ha-svg-icon";
 import "../radio/ha-radio-group";
 import "../radio/ha-radio-option";
 
 @customElement("ha-selector-select")
 export class HaSelectSelector extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
+  @state()
+  @consume({ context: internationalizationContext, subscribe: true })
+  private _i18n!: HomeAssistantInternationalization;
 
   @property({ attribute: false }) public selector!: SelectSelector;
 
@@ -39,6 +46,8 @@ export class HaSelectSelector extends LitElement {
   @property({ type: Boolean }) public disabled = false;
 
   @property({ type: Boolean }) public required = true;
+
+  @query("ha-generic-picker") private _picker?: HaGenericPicker;
 
   private _itemMoved(ev: CustomEvent): void {
     ev.stopPropagation();
@@ -78,7 +87,7 @@ export class HaSelectSelector extends LitElement {
         caseInsensitiveStringCompare(
           a.label,
           b.label,
-          this.hass.locale.language
+          this._i18n.locale.language
         )
       );
     }
@@ -94,9 +103,9 @@ export class HaSelectSelector extends LitElement {
         <ha-select-box
           .options=${options}
           .value=${this.value as string | undefined}
+          .disabled=${this.disabled}
           @value-changed=${this._selectChanged}
           .maxColumns=${this.selector.select?.box_max_columns}
-          .hass=${this.hass}
         ></ha-select-box>
         ${this._renderHelper()}
       `;
@@ -132,8 +141,8 @@ export class HaSelectSelector extends LitElement {
       const value =
         !this.value || this.value === "" ? [] : ensureArray(this.value);
       return html`
-        <div>
-          ${this.label}
+        <div class="checkbox-list">
+          ${this.label} ${this._renderHelper()}
           ${options.map(
             (item: SelectOption) => html`
               <ha-checkbox
@@ -147,7 +156,6 @@ export class HaSelectSelector extends LitElement {
             `
           )}
         </div>
-        ${this._renderHelper()}
       `;
     }
 
@@ -155,67 +163,87 @@ export class HaSelectSelector extends LitElement {
       const value =
         !this.value || this.value === "" ? [] : ensureArray(this.value);
 
-      return html`
-        ${value?.length
-          ? html`
-              <ha-sortable
-                no-style
-                .disabled=${!this.selector.select.reorder}
-                @item-moved=${this._itemMoved}
-                handle-selector="button.primary.action"
-              >
-                <ha-chip-set>
-                  ${repeat(
-                    value,
-                    (item) => item,
-                    (item, idx) => {
-                      const label =
-                        options.find((option) => option.value === item)
-                          ?.label || item;
-                      return html`
-                        <ha-input-chip
-                          .idx=${idx}
-                          @remove=${this._removeItem}
-                          .label=${label}
-                          selected
-                        >
-                          ${this.selector.select?.reorder
-                            ? html`
-                                <ha-svg-icon
-                                  slot="icon"
-                                  .path=${mdiDragHorizontalVariant}
-                                ></ha-svg-icon>
-                              `
-                            : nothing}
-                          ${options.find((option) => option.value === item)
-                            ?.label || item}
-                        </ha-input-chip>
-                      `;
-                    }
-                  )}
-                </ha-chip-set>
-              </ha-sortable>
-            `
-          : nothing}
+      const addLabel = this._i18n.localize("ui.common.add");
 
+      return html`
+        ${
+          this.label
+            ? html`<span id="label" class="label chips-label"
+                >${this.label}</span
+              >`
+            : nothing
+        }
         <ha-generic-picker
-          .hass=${this.hass}
-          .helper=${this.helper}
+          no-sort
+          .label=${this.label}
           .disabled=${this.disabled}
           .required=${this.required && !value.length}
           .value=${""}
-          .addButtonLabel=${this.label}
           .getItems=${this._getItems(options, value, true)}
           .allowCustomValue=${this.selector.select.custom_value ?? false}
           @value-changed=${this._comboBoxValueChanged}
-        ></ha-generic-picker>
+        >
+          <ha-sortable
+            slot="field"
+            no-style
+            .disabled=${!this.selector.select.reorder}
+            @item-moved=${this._itemMoved}
+            draggable-selector="ha-input-chip"
+            handle-selector="button.primary.action"
+          >
+            <ha-chip-set
+              aria-labelledby=${ifDefined(this.label ? "label" : undefined)}
+            >
+              ${repeat(
+                value,
+                (item) => item,
+                (item, idx) => {
+                  const label =
+                    options.find((option) => option.value === item)?.label ||
+                    item;
+                  return html`
+                    <ha-input-chip
+                      .idx=${idx}
+                      @remove=${this._removeItem}
+                      .label=${label}
+                      .title=${label}
+                      selected
+                    >
+                      ${
+                        this.selector.select?.reorder
+                          ? html`
+                              <ha-svg-icon
+                                slot="icon"
+                                .path=${mdiDragHorizontalVariant}
+                              ></ha-svg-icon>
+                            `
+                          : nothing
+                      }
+                      ${label}
+                    </ha-input-chip>
+                  `;
+                }
+              )}
+              <ha-button
+                size="s"
+                appearance="filled"
+                .disabled=${this.disabled}
+                @click=${this._openPicker}
+              >
+                <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
+                ${addLabel}
+              </ha-button>
+            </ha-chip-set>
+          </ha-sortable>
+        </ha-generic-picker>
+        ${this._renderHelper()}
       `;
     }
 
     if (this.selector.select?.custom_value) {
       return html`
         <ha-generic-picker
-          .hass=${this.hass}
+          no-sort
           .label=${this.label}
           .helper=${this.helper}
           .disabled=${this.disabled}
@@ -231,9 +259,11 @@ export class HaSelectSelector extends LitElement {
     return html`
       <ha-select
         .label=${this.label ?? ""}
-        .value=${["string", "number"].includes(typeof this.value)
-          ? (this.value as string | number)
-          : ""}
+        .value=${
+          ["string", "number"].includes(typeof this.value)
+            ? (this.value as string | number)
+            : ""
+        }
         .helper=${this.helper ?? ""}
         .disabled=${this.disabled}
         .required=${this.required}
@@ -247,10 +277,13 @@ export class HaSelectSelector extends LitElement {
 
   private _renderHelper() {
     return this.helper
-      ? html`<ha-input-helper-text .disabled=${this.disabled}
-          >${this.helper}</ha-input-helper-text
-        >`
+      ? html`<ha-input-helper-text>${this.helper}</ha-input-helper-text>`
       : "";
+  }
+
+  private _openPicker(ev: Event) {
+    ev.stopPropagation();
+    this._picker?.open();
   }
 
   private _getOptions = memoizeOne(
@@ -381,8 +414,7 @@ export class HaSelectSelector extends LitElement {
     :host {
       position: relative;
     }
-    ha-select,
-    ha-formfield {
+    ha-select {
       display: block;
     }
 
@@ -394,16 +426,34 @@ export class HaSelectSelector extends LitElement {
     ha-dropdown-item[disabled] {
       --mdc-theme-text-primary-on-background: var(--disabled-text-color);
     }
-    ha-chip-set {
-      padding: 8px 0;
-    }
-
     .label {
       display: block;
       margin: 0 0 8px;
     }
 
+    .chips-label {
+      font-weight: var(--ha-font-weight-medium);
+    }
+
+    ha-sortable ha-chip-set {
+      background-color: var(--mdc-text-field-fill-color);
+      border-bottom: 1px solid var(--ha-color-border-neutral-normal);
+      border-top-right-radius: var(--ha-border-radius-sm);
+      border-top-left-radius: var(--ha-border-radius-sm);
+      padding: var(--ha-space-3);
+    }
+
     ha-select-box + ha-input-helper-text {
+      margin-top: 4px;
+    }
+
+    ha-generic-picker + ha-input-helper-text {
+      padding: 0;
+      margin-top: 4px;
+    }
+
+    .checkbox-list ha-input-helper-text {
+      padding: 0;
       margin-top: 4px;
     }
 

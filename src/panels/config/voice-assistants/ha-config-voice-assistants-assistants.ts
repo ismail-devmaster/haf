@@ -27,8 +27,6 @@ export class HaConfigVoiceAssistantsAssistants extends LitElement {
 
   @property({ attribute: "is-wide", type: Boolean }) public isWide = false;
 
-  @property({ type: Boolean }) public narrow = false;
-
   @property({ attribute: false }) public route!: Route;
 
   protected render() {
@@ -39,42 +37,47 @@ export class HaConfigVoiceAssistantsAssistants extends LitElement {
     return html`
       <hass-tabs-subpage
         .hass=${this.hass}
-        .narrow=${this.narrow}
         back-path="/config"
         .route=${this.route}
         .tabs=${voiceAssistantTabs}
       >
         <div class="content">
-          ${isComponentLoaded(this.hass.config, "assist_pipeline")
-            ? html`
-                <assist-pref
-                  .hass=${this.hass}
-                  .cloudStatus=${this.cloudStatus}
-                  .exposedEntities=${this.exposedEntities}
-                ></assist-pref>
-              `
-            : nothing}
-          ${this.hass.auth.external?.config.hasAssistSettings
-            ? html`
-                <assist-current-device-pref
-                  .hass=${this.hass}
-                ></assist-current-device-pref>
-              `
-            : nothing}
-          ${this.cloudStatus?.logged_in
-            ? html`
-                <cloud-alexa-pref
-                  .hass=${this.hass}
-                  .exposedEntities=${this.exposedEntities}
-                  .cloudStatus=${this.cloudStatus}
-                ></cloud-alexa-pref>
-                <cloud-google-pref
-                  .hass=${this.hass}
-                  .exposedEntities=${this.exposedEntities}
-                  .cloudStatus=${this.cloudStatus}
-                ></cloud-google-pref>
-              `
-            : html`<cloud-discover .hass=${this.hass}></cloud-discover>`}
+          ${
+            isComponentLoaded(this.hass.config, "assist_pipeline")
+              ? html`
+                  <assist-pref
+                    .hass=${this.hass}
+                    .cloudStatus=${this.cloudStatus}
+                    .exposedEntities=${this.exposedEntities}
+                  ></assist-pref>
+                `
+              : nothing
+          }
+          ${
+            this.hass.auth.external?.config.hasAssistSettings
+              ? html`
+                  <assist-current-device-pref
+                    .hass=${this.hass}
+                  ></assist-current-device-pref>
+                `
+              : nothing
+          }
+          ${
+            this.cloudStatus?.logged_in
+              ? html`
+                  <cloud-alexa-pref
+                    .hass=${this.hass}
+                    .exposedEntities=${this.exposedEntities}
+                    .cloudStatus=${this.cloudStatus}
+                  ></cloud-alexa-pref>
+                  <cloud-google-pref
+                    .hass=${this.hass}
+                    .exposedEntities=${this.exposedEntities}
+                    .cloudStatus=${this.cloudStatus}
+                  ></cloud-google-pref>
+                `
+              : html`<cloud-discover .hass=${this.hass}></cloud-discover>`
+          }
         </div>
       </hass-tabs-subpage>
     `;
@@ -82,14 +85,12 @@ export class HaConfigVoiceAssistantsAssistants extends LitElement {
 
   static styles = css`
     .content {
-      padding: 28px 20px 0;
-      max-width: 1040px;
+      padding: 28px var(--ha-content-gutter) 0;
+      max-width: var(--ha-content-width-narrow);
       margin: 0 auto;
     }
     .content > * {
       display: block;
-      margin: auto;
-      max-width: 800px;
       margin-bottom: 24px;
     }
     a {

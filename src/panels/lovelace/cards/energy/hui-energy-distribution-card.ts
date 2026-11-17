@@ -11,48 +11,70 @@ import {
   mdiTransmissionTower,
   mdiWater,
 } from "@mdi/js";
-import type { UnsubscribeFunc } from "home-assistant-js-websocket";
-import type { PropertyValues } from "lit";
+import type { HassEntities, HassEntity } from "home-assistant-js-websocket";
 import { css, html, LitElement, nothing, svg } from "lit";
-import { customElement, property, state } from "lit/decorators";
+import { customElement, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
+import { consume } from "../../../../common/decorators/consume";
+import { preserveUnchangedEntityStatesRecord } from "../../../../common/decorators/consume-context-entry";
+import { transform } from "../../../../common/decorators/transform";
 import { batteryLevelIconPath } from "../../../../common/entity/battery_icon";
+import { shallowEqual } from "../../../../common/util/shallow-equal";
 import "../../../../components/ha-button";
 import "../../../../components/ha-card";
 import "../../../../components/ha-svg-icon";
+import {
+  configContext,
+  entitiesContext,
+  internationalizationContext,
+  reducedMotionContext,
+  statesContext,
+  uiContext,
+} from "../../../../data/context";
 import type { EnergyData } from "../../../../data/energy";
 import {
   computeConsumptionData,
   energySourcesByType,
   formatConsumptionShort,
-  getEnergyDataCollection,
   getSummedData,
   validateEnergyCollectionKey,
 } from "../../../../data/energy";
+import { EnergyCollectionController } from "../../../../data/energy-collection-controller";
+import { getBatteryCapacity } from "../../../../data/energy-battery";
 import { calculateStatisticsSumGrowth } from "../../../../data/recorder";
-import { SubscribeMixin } from "../../../../mixins/subscribe-mixin";
-import type { HomeAssistant } from "../../../../types";
-import { hasConfigChanged } from "../../common/has-changed";
+import type {
+  HomeAssistant,
+  HomeAssistantConfig,
+  HomeAssistantInternationalization,
+  HomeAssistantUI,
+} from "../../../../types";
 import type { LovelaceCard } from "../../types";
 import type { EnergyDistributionCardConfig } from "../types";
-import { formatNumber } from "../../../../common/number/format_number";
+import { formatNumberWithUnit } from "../../../../common/number/format_number";
+import { round } from "../../../../common/number/round";
+import {
+  ENERGY_DISTRIBUTION_HOME_CIRCLE_CIRCUMFERENCE as CIRCLE_CIRCUMFERENCE,
+  computeEnergyDistributionHomeCircleArcs,
+} from "./energy-distribution-home-circle";
+import {
+  EnergyFlowDotsController,
+  energyFlowDotsStyles,
+  renderEnergyFlowDots,
+} from "./energy-flow-dots";
 
-const CIRCLE_CIRCUMFERENCE = 238.76104;
+// Flows are differences of sums; anything that rounds to 0 Wh is noise
+const hasFlow = (value: number | null): value is number =>
+  round(value ?? 0, 3) > 0;
 
 const periodIncludesNow = (data: EnergyData): boolean =>
   !data.end || data.end.getTime() >= Date.now();
 
 @customElement("hui-energy-distribution-card")
-class HuiEnergyDistrubutionCard
-  extends SubscribeMixin(LitElement)
-  implements LovelaceCard
-{
+class HuiEnergyDistrubutionCard extends LitElement implements LovelaceCard {
   public static async getConfigElement() {
     await import("../../editor/config-elements/hui-energy-graph-card-editor");
     return document.createElement("hui-energy-graph-card-editor");
   }
-
-  @property({ attribute: false }) public hass!: HomeAssistant;
 
   @state() private _config?: EnergyDistributionCardConfig;
 
@@ -68,25 +90,105 @@ class HuiEnergyDistrubutionCard
 
   @state() private _data?: EnergyData;
 
-  @state() private _animate = true;
+  @state()
+  @consume({ context: reducedMotionContext, subscribe: true })
+  private _reducedMotion = false;
 
-  protected hassSubscribeRequiredHostProps = ["_config"];
+  @state()
+  @consume({ context: internationalizationContext, subscribe: true })
+  private _i18n!: HomeAssistantInternationalization;
+
+  @state()
+  @consume({ context: configContext, subscribe: true })
+  @transform<HomeAssistantConfig, string>({
+    transformer: ({ config }) => config?.location_name,
+  })
+  private _locationName?: string;
+
+  @state()
+  @consume({ context: uiContext, subscribe: true })
+  @transform<HomeAssistantUI, boolean>({
+    transformer: ({ panels }) => Boolean(panels?.energy),
+  })
+  private _hasEnergyPanel?: boolean;
+
+  @state()
+  @consume({ context: statesContext, subscribe: true })
+  @transform<HassEntities, Record<string, HassEntity | undefined>>({
+    transformer: function (this: HuiEnergyDistrubutionCard, states) {
+      const next: Record<string, HassEntity | undefined> = {};
+      const data = this._data;
+      if (data?.co2SignalEntity) {
+        next[data.co2SignalEntity] = states?.[data.co2SignalEntity];
+      }
+      if (data && periodIncludesNow(data)) {
+        for (const source of energySourcesByType(data.prefs).battery ?? []) {
+          if (source.stat_soc) {
+            next[source.stat_soc] = states?.[source.stat_soc];
+          }
+          if (source.entity_capacity) {
+            next[source.entity_capacity] = states?.[source.entity_capacity];
+          }
+        }
+      }
+      return preserveUnchangedEntityStatesRecord(this._entityStates, next);
+    },
+    watch: ["_data"],
+  })
+  private _entityStates?: Record<string, HassEntity | undefined>;
+
+  @state()
+  @consume({ context: statesContext, subscribe: true })
+  @transform<HassEntities, Record<string, string | undefined>>({
+    transformer: function (this: HuiEnergyDistrubutionCard, states) {
+      const next: Record<string, string | undefined> = {};
+      if (this._data) {
+        for (const source of energySourcesByType(this._data.prefs).gas ?? []) {
+          next[source.stat_energy_from] =
+            states?.[source.stat_energy_from]?.attributes.unit_of_measurement;
+        }
+      }
+      return shallowEqual(this._gasUnits, next) ? this._gasUnits : next;
+    },
+    watch: ["_data"],
+  })
+  private _gasUnits?: Record<string, string | undefined>;
+
+  @state()
+  @consume({ context: entitiesContext, subscribe: true })
+  @transform<HomeAssistant["entities"], Record<string, number | undefined>>({
+    transformer: function (this: HuiEnergyDistrubutionCard, entities) {
+      const next: Record<string, number | undefined> = {};
+      if (this._data) {
+        for (const source of energySourcesByType(this._data.prefs).gas ?? []) {
+          next[source.stat_energy_from] =
+            entities?.[source.stat_energy_from]?.display_precision;
+        }
+      }
+      return shallowEqual(this._gasDisplayPrecisions, next)
+        ? this._gasDisplayPrecisions
+        : next;
+    },
+    watch: ["_data"],
+  })
+  private _gasDisplayPrecisions?: Record<string, number | undefined>;
+
+  constructor() {
+    super();
+    new EnergyCollectionController(this, {
+      config: () => this._config,
+      onData: (data) => {
+        this._data = data;
+      },
+    });
+    new EnergyFlowDotsController(this);
+  }
 
   public setConfig(config: EnergyDistributionCardConfig): void {
     if (config.collection_key) {
       validateEnergyCollectionKey(config.collection_key);
     }
     this._config = config;
-  }
-
-  public hassSubscribe(): UnsubscribeFunc[] {
-    return [
-      getEnergyDataCollection(this.hass, {
-        key: this._config?.collection_key,
-      }).subscribe((data) => {
-        this._data = data;
-      }),
-    ];
   }
 
   private get _energyDashboardHref(): string {
@@ -104,66 +206,38 @@ class HuiEnergyDistrubutionCard
     return 3;
   }
 
-  protected shouldUpdate(changedProps: PropertyValues): boolean {
-    if (
-      hasConfigChanged(this, changedProps) ||
-      changedProps.size > 1 ||
-      !changedProps.has("hass")
-    ) {
-      return true;
-    }
-    const oldStates = changedProps.get("hass").states;
-    if (
-      this._data?.co2SignalEntity &&
-      this.hass.states[this._data.co2SignalEntity] !==
-        oldStates[this._data.co2SignalEntity]
-    ) {
-      return true;
-    }
-    if (this._data && periodIncludesNow(this._data)) {
-      const batteries = energySourcesByType(this._data.prefs).battery;
-      if (
-        batteries?.some(
-          (source) =>
-            source.stat_soc &&
-            this.hass.states[source.stat_soc] !== oldStates[source.stat_soc]
-        )
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  protected willUpdate() {
-    if (!this.hasUpdated && matchMedia("(prefers-reduced-motion)").matches) {
-      this._animate = false;
-    }
-  }
-
   protected render() {
     if (!this._config) {
       return nothing;
     }
 
     if (!this._data) {
-      return html`${this.hass.localize(
-        "ui.panel.lovelace.cards.energy.loading"
-      )}`;
+      return html`${this._i18n.localize("ui.panel.lovelace.cards.energy.loading")}`;
     }
 
     const prefs = this._data.prefs;
     const types = energySourcesByType(prefs);
+    const homeName = types.home?.[0]?.name || this._locationName;
 
-    const hasGrid =
-      !!types.grid?.[0] &&
-      (!!types.grid[0].stat_energy_from || !!types.grid[0].stat_energy_to);
+    const hasGrid = types.grid?.some(
+      (g) => g.stat_energy_from || g.stat_energy_to
+    );
     const hasSolarProduction = types.solar !== undefined;
     const hasBattery = types.battery !== undefined;
     const hasGas = types.gas !== undefined;
     const hasWater = types.water !== undefined;
+    const gasUnit = this._data.gasUnit;
+    const gasDisplayPrecisions = types.gas
+      ?.filter(
+        (source) => this._gasUnits?.[source.stat_energy_from] === gasUnit
+      )
+      .map((source) => this._gasDisplayPrecisions?.[source.stat_energy_from])
+      .filter((precision): precision is number => precision !== undefined);
+    const gasDisplayPrecision = gasDisplayPrecisions?.length
+      ? Math.max(...gasDisplayPrecisions)
+      : undefined;
     const hasReturnToGrid =
-      types.grid?.some((source) => !!source.stat_energy_to) ?? false;
+      types.grid?.some((source) => source.stat_energy_to) ?? false;
 
     const { summedData, compareSummedData: _ } = getSummedData(this._data);
     const { consumption, compareConsumption: __ } = computeConsumptionData(
@@ -210,20 +284,48 @@ class HuiEnergyDistrubutionCard
       // card's data when the selected period extends to now. For historical
       // periods (yesterday, last week, ...) fall back to the generic icon.
       if (periodIncludesNow(this._data)) {
-        const socValues = types
-          .battery!.map((source) =>
-            source.stat_soc
-              ? Number(this.hass.states[source.stat_soc]?.state)
-              : NaN
-          )
-          .filter((value) => Number.isFinite(value));
-        if (socValues.length) {
-          averageBatterySoc =
-            socValues.reduce((sum, value) => sum + value, 0) / socValues.length;
+        const socBatteries = types
+          .battery!.map((source) => ({
+            soc: source.stat_soc
+              ? Number(this._entityStates?.[source.stat_soc]?.state)
+              : NaN,
+            capacity: getBatteryCapacity(source, this._entityStates),
+          }))
+          .filter((battery) => Number.isFinite(battery.soc));
+        if (socBatteries.length) {
+          // Weight each battery's SOC by its capacity so the combined value
+          // reflects the total stored energy. Batteries without a configured
+          // capacity assume the mean of the configured ones; when none are
+          // configured this falls back to an equally weighted (simple) average.
+          const configuredCapacities = socBatteries
+            .map((battery) => battery.capacity)
+            .filter((capacity) => capacity != null && capacity > 0) as number[];
+          const meanCapacity = configuredCapacities.length
+            ? configuredCapacities.reduce((sum, value) => sum + value, 0) /
+              configuredCapacities.length
+            : 1;
+          let weightSum = 0;
+          let weightedSocSum = 0;
+          socBatteries.forEach((battery) => {
+            const capacity =
+              battery.capacity != null && battery.capacity > 0
+                ? battery.capacity
+                : meanCapacity;
+            weightSum += capacity;
+            weightedSocSum += battery.soc * capacity;
+          });
+          averageBatterySoc = weightedSocSum / weightSum;
           batteryIconPath = batteryLevelIconPath(averageBatterySoc);
         }
       }
     }
+
+    const formattedBatterySoc =
+      averageBatterySoc !== null
+        ? formatNumberWithUnit(averageBatterySoc, "%", this._i18n.locale, {
+            maximumFractionDigits: 0,
+          })
+        : undefined;
 
     let returnedToGrid: number | null = null;
 
@@ -260,24 +362,16 @@ class HuiEnergyDistrubutionCard
       ? Math.max(consumption.total.used_grid, 0)
       : 0;
 
+    // Export not covered by solar or battery comes from unconfigured generation
+    const homeToGrid = Math.max(
+      (returnedToGrid ?? 0) - (solarToGrid ?? 0) - (batteryToGrid ?? 0),
+      0
+    );
+
     const totalHomeConsumption = Math.max(0, consumption.total.used_total);
 
-    let homeSolarCircumference: number | undefined;
-    if (hasSolarProduction) {
-      homeSolarCircumference =
-        CIRCLE_CIRCUMFERENCE * (solarConsumption! / totalHomeConsumption);
-    }
-
-    let homeBatteryCircumference: number | undefined;
-    if (batteryConsumption) {
-      homeBatteryCircumference =
-        CIRCLE_CIRCUMFERENCE * (batteryConsumption / totalHomeConsumption);
-    }
-
     let lowCarbonEnergy: number | undefined;
-
-    let homeLowCarbonCircumference: number | undefined;
-    let homeHighCarbonCircumference: number | undefined;
+    let highCarbonConsumption: number | undefined;
 
     // This fallback is used in the demo
     let electricityMapUrl = "https://app.electricitymaps.com";
@@ -292,7 +386,7 @@ class HuiEnergyDistrubutionCard
         this._data.fossilEnergyConsumption
       ).reduce((sum, a) => sum + a, 0);
 
-      const co2State = this.hass.states[this._data.co2SignalEntity];
+      const co2State = this._entityStates?.[this._data.co2SignalEntity];
 
       if (co2State?.attributes.country_code) {
         electricityMapUrl += `/zone/${co2State.attributes.country_code}`;
@@ -301,7 +395,6 @@ class HuiEnergyDistrubutionCard
       if (highCarbonEnergy !== null) {
         lowCarbonEnergy = totalFromGrid - highCarbonEnergy;
 
-        let highCarbonConsumption: number;
         if (gridConsumption !== totalFromGrid) {
           // Only get the part that was used for consumption and not the battery
           highCarbonConsumption =
@@ -309,20 +402,26 @@ class HuiEnergyDistrubutionCard
         } else {
           highCarbonConsumption = highCarbonEnergy;
         }
-
-        homeHighCarbonCircumference =
-          CIRCLE_CIRCUMFERENCE * (highCarbonConsumption / totalHomeConsumption);
-
-        homeLowCarbonCircumference =
-          CIRCLE_CIRCUMFERENCE -
-          (homeSolarCircumference || 0) -
-          (homeBatteryCircumference || 0) -
-          homeHighCarbonCircumference;
       }
     }
 
+    const {
+      solar: homeSolarCircumference,
+      battery: homeBatteryCircumference,
+      lowCarbon: homeLowCarbonCircumference,
+      grid: homeGridCircumference,
+    } = computeEnergyDistributionHomeCircleArcs({
+      usedSolar: solarConsumption ?? 0,
+      usedBattery: batteryConsumption ?? 0,
+      usedGrid: gridConsumption,
+      hasSolar: hasSolarProduction,
+      hasGrid: Boolean(hasGrid),
+      highCarbonConsumption,
+    });
+
     const totalLines =
       gridConsumption +
+      homeToGrid +
       (solarConsumption || 0) +
       (solarToGrid || 0) +
       (solarToBattery || 0) +
@@ -340,175 +439,185 @@ class HuiEnergyDistrubutionCard
       totalBatteryIn || 0,
       totalBatteryOut || 0
     );
-    const targetEnergyUnit = formatConsumptionShort(this.hass, maxEnergy, "kWh")
-      .split(" ")
+    const targetEnergyUnit = formatConsumptionShort(
+      this._i18n.locale,
+      maxEnergy,
+      "kWh"
+    )
+      .split(/\s/)
       .pop();
 
     return html`
       <ha-card .header=${this._config.title}>
         <div class="card-content">
-          ${lowCarbonEnergy !== undefined ||
-          hasSolarProduction ||
-          hasGas ||
-          hasWater
-            ? html`<div class="row">
-                ${lowCarbonEnergy === undefined
-                  ? html`<div class="spacer"></div>`
-                  : html`<div class="circle-container low-carbon">
-                      <span class="label"
-                        >${this.hass.localize(
-                          "ui.panel.lovelace.cards.energy.energy_distribution.low_carbon"
-                        )}</span
-                      >
-                      <a
-                        class="circle"
-                        href=${electricityMapUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <ha-svg-icon .path=${mdiLeaf}></ha-svg-icon>
-                        ${formatConsumptionShort(
-                          this.hass,
-                          lowCarbonEnergy,
-                          "kWh",
-                          targetEnergyUnit
-                        )}
-                      </a>
-                      <svg width="80" height="30">
-                        <line x1="40" y1="0" x2="40" y2="30"></line>
-                      </svg>
-                    </div>`}
-                ${hasSolarProduction
-                  ? html`<div class="circle-container solar">
-                      <span class="label"
-                        >${this.hass.localize(
-                          "ui.panel.lovelace.cards.energy.energy_distribution.solar"
-                        )}</span
-                      >
-                      <div class="circle">
-                        <ha-svg-icon .path=${mdiSolarPower}></ha-svg-icon>
-                        ${formatConsumptionShort(
-                          this.hass,
-                          totalSolarProduction,
-                          "kWh",
-                          targetEnergyUnit
-                        )}
-                      </div>
-                    </div>`
-                  : hasGas || hasWater
-                    ? html`<div class="spacer"></div>`
-                    : ""}
-                ${hasGas
-                  ? html`<div class="circle-container gas">
-                      <span class="label"
-                        >${this.hass.localize(
-                          "ui.panel.lovelace.cards.energy.energy_distribution.gas"
-                        )}</span
-                      >
-                      <div class="circle">
-                        <ha-svg-icon .path=${mdiFire}></ha-svg-icon>
-                        ${formatConsumptionShort(
-                          this.hass,
-                          gasUsage,
-                          this._data.gasUnit
-                        )}
-                      </div>
-                      <svg width="80" height="30">
-                        <path d="M40 0 v30" id="gas" />
-                        ${gasUsage && this._animate
-                          ? svg`<circle
-                    r="1"
-                    class="gas"
-                    vector-effect="non-scaling-stroke"
-                  >
-                    <animateMotion
-                      dur="2s"
-                      repeatCount="indefinite"
-                      calcMode="linear"
-                    >
-                      <mpath xlink:href="#gas" />
-                    </animateMotion>
-                  </circle>`
-                          : ""}
-                      </svg>
-                    </div>`
-                  : hasWater
-                    ? html`<div class="circle-container water">
-                        <span class="label"
-                          >${this.hass.localize(
-                            "ui.panel.lovelace.cards.energy.energy_distribution.water"
-                          )}</span
-                        >
-                        <div class="circle">
-                          <ha-svg-icon .path=${mdiWater}></ha-svg-icon>
-                          ${formatConsumptionShort(
-                            this.hass,
-                            waterUsage,
-                            this._data.waterUnit
-                          )}
-                        </div>
-                        <svg width="80" height="30">
-                          <path d="M40 0 v30" id="water" />
-                          ${waterUsage && this._animate
-                            ? svg`<circle
-                r="1"
-                class="water"
-                vector-effect="non-scaling-stroke"
-              >
-                <animateMotion
-                  dur="2s"
-                  repeatCount="indefinite"
-                  calcMode="linear"
-                >
-                  <mpath xlink:href="#water" />
-                </animateMotion>
-              </circle>`
-                            : ""}
-                        </svg>
-                      </div>`
-                    : html`<div class="spacer"></div>`}
-              </div>`
-            : ""}
+          ${
+            lowCarbonEnergy !== undefined ||
+            hasSolarProduction ||
+            hasGas ||
+            hasWater
+              ? html`<div class="row">
+                  ${
+                    lowCarbonEnergy === undefined
+                      ? html`<div class="spacer"></div>`
+                      : html`<div class="circle-container low-carbon">
+                          <span class="label"
+                            >${this._i18n.localize(
+                              "ui.panel.lovelace.cards.energy.energy_distribution.low_carbon"
+                            )}</span
+                          >
+                          <a
+                            class="circle"
+                            href=${electricityMapUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ha-svg-icon .path=${mdiLeaf}></ha-svg-icon>
+                            ${formatConsumptionShort(
+                              this._i18n.locale,
+                              lowCarbonEnergy,
+                              "kWh",
+                              targetEnergyUnit
+                            )}
+                          </a>
+                          <svg width="80" height="30">
+                            <line x1="40" y1="0" x2="40" y2="30"></line>
+                          </svg>
+                        </div>`
+                  }
+                  ${
+                    hasSolarProduction
+                      ? html`<div class="circle-container solar">
+                          <span class="label"
+                            >${this._i18n.localize(
+                              "ui.panel.lovelace.cards.energy.energy_distribution.solar"
+                            )}</span
+                          >
+                          <div class="circle">
+                            <ha-svg-icon .path=${mdiSolarPower}></ha-svg-icon>
+                            ${formatConsumptionShort(
+                              this._i18n.locale,
+                              totalSolarProduction,
+                              "kWh",
+                              targetEnergyUnit
+                            )}
+                          </div>
+                        </div>`
+                      : hasGas || hasWater
+                        ? html`<div class="spacer"></div>`
+                        : ""
+                  }
+                  ${
+                    hasGas
+                      ? html`<div class="circle-container gas">
+                          <span class="label"
+                            >${this._i18n.localize(
+                              "ui.panel.lovelace.cards.energy.energy_distribution.gas"
+                            )}</span
+                          >
+                          <div class="circle">
+                            <ha-svg-icon .path=${mdiFire}></ha-svg-icon>
+                            ${formatConsumptionShort(
+                              this._i18n.locale,
+                              gasUsage,
+                              this._data.gasUnit,
+                              undefined,
+                              gasDisplayPrecision
+                            )}
+                          </div>
+                          <div class="flow">
+                            <svg width="80" height="30">
+                              <path d="M40 0 v30" id="gas" />
+                            </svg>
+                            ${renderEnergyFlowDots([
+                              !this._reducedMotion &&
+                                gasUsage && {
+                                  path: "gas",
+                                  className: "gas",
+                                  duration: 2,
+                                },
+                            ])}
+                          </div>
+                        </div>`
+                      : hasWater
+                        ? html`<div class="circle-container water">
+                            <span class="label"
+                              >${this._i18n.localize(
+                                "ui.panel.lovelace.cards.energy.energy_distribution.water"
+                              )}</span
+                            >
+                            <div class="circle">
+                              <ha-svg-icon .path=${mdiWater}></ha-svg-icon>
+                              ${formatConsumptionShort(
+                                this._i18n.locale,
+                                waterUsage,
+                                this._data.waterUnit
+                              )}
+                            </div>
+                            <div class="flow">
+                              <svg width="80" height="30">
+                                <path d="M40 0 v30" id="water" />
+                              </svg>
+                              ${renderEnergyFlowDots([
+                                !this._reducedMotion &&
+                                  waterUsage && {
+                                    path: "water",
+                                    className: "water",
+                                    duration: 2,
+                                  },
+                              ])}
+                            </div>
+                          </div>`
+                        : html`<div class="spacer"></div>`
+                  }
+                </div>`
+              : ""
+          }
           <div class="row">
-            ${hasGrid
-              ? html`<div class="circle-container grid">
-                  <div class="circle">
-                    <ha-svg-icon .path=${mdiTransmissionTower}></ha-svg-icon>
-                    ${returnedToGrid !== null
-                      ? html`<span class="return">
-                          <ha-svg-icon
-                            class="small"
-                            .path=${mdiArrowLeft}
-                          ></ha-svg-icon
-                          >${formatConsumptionShort(
-                            this.hass,
-                            returnedToGrid,
-                            "kWh",
-                            targetEnergyUnit
-                          )}
-                        </span>`
-                      : ""}
-                    <span class="consumption">
-                      ${hasReturnToGrid
-                        ? html`<ha-svg-icon
-                            class="small"
-                            .path=${mdiArrowRight}
-                          ></ha-svg-icon>`
-                        : ""}${formatConsumptionShort(
-                        this.hass,
-                        totalFromGrid,
-                        "kWh",
-                        targetEnergyUnit
-                      )}
-                    </span>
-                  </div>
-                  <span class="label"
-                    >${this.hass.localize(
-                      "ui.panel.lovelace.cards.energy.energy_distribution.grid"
-                    )}</span
-                  >
-                </div> `
-              : html`<div class="grid-spacer"></div>`}
+            ${
+              hasGrid
+                ? html`<div class="circle-container grid">
+                    <div class="circle">
+                      <ha-svg-icon .path=${mdiTransmissionTower}></ha-svg-icon>
+                      ${
+                        returnedToGrid !== null
+                          ? html`<span class="return">
+                              <ha-svg-icon
+                                class="small"
+                                .path=${mdiArrowLeft}
+                              ></ha-svg-icon
+                              >${formatConsumptionShort(
+                                this._i18n.locale,
+                                returnedToGrid,
+                                "kWh",
+                                targetEnergyUnit
+                              )}
+                            </span>`
+                          : ""
+                      }
+                      <span class="consumption">
+                        ${
+                          hasReturnToGrid
+                            ? html`<ha-svg-icon
+                                class="small"
+                                .path=${mdiArrowRight}
+                              ></ha-svg-icon>`
+                            : ""
+                        }${formatConsumptionShort(
+                          this._i18n.locale,
+                          totalFromGrid,
+                          "kWh",
+                          targetEnergyUnit
+                        )}
+                      </span>
+                    </div>
+                    <span class="label"
+                      >${this._i18n.localize(
+                        "ui.panel.lovelace.cards.energy.energy_distribution.grid"
+                      )}</span
+                    >
+                  </div> `
+                : html`<div class="grid-spacer"></div>`
+            }
             <div class="circle-container home">
               <div
                 class="circle ${classMap({
@@ -519,16 +628,18 @@ class HuiEnergyDistrubutionCard
               >
                 <ha-svg-icon .path=${mdiHome}></ha-svg-icon>
                 ${formatConsumptionShort(
-                  this.hass,
+                  this._i18n.locale,
                   totalHomeConsumption,
                   "kWh",
                   targetEnergyUnit
                 )}
-                ${homeSolarCircumference !== undefined ||
-                homeLowCarbonCircumference !== undefined
-                  ? html`<svg>
-                      ${homeSolarCircumference !== undefined
-                        ? svg`<circle
+                ${
+                  homeSolarCircumference !== undefined ||
+                  homeLowCarbonCircumference !== undefined
+                    ? html`<svg>
+                        ${
+                          homeSolarCircumference !== undefined
+                            ? svg`<circle
                             class="solar"
                             cx="40"
                             cy="40"
@@ -541,9 +652,11 @@ class HuiEnergyDistrubutionCard
                               CIRCLE_CIRCUMFERENCE - homeSolarCircumference
                             }"
                           />`
-                        : ""}
-                      ${homeBatteryCircumference
-                        ? svg`<circle
+                            : ""
+                        }
+                        ${
+                          homeBatteryCircumference
+                            ? svg`<circle
                             class="battery"
                             cx="40"
                             cy="40"
@@ -558,9 +671,11 @@ class HuiEnergyDistrubutionCard
                             }"
                             shape-rendering="geometricPrecision"
                           />`
-                        : ""}
-                      ${homeLowCarbonCircumference
-                        ? svg`<circle
+                            : ""
+                        }
+                        ${
+                          homeLowCarbonCircumference
+                            ? svg`<circle
                             class="low-carbon"
                             cx="40"
                             cy="40"
@@ -576,140 +691,134 @@ class HuiEnergyDistrubutionCard
                             }"
                             shape-rendering="geometricPrecision"
                           />`
-                        : ""}
-                      ${hasGrid
-                        ? svg`<circle
+                            : ""
+                        }
+                        ${
+                          hasGrid
+                            ? svg`<circle
                         class="grid"
                         cx="40"
                         cy="40"
                         r="38"
-                        stroke-dasharray="${
-                          homeHighCarbonCircumference ??
-                          CIRCLE_CIRCUMFERENCE -
-                            homeSolarCircumference! -
-                            (homeBatteryCircumference || 0)
-                        } ${
-                          homeHighCarbonCircumference !== undefined
-                            ? CIRCLE_CIRCUMFERENCE - homeHighCarbonCircumference
-                            : homeSolarCircumference! +
-                              (homeBatteryCircumference || 0)
+                        stroke-dasharray="${homeGridCircumference} ${
+                          CIRCLE_CIRCUMFERENCE - (homeGridCircumference ?? 0)
                         }"
                         stroke-dashoffset="0"
                         shape-rendering="geometricPrecision"
                       />`
-                        : nothing}
-                    </svg>`
-                  : ""}
+                            : nothing
+                        }
+                      </svg>`
+                    : ""
+                }
               </div>
-              ${hasGas && hasWater
-                ? ""
-                : html`<span class="label"
-                    >${this.hass.config.location_name}</span
-                  >`}
+              ${
+                hasGas && hasWater
+                  ? ""
+                  : html`<span class="label">${homeName}</span>`
+              }
             </div>
           </div>
-          ${hasBattery || (hasGas && hasWater)
-            ? html`<div class="row">
-                <div class="spacer"></div>
-                ${hasBattery
-                  ? html` <div class="circle-container battery">
-                      <div class="circle">
-                        <div class="battery-soc">
-                          <ha-svg-icon .path=${batteryIconPath}></ha-svg-icon>
-                          ${averageBatterySoc !== null
-                            ? html`<span
-                                >${formatNumber(
-                                  averageBatterySoc,
-                                  this.hass.locale,
-                                  {
-                                    maximumFractionDigits: 0,
-                                  }
-                                )}
-                                %</span
-                              >`
-                            : nothing}
-                        </div>
-                        <span class="battery-in">
-                          <ha-svg-icon
-                            class="small"
-                            .path=${mdiArrowDown}
-                          ></ha-svg-icon
-                          >${formatConsumptionShort(
-                            this.hass,
-                            totalBatteryIn,
-                            "kWh",
-                            targetEnergyUnit
-                          )}
-                        </span>
-                        <span class="battery-out">
-                          <ha-svg-icon
-                            class="small"
-                            .path=${mdiArrowUp}
-                          ></ha-svg-icon
-                          >${formatConsumptionShort(
-                            this.hass,
-                            totalBatteryOut,
-                            "kWh",
-                            targetEnergyUnit
-                          )}
-                        </span>
-                      </div>
-                      <span class="label"
-                        >${this.hass.localize(
-                          "ui.panel.lovelace.cards.energy.energy_distribution.battery"
-                        )}</span
-                      >
-                    </div>`
-                  : html`<div class="spacer"></div>`}
-                ${hasGas && hasWater
-                  ? html`<div class="circle-container water bottom">
-                      <svg width="80" height="30">
-                        <path d="M40 30 v-30" id="water" />
-                        ${waterUsage && this._animate
-                          ? svg`<circle
-                    r="1"
-                    class="water"
-                    vector-effect="non-scaling-stroke"
-                  >
-                    <animateMotion
-                      dur="2s"
-                      repeatCount="indefinite"
-                      calcMode="linear"
-                    >
-                      <mpath xlink:href="#water" />
-                    </animateMotion>
-                  </circle>`
-                          : ""}
-                      </svg>
-                      <div class="circle">
-                        <ha-svg-icon .path=${mdiWater}></ha-svg-icon>
-                        ${formatConsumptionShort(
-                          this.hass,
-                          waterUsage,
-                          this._data.waterUnit
-                        )}
-                      </div>
-                      <span class="label"
-                        >${this.hass.localize(
-                          "ui.panel.lovelace.cards.energy.energy_distribution.water"
-                        )}</span
-                      >
-                    </div>`
-                  : html`<div class="spacer"></div>`}
-              </div>`
-            : ""}
+          ${
+            hasBattery || (hasGas && hasWater)
+              ? html`<div class="row">
+                  <div class="spacer"></div>
+                  ${
+                    hasBattery
+                      ? html` <div class="circle-container battery">
+                          <div class="circle">
+                            <div class="battery-soc">
+                              <ha-svg-icon
+                                .path=${batteryIconPath}
+                              ></ha-svg-icon>
+                              ${
+                                formattedBatterySoc
+                                  ? html`<span>${formattedBatterySoc}</span>`
+                                  : nothing
+                              }
+                            </div>
+                            <span class="battery-in">
+                              <ha-svg-icon
+                                class="small"
+                                .path=${mdiArrowDown}
+                              ></ha-svg-icon
+                              >${formatConsumptionShort(
+                                this._i18n.locale,
+                                totalBatteryIn,
+                                "kWh",
+                                targetEnergyUnit
+                              )}
+                            </span>
+                            <span class="battery-out">
+                              <ha-svg-icon
+                                class="small"
+                                .path=${mdiArrowUp}
+                              ></ha-svg-icon
+                              >${formatConsumptionShort(
+                                this._i18n.locale,
+                                totalBatteryOut,
+                                "kWh",
+                                targetEnergyUnit
+                              )}
+                            </span>
+                          </div>
+                          <span class="label"
+                            >${this._i18n.localize(
+                              "ui.panel.lovelace.cards.energy.energy_distribution.battery"
+                            )}</span
+                          >
+                        </div>`
+                      : html`<div class="spacer"></div>`
+                  }
+                  ${
+                    hasGas && hasWater
+                      ? html`<div class="circle-container water bottom">
+                          <div class="flow">
+                            <svg width="80" height="30">
+                              <path d="M40 30 v-30" id="water" />
+                            </svg>
+                            ${renderEnergyFlowDots([
+                              !this._reducedMotion &&
+                                waterUsage && {
+                                  path: "water",
+                                  className: "water",
+                                  duration: 2,
+                                },
+                            ])}
+                          </div>
+                          <div class="circle">
+                            <ha-svg-icon .path=${mdiWater}></ha-svg-icon>
+                            ${formatConsumptionShort(
+                              this._i18n.locale,
+                              waterUsage,
+                              this._data.waterUnit
+                            )}
+                          </div>
+                          <span class="label"
+                            >${this._i18n.localize(
+                              "ui.panel.lovelace.cards.energy.energy_distribution.water"
+                            )}</span
+                          >
+                        </div>`
+                      : html`<div class="spacer"></div>`
+                  }
+                </div>`
+              : ""
+          }
           <div
             class="lines ${classMap({
               high: hasBattery || (hasGas && hasWater),
             })}"
           >
-            <svg
-              viewBox="0 0 100 100"
-              xmlns="http://www.w3.org/2000/svg"
-              preserveAspectRatio="xMidYMid slice"
-            >
-              ${hasReturnToGrid && hasSolarProduction
-                ? svg`<path
+            <div class="flow">
+              <svg
+                viewBox="0 0 100 100"
+                xmlns="http://www.w3.org/2000/svg"
+                preserveAspectRatio="xMidYMid slice"
+              >
+                ${
+                  hasReturnToGrid && hasSolarProduction
+                    ? svg`<path
                     id="return"
                     class="return"
                     d="M${hasBattery ? 45 : 47},0 v15 c0,${
@@ -717,9 +826,11 @@ class HuiEnergyDistrubutionCard
                     } h-20"
                     vector-effect="non-scaling-stroke"
                   ></path> `
-                : ""}
-              ${hasSolarProduction
-                ? svg`<path
+                    : ""
+                }
+                ${
+                  hasSolarProduction
+                    ? svg`<path
                     id="solar"
                     class="solar"
                     d="M${hasBattery ? 55 : 53},0 v15 c0,${
@@ -727,9 +838,11 @@ class HuiEnergyDistrubutionCard
                     } h20"
                     vector-effect="non-scaling-stroke"
                   ></path>`
-                : ""}
-              ${hasBattery
-                ? svg`<path
+                    : ""
+                }
+                ${
+                  hasBattery
+                    ? svg`<path
                     id="battery-house"
                     class="battery-house"
                     d="M55,100 v-15 c0,-35 10,-30 30,-30 h20"
@@ -740,8 +853,8 @@ class HuiEnergyDistrubutionCard
                       ? svg`<path
                           id="battery-grid"
                           class=${classMap({
-                            "battery-from-grid": Boolean(batteryFromGrid),
-                            "battery-to-grid": Boolean(batteryToGrid),
+                            "battery-from-grid": hasFlow(batteryFromGrid),
+                            "battery-to-grid": hasFlow(batteryToGrid),
                           })}
                           d="M45,100 v-15 c0,-35 -10,-30 -30,-30 h-20"
                           vector-effect="non-scaling-stroke"
@@ -749,152 +862,103 @@ class HuiEnergyDistrubutionCard
                       : nothing
                   }
                   `
-                : ""}
-              ${hasBattery && hasSolarProduction
-                ? svg`<path
+                    : ""
+                }
+                ${
+                  hasBattery && hasSolarProduction
+                    ? svg`<path
                     id="battery-solar"
                     class="battery-solar"
                     d="M50,0 V100"
                     vector-effect="non-scaling-stroke"
                   ></path>`
-                : ""}
-              ${hasGrid
-                ? svg`<path
+                    : ""
+                }
+                ${
+                  hasGrid
+                    ? svg`<path
                     class="grid"
                     id="grid"
                     d="M0,${hasBattery ? 50 : hasSolarProduction ? 56 : 53} H100"
                     vector-effect="non-scaling-stroke"
               ></path>`
-                : nothing}
-              ${solarToGrid && this._animate
-                ? svg`<circle
-                    r="1"
-                    class="return"
-                    vector-effect="non-scaling-stroke"
-                  >
-                    <animateMotion
-                      dur="${6 - (solarToGrid / totalLines) * 6}s"
-                      repeatCount="indefinite"
-                      calcMode="linear"
-                    >
-                      <mpath xlink:href="#return" />
-                    </animateMotion>
-                  </circle>`
-                : ""}
-              ${solarConsumption && this._animate
-                ? svg`<circle
-                    r="1"
-                    class="solar"
-                    vector-effect="non-scaling-stroke"
-                  >
-                    <animateMotion
-                      dur="${6 - (solarConsumption / totalLines) * 5}s"
-                      repeatCount="indefinite"
-                      calcMode="linear"
-                    >
-                      <mpath xlink:href="#solar" />
-                    </animateMotion>
-                  </circle>`
-                : ""}
-              ${gridConsumption && this._animate
-                ? svg`<circle
-                    r="1"
-                    class="grid"
-                    vector-effect="non-scaling-stroke"
-                  >
-                    <animateMotion
-                      dur="${6 - (gridConsumption / totalLines) * 5}s"
-                      repeatCount="indefinite"
-                      calcMode="linear"
-                    >
-                      <mpath xlink:href="#grid" />
-                    </animateMotion>
-                  </circle>`
-                : ""}
-              ${solarToBattery && this._animate
-                ? svg`<circle
-                    r="1"
-                    class="battery-solar"
-                    vector-effect="non-scaling-stroke"
-                  >
-                    <animateMotion
-                      dur="${6 - (solarToBattery / totalLines) * 5}s"
-                      repeatCount="indefinite"
-                      calcMode="linear"
-                    >
-                      <mpath xlink:href="#battery-solar" />
-                    </animateMotion>
-                  </circle>`
-                : ""}
-              ${batteryConsumption && this._animate
-                ? svg`<circle
-                    r="1"
-                    class="battery-house"
-                    vector-effect="non-scaling-stroke"
-                  >
-                    <animateMotion
-                      dur="${6 - (batteryConsumption / totalLines) * 5}s"
-                      repeatCount="indefinite"
-                      calcMode="linear"
-                    >
-                      <mpath xlink:href="#battery-house" />
-                    </animateMotion>
-                  </circle>`
-                : ""}
-              ${batteryFromGrid && this._animate
-                ? svg`<circle
-                    r="1"
-                    class="battery-from-grid"
-                    vector-effect="non-scaling-stroke"
-                  >
-                    <animateMotion
-                      dur="${6 - (batteryFromGrid / totalLines) * 5}s"
-                      repeatCount="indefinite"
-                      keyPoints="1;0" keyTimes="0;1"
-                      calcMode="linear"
-                    >
-                      <mpath xlink:href="#battery-grid" />
-                    </animateMotion>
-                  </circle>`
-                : ""}
-              ${batteryToGrid && this._animate
-                ? svg`<circle
-                    r="1"
-                    class="battery-to-grid"
-                    vector-effect="non-scaling-stroke"
-                  >
-                    <animateMotion
-                      dur="${6 - (batteryToGrid / totalLines) * 5}s"
-                      repeatCount="indefinite"
-                      calcMode="linear"
-                    >
-                      <mpath xlink:href="#battery-grid" />
-                    </animateMotion>
-                  </circle>`
-                : ""}
-            </svg>
+                    : nothing
+                }
+              </svg>
+              ${renderEnergyFlowDots(
+                this._reducedMotion
+                  ? []
+                  : [
+                      hasFlow(solarToGrid) && {
+                        path: "return",
+                        className: "return",
+                        duration: 6 - (solarToGrid / totalLines) * 5,
+                      },
+                      hasFlow(solarConsumption) && {
+                        path: "solar",
+                        className: "solar",
+                        duration: 6 - (solarConsumption / totalLines) * 5,
+                      },
+                      hasFlow(gridConsumption) && {
+                        path: "grid",
+                        className: "grid",
+                        duration: 6 - (gridConsumption / totalLines) * 5,
+                      },
+                      hasFlow(homeToGrid) && {
+                        path: "grid",
+                        className: "return",
+                        duration: 6 - (homeToGrid / totalLines) * 5,
+                        reverse: true,
+                      },
+                      hasFlow(solarToBattery) && {
+                        path: "battery-solar",
+                        className: "battery-solar",
+                        duration: 6 - (solarToBattery / totalLines) * 5,
+                      },
+                      hasFlow(batteryConsumption) && {
+                        path: "battery-house",
+                        className: "battery-house",
+                        duration: 6 - (batteryConsumption / totalLines) * 5,
+                      },
+                      hasFlow(batteryFromGrid) && {
+                        path: "battery-grid",
+                        className: "battery-from-grid",
+                        duration: 6 - (batteryFromGrid / totalLines) * 5,
+                        reverse: true,
+                      },
+                      hasFlow(batteryToGrid) && {
+                        path: "battery-grid",
+                        className: "battery-to-grid",
+                        duration: 6 - (batteryToGrid / totalLines) * 5,
+                      },
+                    ]
+              )}
+            </div>
           </div>
         </div>
-        ${this._config.link_dashboard && this.hass.panels.energy
-          ? html`
-              <div class="card-actions">
-                <ha-button
-                  appearance="plain"
-                  size="small"
-                  href=${this._energyDashboardHref}
-                >
-                  ${this.hass.localize(
-                    "ui.panel.lovelace.cards.energy.energy_distribution.go_to_energy_dashboard"
-                  )}
-                </ha-button>
-              </div>
-            `
-          : ""}
+        ${
+          this._config.link_dashboard && this._hasEnergyPanel
+            ? html`
+                <div class="card-actions">
+                  <ha-button
+                    appearance="plain"
+                    size="s"
+                    href=${this._energyDashboardHref}
+                  >
+                    ${this._i18n.localize(
+                      "ui.panel.lovelace.cards.energy.energy_distribution.go_to_energy_dashboard"
+                    )}
+                  </ha-button>
+                </div>
+              `
+            : ""
+        }
       </ha-card>
     `;
   }
 
   static styles = css`
+    ${energyFlowDotsStyles}
     :host {
       --mdc-icon-size: 24px;
     }
@@ -916,11 +980,15 @@ class HuiEnergyDistrubutionCard
       padding: 0 16px 16px;
       box-sizing: border-box;
     }
+    .lines .flow > svg {
+      width: 100%;
+      height: 100%;
+    }
     .lines.high {
       bottom: 100px;
       height: 156px;
     }
-    .lines svg {
+    .lines .flow {
       width: calc(100% - 160px);
       height: 100%;
       max-width: 340px;
@@ -1022,24 +1090,20 @@ class HuiEnergyDistrubutionCard
       top: 0;
       left: 0;
     }
-    .gas path,
-    .gas circle {
+    .gas path {
       stroke: var(--energy-gas-color);
     }
-    circle.gas {
-      stroke-width: 4;
-      fill: var(--energy-gas-color);
+    .flow-dot.gas {
+      background-color: var(--energy-gas-color);
     }
     .gas .circle {
       border-color: var(--energy-gas-color);
     }
-    .water path,
-    .water circle {
+    .water path {
       stroke: var(--energy-water-color);
     }
-    circle.water {
-      stroke-width: 4;
-      fill: var(--energy-water-color);
+    .flow-dot.water {
+      background-color: var(--energy-water-color);
     }
     .water .circle {
       border-color: var(--energy-water-color);
@@ -1064,9 +1128,8 @@ class HuiEnergyDistrubutionCard
     path.solar {
       stroke: var(--energy-solar-color);
     }
-    circle.solar {
-      stroke-width: 4;
-      fill: var(--energy-solar-color);
+    .flow-dot.solar {
+      background-color: var(--energy-solar-color);
     }
     .battery .circle {
       border-color: var(--energy-battery-out-color);
@@ -1075,21 +1138,17 @@ class HuiEnergyDistrubutionCard
     path.battery {
       stroke: var(--energy-battery-out-color);
     }
-    path.battery-house,
-    circle.battery-house {
+    path.battery-house {
       stroke: var(--energy-battery-out-color);
     }
-    circle.battery-house {
-      stroke-width: 4;
-      fill: var(--energy-battery-out-color);
+    .flow-dot.battery-house {
+      background-color: var(--energy-battery-out-color);
     }
-    path.battery-solar,
-    circle.battery-solar {
+    path.battery-solar {
       stroke: var(--energy-battery-in-color);
     }
-    circle.battery-solar {
-      stroke-width: 4;
-      fill: var(--energy-battery-in-color);
+    .flow-dot.battery-solar {
+      background-color: var(--energy-battery-in-color);
     }
     .battery-in {
       color: var(--energy-battery-in-color);
@@ -1103,15 +1162,12 @@ class HuiEnergyDistrubutionCard
     path.battery-to-grid {
       stroke: var(--energy-grid-return-color);
     }
-    path.return,
-    circle.return,
-    circle.battery-to-grid {
+    path.return {
       stroke: var(--energy-grid-return-color);
     }
-    circle.return,
-    circle.battery-to-grid {
-      stroke-width: 4;
-      fill: var(--energy-grid-return-color);
+    .flow-dot.return,
+    .flow-dot.battery-to-grid {
+      background-color: var(--energy-grid-return-color);
     }
     .return {
       color: var(--energy-grid-return-color);
@@ -1123,14 +1179,12 @@ class HuiEnergyDistrubutionCard
       color: var(--energy-grid-consumption-color);
     }
     circle.grid,
-    circle.battery-from-grid,
     path.grid {
       stroke: var(--energy-grid-consumption-color);
     }
-    circle.grid,
-    circle.battery-from-grid {
-      stroke-width: 4;
-      fill: var(--energy-grid-consumption-color);
+    .flow-dot.grid,
+    .flow-dot.battery-from-grid {
+      background-color: var(--energy-grid-consumption-color);
     }
     .home .circle {
       border-width: 0;

@@ -35,6 +35,12 @@ const ENTITIES = [
 
 const triggers = [
   { trigger: "state", entity_id: "light.kitchen", from: "off", to: "on" },
+  {
+    trigger: "state",
+    entity_id: "light.kitchen",
+    not_from: ["unavailable", "unknown"],
+    not_to: "off",
+  },
   { trigger: "mqtt" },
   {
     trigger: "geo_location",
@@ -98,9 +104,11 @@ export class DemoAutomationDescribeTrigger extends LitElement {
       <ha-card header="Triggers">
         <div class="trigger">
           <span>
-            ${this._trigger
-              ? describeTrigger(this._trigger, this.hass, [])
-              : "<invalid YAML>"}
+            ${
+              this._trigger
+                ? describeTrigger(this._trigger, this.hass, [])
+                : "<invalid YAML>"
+            }
           </span>
           <ha-yaml-editor
             label="Trigger Config"

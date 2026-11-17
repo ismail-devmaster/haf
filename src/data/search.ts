@@ -7,8 +7,11 @@ export interface RelatedResult {
   config_entry?: string[];
   device?: string[];
   entity?: string[];
+  floor?: string[];
   group?: string[];
   integration?: string[];
+  label?: string[];
+  person?: string[];
   scene?: string[];
   script?: string[];
   script_blueprint?: string[];
@@ -29,19 +32,23 @@ export type ItemType =
   | "entity"
   | "floor"
   | "group"
+  | "integration"
   | "label"
+  | "person"
   | "scene"
   | "script"
   | "automation_blueprint"
   | "script_blueprint";
 
 export const findRelated = (
-  hass: HomeAssistant,
+  hass: Pick<HomeAssistant, "callWS">,
   itemType: ItemType,
-  itemId: string
+  itemId: string,
+  includeDisabledEntities = false
 ): Promise<RelatedResult> =>
-  hass.callWS({
+  hass.callWS<RelatedResult>({
     type: "search/related",
     item_type: itemType,
     item_id: itemId,
+    ...(includeDisabledEntities ? { include_disabled_entities: true } : {}),
   });

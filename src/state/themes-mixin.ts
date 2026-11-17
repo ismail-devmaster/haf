@@ -8,13 +8,14 @@ import type { HASSDomEvent } from "../common/dom/fire_event";
 import { subscribeThemePreferences, saveThemePreferences } from "../data/theme";
 import { subscribeThemes } from "../data/ws-themes";
 import type { Constructor, HomeAssistant } from "../types";
+import { updateLaunchScreenLogo } from "../util/launch-screen";
 import { storeState } from "../util/ha-pref-storage";
 import type { HassBaseEl } from "./hass-base-mixin";
 
 declare global {
   // for add event listener
   interface HTMLElementEventMap {
-    settheme: HASSDomEvent<Partial<HomeAssistant["selectedTheme"]>>;
+    settheme: HASSDomEvent<HASSDomEvents["settheme"]>;
   }
   interface HASSDomEvents {
     settheme: Partial<HomeAssistant["selectedTheme"]>;
@@ -48,8 +49,13 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
           }
         );
       });
+<<<<<<< HEAD
       mql.addListener((ev) => this._applyTheme(ev.matches));
       if (!this._themeApplied) {
+=======
+      mql.addEventListener("change", (ev) => this._applyTheme(ev.matches));
+      if (!this._themeApplied && mql.matches) {
+>>>>>>> dev
         applyThemesOnElement(
           document.documentElement,
           {
@@ -145,18 +151,27 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
         true
       );
 
+      updateLaunchScreenLogo(darkMode);
+
       if (darkMode !== this.hass.themes.darkMode) {
         this._updateHass({
           themes: { ...this.hass.themes!, darkMode },
         });
+      }
 
-        const schemeMeta = document.querySelector("meta[name=color-scheme]");
-        if (schemeMeta) {
-          schemeMeta.setAttribute(
-            "content",
-            darkMode ? "dark" : themeName === "default" ? "light" : "dark light"
-          );
-        }
+      // Themes with modes are resolved to light or dark above. Only themes
+      // without modes may be dark themes, so let the browser choose for them.
+      const schemeMeta = document.querySelector("meta[name=color-scheme]");
+      if (schemeMeta) {
+        schemeMeta.setAttribute(
+          "content",
+          darkMode
+            ? "dark"
+            : themeName === "default" ||
+                (selectedTheme?.modes && "light" in selectedTheme.modes)
+              ? "light"
+              : "dark light"
+        );
       }
 
       const themeMeta = document.querySelector("meta[name=theme-color]");

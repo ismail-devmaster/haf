@@ -14,7 +14,8 @@ export interface ConfigEntry {
     | "setup_retry"
     | "not_loaded"
     | "failed_unload"
-    | "setup_in_progress";
+    | "setup_in_progress"
+    | "unload_in_progress";
   supports_options: boolean;
   supports_remove_device: boolean;
   supports_unload: boolean;
@@ -25,6 +26,7 @@ export interface ConfigEntry {
   pref_disable_polling: boolean;
   disabled_by: "user" | null;
   reason: string | null;
+  error_reason_translation_domain: string | null;
   error_reason_translation_key: string | null;
   error_reason_translation_placeholders: Record<string, string> | null;
 }
@@ -33,11 +35,14 @@ export interface SubEntry {
   subentry_id: string;
   subentry_type: string;
   title: string;
-  unique_id: string;
+  unique_id: string | null;
 }
 
-export const getSubEntries = (hass: HomeAssistant, entry_id: string) =>
-  hass.callWS<SubEntry[]>({
+export const getSubEntries = (
+  callWS: HomeAssistant["callWS"],
+  entry_id: string
+) =>
+  callWS<SubEntry[]>({
     type: "config_entries/subentries/list",
     entry_id,
   });
@@ -101,7 +106,6 @@ export const subscribeConfigEntries = (
   callbackFunction: (message: ConfigEntryUpdate[]) => void,
   filters?: {
     type?: IntegrationType[];
-    domain?: string;
   }
 ): Promise<UnsubscribeFunc> => {
   const params: any = {
@@ -116,7 +120,7 @@ export const subscribeConfigEntries = (
 };
 
 export const getConfigEntries = (
-  hass: HomeAssistant,
+  hass: Pick<HomeAssistant, "callWS">,
   filters?: {
     type?: IntegrationType[];
     domain?: string;
@@ -137,8 +141,11 @@ export const getConfigEntries = (
   });
 };
 
-export const getConfigEntry = (hass: HomeAssistant, configEntryId: string) =>
-  hass.callWS<{ config_entry: ConfigEntry }>({
+export const getConfigEntry = (
+  callWS: HomeAssistant["callWS"],
+  configEntryId: string
+) =>
+  callWS<{ config_entry: ConfigEntry }>({
     type: "config_entries/get_single",
     entry_id: configEntryId,
   });
@@ -154,7 +161,10 @@ export const updateConfigEntry = (
     ...updatedValues,
   });
 
-export const deleteConfigEntry = (hass: HomeAssistant, configEntryId: string) =>
+export const deleteConfigEntry = (
+  hass: Pick<HomeAssistant, "callApi">,
+  configEntryId: string
+) =>
   hass.callApi<{
     require_restart: boolean;
   }>("DELETE", `config/config_entries/entry/${configEntryId}`);
@@ -210,24 +220,30 @@ export class ConfigEntryStream {
   private _entries: ConfigEntry[] = [];
 
   processMessage(message: ConfigEntryUpdate[]) {
+    let entries =
+      message.length === 0 ||
+      message.some((configEntry) => configEntry.type === null)
+        ? []
+        : [...this._entries];
     message.forEach((configEntry) => {
       if (configEntry.type === null || configEntry.type === "added") {
-        this._entries.push(configEntry.entry);
+        entries.push(configEntry.entry);
         return;
       }
       if (configEntry.type === "removed") {
-        this._entries = this._entries.filter(
+        entries = entries.filter(
           (entry) => entry.entry_id !== configEntry.entry.entry_id
         );
         return;
       }
       if (configEntry.type === "updated") {
         const newEntry = configEntry.entry;
-        this._entries = this._entries.map((entry) =>
+        entries = entries.map((entry) =>
           entry.entry_id === newEntry.entry_id ? newEntry : entry
         );
       }
     });
-    return this._entries;
+    this._entries = entries;
+    return entries;
   }
 }

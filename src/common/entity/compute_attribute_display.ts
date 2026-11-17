@@ -6,6 +6,7 @@ import {
 } from "../../data/entity/entity_attributes";
 import type { EntityRegistryDisplayEntry } from "../../data/entity/entity_registry";
 import type { FrontendLocaleData } from "../../data/translation";
+import { TimeZone } from "../../data/translation";
 import type { WeatherEntity } from "../../data/weather";
 import { getWeatherUnit } from "../../data/weather";
 import type { HomeAssistant, ValuePart } from "../../types";
@@ -17,7 +18,7 @@ import { capitalizeFirstLetter } from "../string/capitalize-first-letter";
 import { isDate } from "../string/is_date";
 import { isTimestamp } from "../string/is_timestamp";
 import { blankBeforeUnit } from "../translations/blank_before_unit";
-import type { LocalizeFunc } from "../translations/localize";
+import type { LocalizeFunc, LocalizeKeys } from "../translations/localize";
 import { computeDomain } from "./compute_domain";
 import { computeStateDomain } from "./compute_state_domain";
 
@@ -60,6 +61,17 @@ export const computeAttributeValueToParts = (
     return [{ type: "value", value: localize("state.default.unknown") }];
   }
 
+  // Device class attribute, return the integration's translated name
+  if (attribute === "device_class" && typeof attributeValue === "string") {
+    const domain = computeStateDomain(stateObj);
+    const deviceClassName = localize(
+      `component.${domain}.entity_component.${attributeValue}.name`
+    );
+    if (deviceClassName) {
+      return [{ type: "value", value: deviceClassName }];
+    }
+  }
+
   // Number value, return formatted number
   if (typeof attributeValue === "number") {
     const domain = computeStateDomain(stateObj);
@@ -71,8 +83,7 @@ export const computeAttributeValueToParts = (
       : formatNumber(attributeValue, locale);
 
     let unit = DOMAIN_ATTRIBUTES_UNITS[domain]?.[attribute] as
-      | string
-      | undefined;
+      string | undefined;
 
     if (domain === "weather") {
       unit = getWeatherUnit(config, stateObj as WeatherEntity, attribute);
@@ -102,6 +113,24 @@ export const computeAttributeValueToParts = (
         if (checkValidDate(date)) {
           const formattedDate = formatDateTimeWithSeconds(date, locale, config);
           return [{ type: "value", value: formattedDate }];
+        }
+      }
+
+      // Date only, which is timezone agnostic, so parse and format it as
+      // local time to keep the same calendar day
+      if (isDate(attributeValue)) {
+        const date = new Date(`${attributeValue}T00:00`);
+        if (checkValidDate(date)) {
+          return [
+            {
+              type: "value",
+              value: formatDate(
+                date,
+                { ...locale, time_zone: TimeZone.local },
+                config
+              ),
+            },
+          ];
         }
       }
 
@@ -145,8 +174,7 @@ export const computeAttributeValueToParts = (
   const domain = computeDomain(entityId);
   const deviceClass = stateObj.attributes.device_class;
   const registryEntry = entities[entityId] as
-    | EntityRegistryDisplayEntry
-    | undefined;
+    EntityRegistryDisplayEntry | undefined;
   const translationKey = registryEntry?.translation_key;
 
   const formattedValue =
@@ -189,6 +217,8 @@ export const computeAttributeNameDisplay = (
     localize(
       `component.${domain}.entity_component._.state_attributes.${attribute}.name`
     ) ||
+    // Attributes every entity can have, which no integration translates
+    localize(`ui.components.attributes.names.${attribute}` as LocalizeKeys) ||
     capitalizeFirstLetter(
       attribute
         .replace(/_/g, " ")

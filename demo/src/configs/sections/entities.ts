@@ -140,6 +140,18 @@ export const demoEntitiesSections: DemoConfig["entities"] = (localize) =>
         friendly_name: "Outdoor humidity",
       },
     },
+    // Used by the automation for when the car leaves home
+    "zone.home": {
+      entity_id: "zone.home",
+      state: "0",
+      attributes: {
+        latitude: 52.3731339,
+        longitude: 4.8903147,
+        radius: 100,
+        friendly_name: "Home",
+        icon: "mdi:home",
+      },
+    },
     "device_tracker.car": {
       entity_id: "device_tracker.car",
       state: "not_home",
@@ -514,6 +526,7 @@ export const demoEntitiesSections: DemoConfig["entities"] = (localize) =>
         friendly_name: "Outdoor motion sensor Illuminance",
       },
     },
+<<<<<<< HEAD
     "automation.home_assistant_auto_update": {
       entity_id: "automation.home_assistant_auto_update",
       state: "off",
@@ -527,6 +540,8 @@ export const demoEntitiesSections: DemoConfig["entities"] = (localize) =>
         friendly_name: "Domolux Auto-update",
       },
     },
+=======
+>>>>>>> dev
     "update.home_assistant_operating_system_update": {
       entity_id: "update.home_assistant_operating_system_update",
       state: "off",

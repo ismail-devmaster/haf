@@ -1,5 +1,9 @@
+import type { HassEntity } from "home-assistant-js-websocket";
 import { css, LitElement, nothing, html } from "lit";
+import { ifDefined } from "lit/directives/if-defined";
 import { customElement, property, state } from "lit/decorators";
+import { computeCssColor } from "../../../common/color/compute-color";
+import { consumeEntityState } from "../../../common/decorators/consume-context-entry";
 import { computeDomain } from "../../../common/entity/compute_domain";
 import { isNumericFromAttributes } from "../../../common/number/format_number";
 import type { HomeAssistant } from "../../../types";
@@ -9,6 +13,11 @@ import type {
   BarGaugeCardFeatureConfig,
 } from "./types";
 
+const supportsBarGaugeCardFeatureFromState = (stateObj: HassEntity) => {
+  const domain = computeDomain(stateObj.entity_id);
+  return domain === "sensor" && isNumericFromAttributes(stateObj.attributes);
+};
+
 export const supportsBarGaugeCardFeature = (
   hass: HomeAssistant,
   context: LovelaceCardFeatureContext
@@ -17,15 +26,51 @@ export const supportsBarGaugeCardFeature = (
     ? hass.states[context.entity_id]
     : undefined;
   if (!stateObj) return false;
-  const domain = computeDomain(stateObj.entity_id);
-  return domain === "sensor" && isNumericFromAttributes(stateObj.attributes);
+  return supportsBarGaugeCardFeatureFromState(stateObj);
+};
+
+const severityMap = {
+  red: "var(--error-color)",
+  green: "var(--success-color)",
+  yellow: "var(--warning-color)",
+};
+
+const computeSeverityColor = (
+  severity: BarGaugeCardFeatureConfig["severity"],
+  value: number
+): string | undefined => {
+  let best: { level: number; color: string } | undefined;
+  for (const [key, level] of Object.entries(severity ?? {})) {
+    if (
+      key in severityMap &&
+      typeof level === "number" &&
+      value >= level &&
+      (!best || level >= best.level)
+    ) {
+      best = { level, color: severityMap[key] };
+    }
+  }
+  return best?.color;
+};
+
+const computeSegmentColor = (
+  segments: BarGaugeCardFeatureConfig["segments"],
+  value: number
+): string | undefined => {
+  const color = segments
+    ?.filter((segment) => value >= segment.from)
+    .sort((a, b) => a.from - b.from)
+    .pop()?.color;
+  return color && computeCssColor(color);
 };
 
 @customElement("hui-bar-gauge-card-feature")
 class HuiBarGaugeCardFeature extends LitElement implements LovelaceCardFeature {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property({ attribute: false }) public context!: LovelaceCardFeatureContext;
+
+  @state()
+  @consumeEntityState({ entityIdPath: ["context", "entity_id"] })
+  private _stateObj?: HassEntity;
 
   @state() private _config?: BarGaugeCardFeatureConfig;
 
@@ -50,15 +95,13 @@ class HuiBarGaugeCardFeature extends LitElement implements LovelaceCardFeature {
   render() {
     if (
       !this._config ||
-      !this.hass ||
       !this.context ||
-      !this.context.entity_id ||
-      !this.hass.states[this.context.entity_id] ||
-      !supportsBarGaugeCardFeature(this.hass, this.context)
+      !this._stateObj ||
+      !supportsBarGaugeCardFeatureFromState(this._stateObj)
     ) {
       return nothing;
     }
-    const stateObj = this.hass.states[this.context.entity_id];
+    const stateObj = this._stateObj;
     const min = this._config.min ?? 0;
     const max = this._config.max ?? 100;
     const value = parseFloat(stateObj.state);
@@ -71,9 +114,13 @@ class HuiBarGaugeCardFeature extends LitElement implements LovelaceCardFeature {
       0,
       Math.min(100, ((value - min) / (max - min)) * 100)
     );
+    const color = this._config.segments
+      ? computeSegmentColor(this._config.segments, value)
+      : computeSeverityColor(this._config.severity, value);
+    const style = color ? `--feature-color: ${color}` : undefined;
 
-    return html`<div style="width: ${percentage}%"></div>
-      <div class="bar-gauge-background"></div>`;
+    return html`<div style="width: ${percentage}%; ${style ?? ""}"></div>
+      <div class="bar-gauge-background" style=${ifDefined(style)}></div>`;
   }
 
   static styles = css`

@@ -31,6 +31,7 @@ export function hasConfigChanged(
       element.hass.formatEntityAttributeName ||
     oldHass.formatEntityAttributeValue !==
       element.hass.formatEntityAttributeValue ||
+    oldHass.formatEntityName !== element.hass.formatEntityName ||
     oldHass.config.state !== element.hass.config.state
   ) {
     return true;
@@ -55,11 +56,9 @@ function compareEntityDisplayEntry(
   entityId: string
 ) {
   const oldEntry = oldHass.entities[entityId] as
-    | EntityRegistryDisplayEntry
-    | undefined;
+    EntityRegistryDisplayEntry | undefined;
   const newEntry = newHass.entities[entityId] as
-    | EntityRegistryDisplayEntry
-    | undefined;
+    EntityRegistryDisplayEntry | undefined;
 
   return oldEntry?.display_precision !== newEntry?.display_precision;
 }

@@ -1,14 +1,31 @@
-import { customElement, property } from "lit/decorators";
+import type { ContextType } from "@lit/context";
+import { customElement, property, state } from "lit/decorators";
 import type { CSSResultGroup } from "lit";
 import { LitElement, css, html } from "lit";
+import { consume } from "../common/decorators/consume";
 import { haStyle } from "../resources/styles";
-import type { HomeAssistant } from "../types";
+import {
+  brandsAccessTokenContext,
+  configContext,
+  uiContext,
+} from "../data/context";
 import { voiceAssistants } from "../data/expose";
 import { brandsUrl } from "../util/brands-url";
 
 @customElement("voice-assistant-brand-icon")
 export class VoiceAssistantBrandicon extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
+  @state()
+  @consume({ context: uiContext, subscribe: true })
+  private _ui!: ContextType<typeof uiContext>;
+
+  @state()
+  @consume({ context: configContext, subscribe: true })
+  private _config!: ContextType<typeof configContext>;
+
+  @state()
+  @consume({ context: brandsAccessTokenContext, subscribe: true })
+  // @ts-ignore re-render trigger only, its value is never read
+  private _brandsAccessToken?: string;
 
   @property({ attribute: false }) public voiceAssistantId!: string;
 
@@ -21,9 +38,9 @@ export class VoiceAssistantBrandicon extends LitElement {
           {
             domain: voiceAssistants[this.voiceAssistantId].domain,
             type: "icon",
-            darkOptimized: this.hass.themes?.darkMode,
+            darkOptimized: this._ui.themes?.darkMode,
           },
-          this.hass.auth.data.hassUrl
+          this._config.auth.data.hassUrl
         )}
         crossorigin="anonymous"
         referrerpolicy="no-referrer"

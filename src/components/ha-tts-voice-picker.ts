@@ -1,11 +1,15 @@
+import type { ContextType } from "@lit/context";
 import type { PropertyValues } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
+import { consume } from "../common/decorators/consume";
+import { consumeLocalize } from "../common/decorators/consume-context-entry";
 import { fireEvent } from "../common/dom/fire_event";
+import type { LocalizeFunc } from "../common/translations/localize";
 import { debounce } from "../common/util/debounce";
+import { apiContext } from "../data/context";
 import type { TTSVoice } from "../data/tts";
 import { listTTSVoices } from "../data/tts";
-import type { HomeAssistant } from "../types";
 import type { HaSelectOption, HaSelectSelectEvent } from "./ha-select";
 import "./ha-select";
 
@@ -21,13 +25,18 @@ export class HaTTSVoicePicker extends LitElement {
 
   @property() public language?: string;
 
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property({ type: Boolean, reflect: true }) public disabled = false;
 
   @property({ type: Boolean }) public required = false;
 
   @state() _voices?: TTSVoice[] | null;
+
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
+
+  @consume({ context: apiContext, subscribe: true })
+  private _api!: ContextType<typeof apiContext>;
 
   protected render() {
     if (!this._voices) {
@@ -44,14 +53,15 @@ export class HaTTSVoicePicker extends LitElement {
     if (!this.required || !this.value) {
       options.unshift({
         value: NONE,
-        label: this.hass!.localize("ui.components.tts-voice-picker.none"),
+        label: this._localize("ui.components.tts-voice-picker.none"),
       });
     }
 
     return html`
       <ha-select
-        .label=${this.label ||
-        this.hass!.localize("ui.components.tts-voice-picker.voice")}
+        .label=${
+          this.label || this._localize("ui.components.tts-voice-picker.voice")
+        }
         .value=${value}
         .required=${this.required}
         .disabled=${this.disabled}
@@ -82,18 +92,28 @@ export class HaTTSVoicePicker extends LitElement {
       return;
     }
     this._voices = (
-      await listTTSVoices(this.hass, this.engineId, this.language)
+      await listTTSVoices(this._api.callWS, this.engineId, this.language)
     ).voices;
 
-    if (!this.value) {
+    const valueIsValid =
+      this.value &&
+      this._voices?.some((voice) => voice.voice_id === this.value);
+
+    if (valueIsValid) {
       return;
     }
 
-    if (
-      !this._voices ||
-      !this._voices.find((voice) => voice.voice_id === this.value)
-    ) {
-      this.value = undefined;
+    // The current value is missing or no longer valid for the loaded voices.
+    // When a voice is required, auto-select the first one (the <ha-select>
+    // already displays it) so the value is propagated to the parent;
+    // otherwise clear it.
+    const newValue =
+      this.required && this._voices?.length
+        ? this._voices[0].voice_id
+        : undefined;
+
+    if (newValue !== this.value) {
+      this.value = newValue;
       fireEvent(this, "value-changed", { value: this.value });
     }
   }
@@ -109,7 +129,6 @@ export class HaTTSVoicePicker extends LitElement {
   private _changed(ev: HaSelectSelectEvent): void {
     const value = ev.detail.value;
     if (
-      !this.hass ||
       value === "" ||
       value === this.value ||
       (this.value === undefined && value === NONE)

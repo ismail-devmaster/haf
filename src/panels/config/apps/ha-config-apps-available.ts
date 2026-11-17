@@ -5,6 +5,7 @@ import { customElement, property, state } from "lit/decorators";
 import memoizeOne from "memoize-one";
 import type { HASSDomEvent } from "../../../common/dom/fire_event";
 import { navigate } from "../../../common/navigate";
+import { extractSearchParam } from "../../../common/url/search-params";
 import "../../../components/ha-dropdown";
 import type { HaDropdownSelectEvent } from "../../../components/ha-dropdown";
 import "../../../components/ha-dropdown-item";
@@ -14,21 +15,25 @@ import type {
   HassioAddonRepository,
   HassioAddonsInfo,
 } from "../../../data/hassio/addon";
-import {
-  fetchHassioAddonsInfo,
-  reloadHassioAddons,
-} from "../../../data/hassio/addon";
+import { fetchHassioAddonsInfo } from "../../../data/hassio/addon";
 import { extractApiErrorMessage } from "../../../data/hassio/common";
 import type {
   StoreAddon,
   SupervisorStore,
 } from "../../../data/supervisor/store";
-import { fetchSupervisorStore } from "../../../data/supervisor/store";
-import { showAlertDialog } from "../../../dialogs/generic/show-dialog-box";
+import {
+  addStoreRepository,
+  fetchSupervisorStore,
+} from "../../../data/supervisor/store";
+import {
+  showAlertDialog,
+  showConfirmationDialog,
+} from "../../../dialogs/generic/show-dialog-box";
 import "../../../layouts/hass-error-screen";
 import "../../../layouts/hass-loading-screen";
 import "../../../layouts/hass-subpage";
 import type { HomeAssistant, Route } from "../../../types";
+import { checkForAppUpdates } from "./common/check-for-updates";
 
 import "./supervisor-apps-repository";
 
@@ -64,6 +69,8 @@ export class HaConfigAppsAvailable extends LitElement {
 
   @state() private _filter?: string;
 
+  @state() private _checkingUpdates = false;
+
   public connectedCallback(): void {
     super.connectedCallback();
     this.addEventListener(
@@ -82,7 +89,15 @@ export class HaConfigAppsAvailable extends LitElement {
 
   protected firstUpdated(changedProps: PropertyValues<this>) {
     super.firstUpdated(changedProps);
-    this._loadData();
+    const repositoryUrl = extractSearchParam("repository_url");
+    if (repositoryUrl) {
+      navigate("/config/apps/available", { replace: true });
+    }
+    this._loadData().then(() => {
+      if (repositoryUrl) {
+        this._addRepository(repositoryUrl);
+      }
+    });
     this.addEventListener("hass-api-called", (ev) => this._apiCalled(ev));
   }
 
@@ -129,7 +144,10 @@ export class HaConfigAppsAvailable extends LitElement {
             .path=${mdiDotsVertical}
             slot="trigger"
           ></ha-icon-button>
-          <ha-dropdown-item value="check_updates">
+          <ha-dropdown-item
+            value="check_updates"
+            .disabled=${this._checkingUpdates}
+          >
             ${this.hass.localize("ui.panel.config.apps.store.check_updates")}
           </ha-dropdown-item>
           <ha-dropdown-item value="repositories">
@@ -139,19 +157,21 @@ export class HaConfigAppsAvailable extends LitElement {
             ${this.hass.localize("ui.panel.config.apps.store.registries")}
           </ha-dropdown-item>
         </ha-dropdown>
-        ${repos.length === 0
-          ? html`<hass-loading-screen no-toolbar></hass-loading-screen>`
-          : html`
-              <div class="search">
-                <ha-input-search
-                  appearance="outlined"
-                  .value=${this._filter}
-                  @input=${this._filterChanged}
-                ></ha-input-search>
-              </div>
+        ${
+          repos.length === 0
+            ? html`<hass-loading-screen no-toolbar></hass-loading-screen>`
+            : html`
+                <div class="search">
+                  <ha-input-search
+                    appearance="outlined"
+                    .value=${this._filter}
+                    @input=${this._filterChanged}
+                  ></ha-input-search>
+                </div>
 
-              ${repos}
-            `}
+                ${repos}
+              `
+        }
       </hass-subpage>
     `;
   }
@@ -201,14 +221,11 @@ export class HaConfigAppsAvailable extends LitElement {
   }
 
   private async _refreshData() {
+    this._checkingUpdates = true;
     try {
-      await reloadHassioAddons(this.hass);
-    } catch (err) {
-      showAlertDialog(this, {
-        text: extractApiErrorMessage(err),
-      });
+      this._loadData(await checkForAppUpdates(this, this.hass));
     } finally {
-      this._loadData();
+      this._checkingUpdates = false;
     }
   }
 
@@ -226,14 +243,48 @@ export class HaConfigAppsAvailable extends LitElement {
     navigate("/config/apps/registries");
   }
 
-  private async _loadData(): Promise<void> {
+  private async _addRepository(repositoryUrl: string): Promise<void> {
+    if (
+      !this._store ||
+      this._store.repositories.some((repo) => repo.source === repositoryUrl)
+    ) {
+      return;
+    }
+
+    if (
+      !(await showConfirmationDialog(this, {
+        title: this.hass.localize(
+          "ui.panel.config.apps.my.add_repository_title"
+        ),
+        text: this.hass.localize(
+          "ui.panel.config.apps.my.add_repository_store_description",
+          { repository: repositoryUrl }
+        ),
+        confirmText: this.hass.localize("ui.common.add"),
+        dismissText: this.hass.localize("ui.common.cancel"),
+      }))
+    ) {
+      return;
+    }
+
     try {
-      const [addon, store] = await Promise.all([
-        fetchHassioAddonsInfo(this.hass),
+      await addStoreRepository(this.hass, repositoryUrl);
+      await this._loadData();
+    } catch (err: any) {
+      showAlertDialog(this, {
+        text: extractApiErrorMessage(err),
+      });
+    }
+  }
+
+  private async _loadData(addon?: HassioAddonsInfo): Promise<void> {
+    try {
+      const [addonInfo, store] = await Promise.all([
+        addon ?? fetchHassioAddonsInfo(this.hass),
         fetchSupervisorStore(this.hass),
       ]);
 
-      this._addon = addon;
+      this._addon = addonInfo;
       this._store = store;
     } catch (err: any) {
       this._error =
@@ -268,7 +319,6 @@ export class HaConfigAppsAvailable extends LitElement {
     :host {
       display: block;
       height: 100%;
-      background-color: var(--primary-background-color);
     }
     supervisor-apps-repository {
       margin-top: 24px;

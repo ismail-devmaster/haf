@@ -74,22 +74,21 @@ class MoreInfoGroup extends LitElement {
     if (!this.hass || !this.stateObj) {
       return nothing;
     }
-    return html`${this._moreInfoType
-      ? dynamicElement(this._moreInfoType, {
-          hass: this.hass,
-          stateObj: this._groupDomainStateObj,
-        })
-      : ""}
+    return html`${
+      this._moreInfoType
+        ? dynamicElement(this._moreInfoType, {
+            hass: this.hass,
+            stateObj: this._groupDomainStateObj,
+          })
+        : ""
+    }
     ${this.stateObj.attributes.entity_id.map((entity_id) => {
       const entityState = this.hass!.states[entity_id];
       if (!entityState) {
         return "";
       }
       return html`
-        <state-card-content
-          .stateObj=${entityState}
-          .hass=${this.hass}
-        ></state-card-content>
+        <state-card-content .stateObj=${entityState}></state-card-content>
       `;
     })}`;
   }

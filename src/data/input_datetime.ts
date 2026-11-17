@@ -1,5 +1,5 @@
 import type { HassEntity } from "home-assistant-js-websocket";
-import type { HomeAssistant } from "../types";
+import type { HomeAssistant, HomeAssistantApi } from "../types";
 
 export interface InputDateTime {
   id: string;
@@ -32,23 +32,23 @@ export const stateToIsoDateString = (entityState: HassEntity) =>
   )}`;
 
 export const setInputDateTimeValue = (
-  hass: HomeAssistant,
+  callService: HomeAssistantApi["callService"],
   entityId: string,
   time: string | undefined = undefined,
   date: string | undefined = undefined
 ) => {
   const param = { entity_id: entityId, time, date };
-  hass.callService("input_datetime", "set_datetime", param);
+  callService("input_datetime", "set_datetime", param);
 };
 
 export const fetchInputDateTime = (hass: HomeAssistant) =>
   hass.callWS<InputDateTime[]>({ type: "input_datetime/list" });
 
 export const createInputDateTime = (
-  hass: HomeAssistant,
+  callWS: HomeAssistantApi["callWS"],
   values: InputDateTimeMutableParams
 ) =>
-  hass.callWS<InputDateTime>({
+  callWS<InputDateTime>({
     type: "input_datetime/create",
     ...values,
   });

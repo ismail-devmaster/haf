@@ -1,10 +1,10 @@
 import type { HassEntities } from "home-assistant-js-websocket";
-import { computeStateName } from "../../common/entity/compute_state_name";
 import type { LocalizeFunc } from "../../common/translations/localize";
 import type { HaFormSchema } from "../../components/ha-form/types";
-import type { CallWS } from "../../types";
+import type { CallWS, HomeAssistant } from "../../types";
 import type { BaseTrigger } from "../automation";
 import { migrateAutomationTrigger } from "../automation";
+import type { DeviceCompositeSplits } from "./device_registry";
 import type { EntityRegistryEntry } from "../entity/entity_registry";
 import {
   entityRegistryByEntityId,
@@ -13,7 +13,7 @@ import {
 
 export interface DeviceAutomation {
   alias?: string;
-  comment?: string;
+  note?: string;
   device_id: string;
   domain: string;
   entity_id?: string;
@@ -21,12 +21,10 @@ export interface DeviceAutomation {
   subtype?: string;
   event?: string;
   enabled?: boolean;
-  metadata?: { secondary: boolean };
+  metadata?: { secondary?: boolean };
 }
 
-export interface DeviceAction extends DeviceAutomation {
-  entity_id: string;
-}
+export type DeviceAction = DeviceAutomation;
 
 export interface DeviceCondition extends DeviceAutomation {
   condition: "device";
@@ -38,7 +36,7 @@ export type DeviceTrigger = DeviceAutomation &
   };
 
 export interface DeviceCapabilities {
-  extra_fields: HaFormSchema[];
+  extra_fields?: HaFormSchema[];
 }
 
 export const fetchDeviceActions = (callWS: CallWS, deviceId: string) =>
@@ -158,6 +156,94 @@ export const deviceAutomationsEqual = (
   return true;
 };
 
+// Decides how a device automation editor should handle its referenced device.
+// A missing device that was replaced by a split device stays editable so the
+// device picker can offer to fix the reference; a genuinely unknown device
+// cannot be edited visually. Returns "loading" while the split map is unknown.
+export const deviceAutomationEditorMode = (
+  hass: HomeAssistant,
+  deviceId: string | undefined,
+  compositeSplits: DeviceCompositeSplits | undefined
+): "editable" | "loading" | "unknown-device" => {
+  if (!deviceId || deviceId in hass.devices) {
+    return "editable";
+  }
+  if (compositeSplits === undefined) {
+    return "loading";
+  }
+  // Only editable if at least one of the split (replacement) devices still
+  // exists; otherwise the reference is stale and cannot be fixed here.
+  const split = compositeSplits[deviceId];
+  return split?.split_ids.some((id) => id in hass.devices)
+    ? "editable"
+    : "unknown-device";
+};
+
+const deviceAutomationsSameType = (a: DeviceAutomation, b: DeviceAutomation) =>
+  deviceAutomationIdentifiers
+    .filter((property) => property !== "device_id" && property !== "entity_id")
+    .every((property) => Object.is(a[property], b[property]));
+
+// An entity can be referenced by its registry id or by its entity id, and the
+// two sides do not have to agree.
+const deviceAutomationsSameEntity = (
+  entityRegistry: EntityRegistryEntry[],
+  a: DeviceAutomation,
+  b: DeviceAutomation
+) => {
+  if (!a.entity_id && !b.entity_id) {
+    return true;
+  }
+  if (!a.entity_id || !b.entity_id) {
+    return false;
+  }
+  return (
+    a.entity_id === b.entity_id ||
+    compareEntityIdWithEntityRegId(entityRegistry, a.entity_id, b.entity_id)
+  );
+};
+
+// A device exposes the same automation type once per entity, so the same type
+// on another entity is a different automation, not an equivalent one.
+export const findEquivalentDeviceAutomation = <T extends DeviceAutomation>(
+  entityRegistry: EntityRegistryEntry[],
+  automations: T[],
+  automation: DeviceAutomation
+): T | undefined =>
+  automations.find(
+    (candidate) =>
+      deviceAutomationsSameType(candidate, automation) &&
+      deviceAutomationsSameEntity(entityRegistry, candidate, automation)
+  );
+
+// Among the split devices that replaced a removed device, the ones that offer
+// the given automation. Nothing in the registry says which of them took it over,
+// so each candidate has to be asked.
+export const fetchReplacementDevices = async <T extends DeviceAutomation>(
+  hass: HomeAssistant,
+  entityRegistry: EntityRegistryEntry[],
+  automation: DeviceAutomation,
+  compositeSplits: DeviceCompositeSplits,
+  fetchDeviceAutomations: (callWS: CallWS, deviceId: string) => Promise<T[]>
+): Promise<string[]> => {
+  const candidates =
+    compositeSplits[automation.device_id]?.split_ids.filter(
+      (id) => id in hass.devices
+    ) ?? [];
+  const automationsPerCandidate = await Promise.all(
+    candidates.map((id) =>
+      fetchDeviceAutomations(hass.callWS, id).catch(() => [] as T[])
+    )
+  );
+  return candidates.filter((_id, index) =>
+    findEquivalentDeviceAutomation(
+      entityRegistry,
+      automationsPerCandidate[index],
+      automation
+    )
+  );
+};
+
 const compareEntityIdWithEntityRegId = (
   entityRegistry: EntityRegistryEntry[],
   entityIdA?: string,
@@ -186,6 +272,7 @@ const compareEntityIdWithEntityRegId = (
 const getEntityName = (
   localize: LocalizeFunc,
   states: HassEntities,
+  formatEntityName: HomeAssistant["formatEntityName"],
   entityRegistry: EntityRegistryEntry[],
   entityId: string | undefined
 ): string => {
@@ -195,20 +282,17 @@ const getEntityName = (
   if (entityId.includes(".")) {
     const state = states[entityId];
     if (state) {
-      return computeStateName(state);
+      return formatEntityName(state);
     }
     return entityId;
   }
   const entityReg = entityRegistryById(entityRegistry)[entityId];
   if (entityReg) {
-    if (entityReg.name) {
-      return entityReg.name;
-    }
     const state = states[entityReg.entity_id];
     if (state) {
-      return computeStateName(state);
+      return formatEntityName(state);
     }
-    return entityReg.original_name ?? entityId;
+    return entityReg.name || entityReg.original_name || entityId;
   }
   return `<${localize("ui.panel.config.automation.editor.unknown_entity")}>`;
 };
@@ -216,6 +300,7 @@ const getEntityName = (
 export const localizeDeviceAutomationAction = (
   localize: LocalizeFunc,
   states: HassEntities,
+  formatEntityName: HomeAssistant["formatEntityName"],
   entityRegistry: EntityRegistryEntry[],
   action: DeviceAction
 ): string =>
@@ -225,6 +310,7 @@ export const localizeDeviceAutomationAction = (
       entity_name: getEntityName(
         localize,
         states,
+        formatEntityName,
         entityRegistry,
         action.entity_id
       ),
@@ -239,6 +325,7 @@ export const localizeDeviceAutomationAction = (
 export const localizeDeviceAutomationCondition = (
   localize: LocalizeFunc,
   states: HassEntities,
+  formatEntityName: HomeAssistant["formatEntityName"],
   entityRegistry: EntityRegistryEntry[],
   condition: DeviceCondition
 ): string =>
@@ -248,6 +335,7 @@ export const localizeDeviceAutomationCondition = (
       entity_name: getEntityName(
         localize,
         states,
+        formatEntityName,
         entityRegistry,
         condition.entity_id
       ),
@@ -265,6 +353,7 @@ export const localizeDeviceAutomationCondition = (
 export const localizeDeviceAutomationTrigger = (
   localize: LocalizeFunc,
   states: HassEntities,
+  formatEntityName: HomeAssistant["formatEntityName"],
   entityRegistry: EntityRegistryEntry[],
   trigger: DeviceTrigger
 ): string =>
@@ -274,6 +363,7 @@ export const localizeDeviceAutomationTrigger = (
       entity_name: getEntityName(
         localize,
         states,
+        formatEntityName,
         entityRegistry,
         trigger.entity_id
       ),

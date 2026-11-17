@@ -1,9 +1,13 @@
 import { mdiAlertCircleOutline, mdiAlertOutline } from "@mdi/js";
+import type { ContextType } from "@lit/context";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
+import { consume } from "../../../common/decorators/consume";
+import { consumeLocalize } from "../../../common/decorators/consume-context-entry";
+import type { LocalizeFunc } from "../../../common/translations/localize";
 import "../../../components/ha-card";
 import "../../../components/ha-svg-icon";
-import type { HomeAssistant } from "../../../types";
+import { configContext } from "../../../data/context";
 import type { LovelaceCard, LovelaceGridOptions } from "../types";
 import type { ErrorCardConfig } from "./types";
 
@@ -14,7 +18,13 @@ const ERROR_ICONS = {
 
 @customElement("hui-error-card")
 export class HuiErrorCard extends LitElement implements LovelaceCard {
-  @property({ attribute: false }) public hass?: HomeAssistant;
+  @state()
+  @consumeLocalize()
+  private _localize?: LocalizeFunc;
+
+  @state()
+  @consume({ context: configContext, subscribe: true })
+  private _hassConfig?: ContextType<typeof configContext>;
 
   @property({ attribute: false }) public preview = false;
 
@@ -45,12 +55,21 @@ export class HuiErrorCard extends LitElement implements LovelaceCard {
     const error =
       this._config?.error ||
       (this.severity === "warning" &&
+<<<<<<< HEAD
         this.hass?.localize("ui.errors.config.configuration_warning")) ||
       this.hass?.localize("ui.errors.config.configuration_error");
     // Non-admin users see the title so they can report and understand
     // failures. The detailed 'message' field below remains preview-only as
     // it can include internal card implementation details.
     const showTitle = this.hass === undefined || this.preview;
+=======
+        this._localize?.("ui.errors.config.configuration_warning")) ||
+      this._localize?.("ui.errors.config.configuration_error");
+    const showTitle =
+      this._hassConfig === undefined ||
+      this._hassConfig.user?.is_admin ||
+      this.preview;
+>>>>>>> dev
     const showMessage = this.preview;
 
     return html`
@@ -61,13 +80,17 @@ export class HuiErrorCard extends LitElement implements LovelaceCard {
               <ha-svg-icon .path=${ERROR_ICONS[this.severity]}></ha-svg-icon>
             </slot>
           </div>
-          ${showTitle
-            ? html`<div class="title"><slot>${error}</slot></div>`
-            : nothing}
+          ${
+            showTitle
+              ? html`<div class="title"><slot>${error}</slot></div>`
+              : nothing
+          }
         </div>
-        ${showMessage && this._config?.message
-          ? html`<div class="message">${this._config.message}</div>`
-          : nothing}
+        ${
+          showMessage && this._config?.message
+            ? html`<div class="message">${this._config.message}</div>`
+            : nothing
+        }
       </ha-card>
     `;
   }

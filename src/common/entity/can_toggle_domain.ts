@@ -1,16 +1,12 @@
-import type { HomeAssistant } from "../../types";
+import type { HassServices } from "home-assistant-js-websocket";
+import { getToggleAction } from "./get_toggle_action";
 
-export const canToggleDomain = (hass: HomeAssistant, domain: string) => {
-  const services = hass.services[domain];
-  if (!services) {
+export const canToggleDomain = (services: HassServices, domain: string) => {
+  const domainServices = services[domain];
+  if (!domainServices) {
     return false;
   }
-
-  if (domain === "lock") {
-    return "lock" in services;
-  }
-  if (domain === "cover") {
-    return "open_cover" in services;
-  }
-  return "turn_on" in services;
+  const actionOn = getToggleAction(domain, true);
+  const actionOff = getToggleAction(domain, false);
+  return actionOn in domainServices && actionOff in domainServices;
 };

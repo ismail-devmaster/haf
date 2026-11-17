@@ -5,6 +5,7 @@ import { customElement, property, state } from "lit/decorators";
 import { repeat } from "lit/directives/repeat";
 import memoizeOne from "memoize-one";
 import { fireEvent } from "../../../common/dom/fire_event";
+import type { HASSDomTargetEvent } from "../../../common/dom/fire_event";
 import "../../../components/chips/ha-chip-set";
 import "../../../components/chips/ha-input-chip";
 import "../../../components/ha-alert";
@@ -24,13 +25,25 @@ import type {
   FloorRegistryEntry,
   FloorRegistryEntryMutableParams,
 } from "../../../data/floor_registry";
+import { DirtyStateProviderMixin } from "../../../mixins/dirty-state-provider-mixin";
 import { haStyle, haStyleDialog } from "../../../resources/styles";
 import type { HomeAssistant } from "../../../types";
 import { showAreaRegistryDetailDialog } from "./show-dialog-area-registry-detail";
 import type { FloorRegistryDetailDialogParams } from "./show-dialog-floor-registry-detail";
 
+interface FloorFormState {
+  name: string;
+  aliases: string[];
+  icon: string | null;
+  level: number | null;
+  addedAreas: string[];
+  removedAreas: string[];
+}
+
 @customElement("dialog-floor-registry-detail")
-class DialogFloorDetail extends LitElement {
+class DialogFloorDetail extends DirtyStateProviderMixin<FloorFormState>()(
+  LitElement
+) {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
   @state() private _name!: string;
@@ -62,9 +75,21 @@ class DialogFloorDetail extends LitElement {
     this._aliases = this._params.entry?.aliases || [];
     this._icon = this._params.entry?.icon || null;
     this._level = this._params.entry?.level ?? null;
-    this._addedAreas.clear();
-    this._removedAreas.clear();
+    this._addedAreas = new Set();
+    this._removedAreas = new Set();
     this._open = true;
+    this._initDirtyTracking({ type: "deep" }, this._currentState());
+  }
+
+  private _currentState(): FloorFormState {
+    return {
+      name: this._name,
+      aliases: this._aliases,
+      icon: this._icon,
+      level: this._level,
+      addedAreas: [...this._addedAreas].sort(),
+      removedAreas: [...this._removedAreas].sort(),
+    };
   }
 
   public closeDialog(): void {
@@ -74,8 +99,6 @@ class DialogFloorDetail extends LitElement {
   private _dialogClosed(): void {
     this._error = "";
     this._params = undefined;
-    this._addedAreas.clear();
-    this._removedAreas.clear();
     fireEvent(this, "dialog-closed", { dialog: this.localName });
   }
 
@@ -109,29 +132,35 @@ class DialogFloorDetail extends LitElement {
     return html`
       <ha-dialog
         .open=${this._open}
-        header-title=${entry
-          ? this.hass.localize("ui.panel.config.floors.editor.update_floor")
-          : this.hass.localize("ui.panel.config.floors.editor.create_floor")}
-        prevent-scrim-close
+        header-title=${
+          entry
+            ? this.hass.localize("ui.panel.config.floors.editor.update_floor")
+            : this.hass.localize("ui.panel.config.floors.editor.create_floor")
+        }
+        .preventScrimClose=${this.isDirtyState}
         @closed=${this._dialogClosed}
       >
         <div>
-          ${this._error
-            ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
-            : ""}
+          ${
+            this._error
+              ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
+              : ""
+          }
           <div class="form">
-            ${entry
-              ? html`
-                  <ha-settings-row>
-                    <span slot="heading">
-                      ${this.hass.localize(
-                        "ui.panel.config.floors.editor.floor_id"
-                      )}
-                    </span>
-                    <span slot="description">${entry.floor_id}</span>
-                  </ha-settings-row>
-                `
-              : nothing}
+            ${
+              entry
+                ? html`
+                    <ha-settings-row>
+                      <span slot="heading">
+                        ${this.hass.localize(
+                          "ui.panel.config.floors.editor.floor_id"
+                        )}
+                      </span>
+                      <span slot="description">${entry.floor_id}</span>
+                    </ha-settings-row>
+                  `
+                : nothing
+            }
 
             <ha-input
               autofocus
@@ -158,19 +187,20 @@ class DialogFloorDetail extends LitElement {
             ></ha-input>
 
             <ha-icon-picker
-              .hass=${this.hass}
               .value=${this._icon}
               @value-changed=${this._iconChanged}
               .label=${this.hass.localize("ui.panel.config.areas.editor.icon")}
             >
-              ${!this._icon
-                ? html`
-                    <ha-floor-icon
-                      slot="start"
-                      .floor=${{ level: this._level }}
-                    ></ha-floor-icon>
-                  `
-                : nothing}
+              ${
+                !this._icon
+                  ? html`
+                      <ha-floor-icon
+                        slot="start"
+                        .floor=${{ level: this._level }}
+                      ></ha-floor-icon>
+                    `
+                  : nothing
+              }
             </ha-icon-picker>
 
             <h3 class="header">
@@ -179,38 +209,41 @@ class DialogFloorDetail extends LitElement {
               )}
             </h3>
 
-            ${areas.length
-              ? html`<ha-chip-set>
-                  ${repeat(
-                    areas,
-                    (area) => area.area_id,
-                    (area) =>
-                      html`<ha-input-chip
-                        .area=${area}
-                        @click=${this._openArea}
-                        @remove=${this._removeArea}
-                        .label=${area?.name}
-                      >
-                        ${area.icon
-                          ? html`<ha-icon
-                              slot="icon"
-                              .icon=${area.icon}
-                            ></ha-icon>`
-                          : html`<ha-svg-icon
-                              slot="icon"
-                              .path=${mdiTextureBox}
-                            ></ha-svg-icon>`}
-                      </ha-input-chip>`
-                  )}
-                </ha-chip-set>`
-              : html`<p class="description">
-                  ${this.hass.localize(
-                    "ui.panel.config.floors.editor.areas_description"
-                  )}
-                </p>`}
+            ${
+              areas.length
+                ? html`<ha-chip-set>
+                    ${repeat(
+                      areas,
+                      (area) => area.area_id,
+                      (area) =>
+                        html`<ha-input-chip
+                          .area=${area}
+                          @click=${this._openArea}
+                          @remove=${this._removeArea}
+                          .label=${area?.name}
+                        >
+                          ${
+                            area.icon
+                              ? html`<ha-icon
+                                  slot="icon"
+                                  .icon=${area.icon}
+                                ></ha-icon>`
+                              : html`<ha-svg-icon
+                                  slot="icon"
+                                  .path=${mdiTextureBox}
+                                ></ha-svg-icon>`
+                          }
+                        </ha-input-chip>`
+                    )}
+                  </ha-chip-set>`
+                : html`<p class="description">
+                    ${this.hass.localize(
+                      "ui.panel.config.floors.editor.areas_description"
+                    )}
+                  </p>`
+            }
             <ha-area-picker
               no-add
-              .hass=${this.hass}
               @value-changed=${this._addArea}
               .excludeAreas=${areas.map((a) => a.area_id)}
               .addButtonLabel=${this.hass.localize(
@@ -230,7 +263,6 @@ class DialogFloorDetail extends LitElement {
               )}
             </p>
             <ha-aliases-editor
-              .hass=${this.hass}
               .aliases=${this._aliases}
               @value-changed=${this._aliasesChanged}
             ></ha-aliases-editor>
@@ -247,11 +279,16 @@ class DialogFloorDetail extends LitElement {
           <ha-button
             slot="primaryAction"
             @click=${this._updateEntry}
-            .disabled=${!!this._submitting}
+            .disabled=${
+              !!this._submitting ||
+              (!!this._params?.entry && !this.isDirtyState)
+            }
           >
-            ${entry
-              ? this.hass.localize("ui.common.save")
-              : this.hass.localize("ui.common.create")}
+            ${
+              entry
+                ? this.hass.localize("ui.common.save")
+                : this.hass.localize("ui.common.create")
+            }
           </ha-button>
         </ha-dialog-footer>
       </ha-dialog>
@@ -263,7 +300,7 @@ class DialogFloorDetail extends LitElement {
     showAreaRegistryDetailDialog(this, {
       entry: area,
       updateEntry: (values) =>
-        updateAreaRegistryEntry(this.hass!, area.area_id, values),
+        updateAreaRegistryEntry(this.hass!.callWS, area.area_id, values),
     });
   }
 
@@ -272,10 +309,12 @@ class DialogFloorDetail extends LitElement {
     if (this._addedAreas.has(areaId)) {
       this._addedAreas.delete(areaId);
       this._addedAreas = new Set(this._addedAreas);
+      this._updateDirtyState(this._currentState());
       return;
     }
     this._removedAreas.add(areaId);
     this._removedAreas = new Set(this._removedAreas);
+    this._updateDirtyState(this._currentState());
   }
 
   private _addArea(ev) {
@@ -287,28 +326,33 @@ class DialogFloorDetail extends LitElement {
     if (this._removedAreas.has(areaId)) {
       this._removedAreas.delete(areaId);
       this._removedAreas = new Set(this._removedAreas);
+      this._updateDirtyState(this._currentState());
       return;
     }
     this._addedAreas.add(areaId);
     this._addedAreas = new Set(this._addedAreas);
+    this._updateDirtyState(this._currentState());
   }
 
-  private _nameChanged(ev: InputEvent) {
+  private _nameChanged(ev: InputEvent & HASSDomTargetEvent<HaInput>) {
     this._error = undefined;
     this._name = (ev.target as HaInput).value ?? "";
+    this._updateDirtyState(this._currentState());
   }
 
-  private _levelChanged(ev: InputEvent) {
+  private _levelChanged(ev: InputEvent & HASSDomTargetEvent<HaInput>) {
     this._error = undefined;
     this._level =
       (ev.target as HaInput).value === ""
         ? null
         : Number((ev.target as HaInput).value);
+    this._updateDirtyState(this._currentState());
   }
 
   private _iconChanged(ev) {
     this._error = undefined;
     this._icon = ev.detail.value;
+    this._updateDirtyState(this._currentState());
   }
 
   private async _updateEntry() {
@@ -339,6 +383,7 @@ class DialogFloorDetail extends LitElement {
           this._removedAreas
         );
       }
+      this._markDirtyStateClean();
       this.closeDialog();
     } catch (err: any) {
       this._error =
@@ -351,6 +396,7 @@ class DialogFloorDetail extends LitElement {
 
   private _aliasesChanged(ev: CustomEvent): void {
     this._aliases = ev.detail.value;
+    this._updateDirtyState(this._currentState());
   }
 
   static get styles(): CSSResultGroup {

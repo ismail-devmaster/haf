@@ -1,13 +1,20 @@
 import type { HomeAssistant } from "../types";
 import { handleFetchPromise } from "../util/hass-call-api";
-import type { CloudStatus } from "./cloud";
 
 export interface InstallationType {
   installation_type:
+<<<<<<< HEAD
     | "Domolux Operating System"
     | "Domolux Container"
     | "Domolux Supervised"
     | "Domolux Core"
+=======
+    | "Home Assistant OS"
+    | "Home Assistant Container"
+    | "Unsupported Third Party Container"
+    | "Home Assistant Supervised"
+    | "Home Assistant Core"
+>>>>>>> dev
     | "Unknown";
 }
 
@@ -47,6 +54,10 @@ export interface CloudLoginPassword extends CloudLoginBase {
 
 export interface CloudLoginMFA extends CloudLoginBase {
   code: string;
+}
+
+export interface OnboardingCloudStatus {
+  logged_in: boolean;
 }
 
 export const fetchOnboardingOverview = () =>
@@ -115,7 +126,7 @@ export const loginHaCloud = async (
     })
   );
 
-export const fetchHaCloudStatus = async (): Promise<CloudStatus> =>
+export const fetchHaCloudStatus = async (): Promise<OnboardingCloudStatus> =>
   handleFetchPromise(fetch("/api/onboarding/cloud/status"));
 
 export const signOutHaCloud = async () =>

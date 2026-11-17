@@ -14,25 +14,36 @@ export class HaBadge extends LitElement {
 
   @property({ type: Boolean, attribute: "icon-only" }) iconOnly = false;
 
+  /**
+   * Accessible name for the badge button when it shows only its icon.
+   */
+  @property({ attribute: "accessible-label" }) public accessibleLabel?: string;
+
   protected render() {
     const label = this.label;
+    const isButton = this.type === "button";
 
     return html`
       <div
         class="badge ${classMap({
           "icon-only": this.iconOnly,
         })}"
-        role=${ifDefined(this.type === "button" ? "button" : undefined)}
-        tabindex=${ifDefined(this.type === "button" ? "0" : undefined)}
+        role=${ifDefined(isButton ? "button" : undefined)}
+        tabindex=${ifDefined(isButton ? "0" : undefined)}
+        aria-label=${ifDefined(
+          isButton && this.iconOnly ? this.accessibleLabel : undefined
+        )}
       >
         <ha-ripple .disabled=${this.type !== "button"}></ha-ripple>
         <slot name="icon"></slot>
-        ${this.iconOnly
-          ? nothing
-          : html`<span class="info">
-              ${label ? html`<span class="label">${label}</span>` : nothing}
-              <span class="content"><slot></slot></span>
-            </span>`}
+        ${
+          this.iconOnly
+            ? nothing
+            : html`<span class="info">
+                ${label ? html`<span class="label">${label}</span>` : nothing}
+                <span class="content"><slot></slot></span>
+              </span>`
+        }
       </div>
     `;
   }
@@ -68,7 +79,6 @@ export class HaBadge extends LitElement {
         --ha-card-background,
         var(--card-background-color, white)
       );
-      -webkit-backdrop-filter: var(--ha-card-backdrop-filter, none);
       backdrop-filter: var(--ha-card-backdrop-filter, none);
       border-width: var(--ha-card-border-width, 1px);
       box-shadow: var(--ha-card-box-shadow, none);
@@ -122,7 +132,7 @@ export class HaBadge extends LitElement {
     ::slotted(img[slot="icon"]) {
       width: 30px;
       height: 30px;
-      border-radius: var(--ha-border-radius-circle);
+      border-radius: var(--ha-picture-border-radius);
       object-fit: cover;
       overflow: hidden;
       margin-left: -10px;

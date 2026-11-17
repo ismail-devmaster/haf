@@ -35,11 +35,13 @@ export class HaSettingsRow extends LitElement {
           ?three-line=${this.threeLine}
         >
           <slot name="heading"></slot>
-          ${hasDescription
-            ? html`<span class="secondary"
-                ><slot name="description"></slot
-              ></span>`
-            : nothing}
+          ${
+            hasDescription
+              ? html`<span class="secondary"
+                  ><slot name="description"></slot
+                ></span>`
+              : nothing
+          }
         </div>
       </div>
       <div class="content">
@@ -84,17 +86,11 @@ export class HaSettingsRow extends LitElement {
     .body > .secondary {
       display: block;
       padding-top: var(--ha-space-1);
-      font-family: var(
-        --mdc-typography-body2-font-family,
-        var(--mdc-typography-font-family, var(--ha-font-family-body))
-      );
-      font-size: var(--mdc-typography-body2-font-size, var(--ha-font-size-s));
+      font-family: var(--ha-font-family-body);
+      font-size: var(--ha-font-size-s);
       -webkit-font-smoothing: var(--ha-font-smoothing);
       -moz-osx-font-smoothing: var(--ha-moz-osx-font-smoothing);
-      font-weight: var(
-        --mdc-typography-body2-font-weight,
-        var(--ha-font-weight-normal)
-      );
+      font-weight: var(--ha-font-weight-normal);
       line-height: normal;
       color: var(--secondary-text-color);
     }

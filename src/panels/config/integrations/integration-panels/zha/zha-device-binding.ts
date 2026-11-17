@@ -2,13 +2,12 @@ import type { CSSResultGroup, PropertyValues, TemplateResult } from "lit";
 import { css, html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import "../../../../../components/buttons/ha-progress-button";
-import "../../../../../components/ha-card";
-import "../../../../../components/ha-select";
-import type { HaSelectSelectEvent } from "../../../../../components/ha-select";
+import "../../../../../components/device/ha-device-picker";
+import type { HaDevicePickerDeviceFilterFunc } from "../../../../../components/device/ha-device-picker";
 import type { ZHADevice } from "../../../../../data/zha";
 import { bindDevices, unbindDevices } from "../../../../../data/zha";
 import { haStyle } from "../../../../../resources/styles";
-import type { HomeAssistant } from "../../../../../types";
+import type { HomeAssistant, ValueChangedEvent } from "../../../../../types";
 
 @customElement("zha-device-binding-control")
 export class ZHADeviceBindingControl extends LitElement {
@@ -16,46 +15,44 @@ export class ZHADeviceBindingControl extends LitElement {
 
   @property({ attribute: false }) public device?: ZHADevice;
 
-  @state() private _bindTargetIndex = -1;
-
-  @state() private bindableDevices: ZHADevice[] = [];
+  @property({ attribute: false }) public bindableDevices: ZHADevice[] = [];
 
   @state() private _deviceToBind?: ZHADevice;
 
   @state() private _bindingOperationInProgress = false;
 
   protected updated(changedProperties: PropertyValues<this>): void {
-    if (changedProperties.has("device")) {
-      this._bindTargetIndex = -1;
+    const oldDevice = changedProperties.get("device");
+    const deviceChanged =
+      changedProperties.has("device") && this.device?.ieee !== oldDevice?.ieee;
+
+    if (deviceChanged || changedProperties.has("bindableDevices")) {
+      this._deviceToBind = undefined;
     }
     super.updated(changedProperties);
   }
 
   protected render(): TemplateResult {
     return html`
-      <ha-card class="content">
+      <div class="content">
         <div class="command-picker">
-          <ha-select
+          <ha-device-picker
             label=${this.hass!.localize(
               "ui.panel.config.zha.device_binding.picker_label"
             )}
-            class="menu"
-            .value=${String(this._bindTargetIndex)}
-            @selected=${this._bindTargetIndexChanged}
-            .options=${this.bindableDevices.map((device, idx) => ({
-              value: String(idx),
-              label: device.user_given_name
-                ? device.user_given_name
-                : device.name,
-            }))}
+            .value=${this._deviceToBind?.device_reg_id}
+            .deviceFilter=${this._filterBindableDevices}
+            @value-changed=${this._bindTargetChanged}
           >
-          </ha-select>
+          </ha-device-picker>
         </div>
         <div class="card-actions">
           <ha-progress-button
             @click=${this._onUnbindDevicesClick}
-            .disabled=${!(this._deviceToBind && this.device) ||
-            this._bindingOperationInProgress}
+            .disabled=${
+              !(this._deviceToBind && this.device) ||
+              this._bindingOperationInProgress
+            }
             variant="danger"
             appearance="plain"
           >
@@ -63,22 +60,28 @@ export class ZHADeviceBindingControl extends LitElement {
           </ha-progress-button>
           <ha-progress-button
             @click=${this._onBindDevicesClick}
-            .disabled=${!(this._deviceToBind && this.device) ||
-            this._bindingOperationInProgress}
+            .disabled=${
+              !(this._deviceToBind && this.device) ||
+              this._bindingOperationInProgress
+            }
           >
             ${this.hass!.localize("ui.panel.config.zha.device_binding.bind")}
           </ha-progress-button>
         </div>
-      </ha-card>
+      </div>
     `;
   }
 
-  private _bindTargetIndexChanged(event: HaSelectSelectEvent): void {
-    this._bindTargetIndex = Number(event.detail.value);
-    this._deviceToBind =
-      this._bindTargetIndex === -1
-        ? undefined
-        : this.bindableDevices[this._bindTargetIndex];
+  private _filterBindableDevices: HaDevicePickerDeviceFilterFunc = (device) =>
+    this.bindableDevices.some(
+      (bindableDevice) => bindableDevice.device_reg_id === device.id
+    );
+
+  private _bindTargetChanged(event: ValueChangedEvent<string>): void {
+    event.stopPropagation();
+    this._deviceToBind = this.bindableDevices.find(
+      (device) => device.device_reg_id === event.detail.value
+    );
   }
 
   private async _onBindDevicesClick(ev: CustomEvent): Promise<void> {
@@ -123,18 +126,16 @@ export class ZHADeviceBindingControl extends LitElement {
     return [
       haStyle,
       css`
-        .menu {
+        ha-device-picker {
+          display: block;
           width: 100%;
         }
 
-        .content {
-          padding: var(--ha-space-4) 0 0;
-          border: none;
-          outline: none;
+        :host {
+          display: block;
         }
 
         .command-picker {
-          align-items: center;
           padding-left: 28px;
           padding-right: 28px;
           padding-inline-start: 28px;
@@ -142,14 +143,12 @@ export class ZHADeviceBindingControl extends LitElement {
           padding-bottom: 10px;
         }
 
-        .header {
-          flex-grow: 1;
-        }
         .card-actions {
           display: flex;
-          margin-top: var(--ha-space-2);
+          border-top: 1px solid var(--divider-color);
+          padding: var(--ha-space-2);
           justify-content: flex-end;
-          gap: var(--ha-space-3);
+          gap: var(--ha-space-2);
         }
       `,
     ];

@@ -7,22 +7,23 @@ import {
   mdiLinkVariant,
   mdiVectorPolyline,
 } from "@mdi/js";
+import type { UnsubscribeFunc } from "home-assistant-js-websocket";
 import type { CSSResultGroup, TemplateResult } from "lit";
 import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import "../../../../../components/ha-button";
 import "../../../../../components/ha-card";
 import "../../../../../components/ha-icon-next";
-import "../../../../../components/ha-md-list";
-import "../../../../../components/ha-md-list-item";
 import "../../../../../components/ha-svg-icon";
-import type { UnsubscribeFunc } from "home-assistant-js-websocket";
+import "../../../../../components/item/ha-list-item-button";
+import "../../../../../components/list/ha-list-nav";
 import type {
   BluetoothAllocationsData,
   BluetoothDeviceData,
   BluetoothScannerState,
 } from "../../../../../data/bluetooth";
 import {
+  isScannerStateMismatch,
   subscribeBluetoothAdvertisements,
   subscribeBluetoothConnectionAllocations,
   subscribeBluetoothScannerState,
@@ -144,7 +145,7 @@ export class BluetoothConfigDashboard extends LitElement {
       0
     );
     const hasMismatch = Object.values(this._scannerStates).some(
-      (s) => s.current_mode !== s.requested_mode
+      isScannerStateMismatch
     );
     const isOffline = adapterCount === 0;
     const status = isOffline ? "offline" : hasMismatch ? "warning" : "online";
@@ -159,7 +160,7 @@ export class BluetoothConfigDashboard extends LitElement {
         .hass=${this.hass}
         .narrow=${this.narrow}
         .header=${this.hass.localize("ui.panel.config.bluetooth.title")}
-        back-path="/config"
+        back-path="/config/connectivity"
       >
         <div class="container">
           <ha-card class="content network-status">
@@ -212,11 +213,12 @@ export class BluetoothConfigDashboard extends LitElement {
               </ha-button>
             </div>
             <div class="card-content network-card-content">
-              <ha-md-list>
-                <ha-md-list-item
-                  type="link"
-                  href="/config/bluetooth/adapter-info"
-                >
+              <ha-list-nav
+                .ariaLabel=${this.hass.localize(
+                  "ui.panel.config.bluetooth.my_network"
+                )}
+              >
+                <ha-list-item-button href="/config/bluetooth/adapter-info">
                   <ha-svg-icon
                     slot="start"
                     .path=${mdiAccessPoint}
@@ -228,10 +230,9 @@ export class BluetoothConfigDashboard extends LitElement {
                     )}
                   </div>
                   <ha-icon-next slot="end"></ha-icon-next>
-                </ha-md-list-item>
+                </ha-list-item-button>
 
-                <ha-md-list-item
-                  type="link"
+                <ha-list-item-button
                   href="/config/bluetooth/connection-monitor"
                 >
                   <ha-svg-icon
@@ -245,10 +246,9 @@ export class BluetoothConfigDashboard extends LitElement {
                     )}
                   </div>
                   <ha-icon-next slot="end"></ha-icon-next>
-                </ha-md-list-item>
+                </ha-list-item-button>
 
-                <ha-md-list-item
-                  type="link"
+                <ha-list-item-button
                   href="/config/bluetooth/advertisement-monitor"
                 >
                   <ha-svg-icon slot="start" .path=${mdiBroadcast}></ha-svg-icon>
@@ -259,8 +259,8 @@ export class BluetoothConfigDashboard extends LitElement {
                     )}
                   </div>
                   <ha-icon-next slot="end"></ha-icon-next>
-                </ha-md-list-item>
-              </ha-md-list>
+                </ha-list-item-button>
+              </ha-list-nav>
             </div>
           </ha-card>
         </div>
@@ -273,21 +273,16 @@ export class BluetoothConfigDashboard extends LitElement {
       haStyle,
       css`
         .container {
-          padding: var(--ha-space-2) var(--ha-space-4) var(--ha-space-4);
+          padding: var(--ha-space-2) var(--ha-content-gutter) var(--ha-space-4);
         }
 
         ha-card {
           margin: 0px auto var(--ha-space-4);
-          max-width: 600px;
+          max-width: var(--ha-content-width-narrow);
         }
 
         .content {
           margin-top: var(--ha-space-6);
-        }
-
-        ha-md-list {
-          background: none;
-          padding: 0;
         }
 
         .network-card {

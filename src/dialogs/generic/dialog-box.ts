@@ -13,11 +13,18 @@ import "../../components/ha-textarea";
 import type { HaTextArea } from "../../components/ha-textarea";
 import "../../components/input/ha-input";
 import type { HaInput } from "../../components/input/ha-input";
+import { DirtyStateProviderMixin } from "../../mixins/dirty-state-provider-mixin";
 import type { HomeAssistant } from "../../types";
 import type { DialogBoxParams } from "./show-dialog-box";
 
+interface DialogBoxDirtyState {
+  value: string;
+}
+
 @customElement("dialog-box")
-class DialogBox extends LitElement {
+class DialogBox extends DirtyStateProviderMixin<DialogBoxDirtyState>()(
+  LitElement
+) {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
   @state() private _params?: DialogBoxParams;
@@ -36,13 +43,22 @@ class DialogBox extends LitElement {
 
   private _closeResolve?: () => void;
 
+  // Set while a new opening waits for the previous one to finish closing
+  private _reopening = false;
+
   public async showDialog(params: DialogBoxParams): Promise<void> {
     if (this._closePromise) {
+      this._reopening = true;
       await this._closePromise;
+      this._reopening = false;
     }
     this._params = params;
     this._validInput = true;
     this._open = true;
+    this._initDirtyTracking(
+      { type: "deep" },
+      { value: params.defaultValue ?? "" }
+    );
     await this.updateComplete;
     this._validateInput();
   }
@@ -77,104 +93,130 @@ class DialogBox extends LitElement {
       <ha-dialog
         .open=${this._open}
         type=${confirmPrompt ? "alert" : "standard"}
-        ?prevent-scrim-close=${confirmPrompt}
+        .preventScrimClose=${!!this._params.confirmation || this.isDirtyState}
         @closed=${this._dialogClosed}
-        aria-labelledby="dialog-box-title"
+        .accessibleLabel=${this._accessibleLabel(dialogTitle)}
         aria-describedby="dialog-box-description"
       >
         <ha-dialog-header slot="header">
-          ${!confirmPrompt
-            ? html`<slot name="headerNavigationIcon" slot="navigationIcon">
-                <ha-icon-button
-                  data-dialog="close"
-                  .label=${this.hass?.localize("ui.common.close") ?? "Close"}
-                  .path=${mdiClose}
-                ></ha-icon-button
-              ></slot>`
-            : nothing}
+          ${
+            !confirmPrompt || this._params.showCloseButton
+              ? html`<slot name="headerNavigationIcon" slot="navigationIcon">
+                  <ha-icon-button
+                    data-dialog="close"
+                    .label=${this.hass?.localize("ui.common.close") ?? "Close"}
+                    .path=${mdiClose}
+                  ></ha-icon-button
+                ></slot>`
+              : nothing
+          }
           <h1
             class=${classMap({ title: true, alert: confirmPrompt })}
             slot="title"
             id="dialog-box-title"
           >
-            ${this._params.warning
-              ? html`<ha-svg-icon
-                  .path=${mdiAlertOutline}
-                  style="color: var(--warning-color)"
-                ></ha-svg-icon> `
-              : nothing}
+            ${
+              this._params.warning
+                ? html`<ha-svg-icon
+                    .path=${mdiAlertOutline}
+                    style="color: var(--warning-color)"
+                  ></ha-svg-icon> `
+                : nothing
+            }
             ${dialogTitle}
           </h1>
-          ${this._params.subtitle
-            ? html`<span slot="subtitle">${this._params.subtitle}</span>`
-            : nothing}
+          ${
+            this._params.subtitle
+              ? html`<span slot="subtitle">${this._params.subtitle}</span>`
+              : nothing
+          }
         </ha-dialog-header>
         <div id="dialog-box-description">
           ${this._params.text ? html` <p>${this._params.text}</p> ` : ""}
-          ${this._params.prompt && !this._params.multiline
-            ? html`
-                <ha-input
-                  autofocus
-                  value=${ifDefined(this._params.defaultValue)}
-                  .placeholder=${this._params.placeholder}
-                  .label=${this._params.inputLabel
-                    ? this._params.inputLabel
-                    : ""}
-                  .type=${this._params.inputType
-                    ? this._params.inputType
-                    : "text"}
-                  .min=${this._params.inputMin}
-                  .max=${this._params.inputMax}
-                  .disabled=${this._loading}
-                  @input=${this._validateInput}
-                >
-                  ${this._params.inputSuffix
-                    ? html`<span slot="end">${this._params.inputSuffix}</span>`
-                    : nothing}
-                </ha-input>
-              `
-            : this._params.prompt && this._params.multiline
+          ${
+            this._params.prompt && !this._params.multiline
               ? html`
-                  <ha-textarea
-                    resize="auto"
+                  <ha-input
                     autofocus
-                    .value=${this._params.defaultValue}
+                    value=${ifDefined(this._params.defaultValue)}
                     .placeholder=${this._params.placeholder}
-                    .label=${this._params.inputLabel}
+                    .label=${
+                      this._params.inputLabel ? this._params.inputLabel : ""
+                    }
+                    .type=${
+                      this._params.inputType ? this._params.inputType : "text"
+                    }
+                    .min=${this._params.inputMin}
+                    .max=${this._params.inputMax}
                     .disabled=${this._loading}
                     @input=${this._validateInput}
-                  ></ha-textarea>
+                  >
+                    ${
+                      this._params.inputSuffix
+                        ? html`<span slot="end"
+                            >${this._params.inputSuffix}</span
+                          >`
+                        : nothing
+                    }
+                  </ha-input>
                 `
-              : nothing}
+              : this._params.prompt && this._params.multiline
+                ? html`
+                    <ha-textarea
+                      resize="auto"
+                      autofocus
+                      .value=${this._params.defaultValue}
+                      .placeholder=${this._params.placeholder}
+                      .label=${this._params.inputLabel}
+                      .disabled=${this._loading}
+                      @input=${this._validateInput}
+                    ></ha-textarea>
+                  `
+                : nothing
+          }
+          ${
+            this._params.prompt && this._params.textBelowInput
+              ? html`<div class="after-input">
+                  ${this._params.textBelowInput}
+                </div>`
+              : nothing
+          }
         </div>
         <ha-dialog-footer slot="footer">
-          ${confirmPrompt
-            ? html`
-                <ha-button
-                  slot="secondaryAction"
-                  @click=${this._dismiss}
-                  ?autofocus=${!this._params.prompt && this._params.destructive}
-                  ?disabled=${this._loading}
-                  appearance="plain"
-                >
-                  ${this._params.dismissText
-                    ? this._params.dismissText
-                    : this.hass.localize("ui.common.cancel")}
-                </ha-button>
-              `
-            : nothing}
+          ${
+            confirmPrompt
+              ? html`
+                  <ha-button
+                    slot="secondaryAction"
+                    @click=${this._dismiss}
+                    ?autofocus=${!this._params.prompt && this._params.destructive}
+                    ?disabled=${this._loading}
+                    appearance="plain"
+                  >
+                    ${
+                      this._params.dismissText
+                        ? this._params.dismissText
+                        : this.hass.localize("ui.common.cancel")
+                    }
+                  </ha-button>
+                `
+              : nothing
+          }
           <ha-button
             slot="primaryAction"
             @click=${this._confirm}
             ?autofocus=${!this._params.prompt && !this._params.destructive}
-            ?disabled=${this._loading ||
-            (!!this._params.prompt && !this._validInput)}
+            ?disabled=${
+              this._loading || (!!this._params.prompt && !this._validInput)
+            }
             .loading=${this._loading}
             variant=${this._params.destructive ? "danger" : "brand"}
           >
-            ${this._params.confirmText
-              ? this._params.confirmText
-              : this.hass.localize("ui.common.ok")}
+            ${
+              this._params.confirmText
+                ? this._params.confirmText
+                : this.hass.localize("ui.common.ok")
+            }
           </ha-button>
         </ha-dialog-footer>
       </ha-dialog>
@@ -185,6 +227,17 @@ class DialogBox extends LitElement {
     if (this._params?.cancel) {
       this._params.cancel();
     }
+  }
+
+  // Alerts often have no title. Their message is what a screen reader should
+  // announce then, as long as it is plain text.
+  private _accessibleLabel(dialogTitle: string | false | undefined) {
+    if (dialogTitle) {
+      return dialogTitle;
+    }
+    return typeof this._params?.text === "string"
+      ? this._params.text
+      : undefined;
   }
 
   private _dismiss(): void {
@@ -212,6 +265,7 @@ class DialogBox extends LitElement {
     if (this._params!.confirm) {
       this._params!.confirm(this._textField?.value);
     }
+    this._markDirtyStateClean();
     this._closeDialog();
   }
 
@@ -219,6 +273,9 @@ class DialogBox extends LitElement {
     this._validInput = this._params?.prompt
       ? (this._textField?.checkValidity() ?? true)
       : true;
+    if (this._params?.prompt) {
+      this._updateDirtyState({ value: this._textField?.value ?? "" });
+    }
   }
 
   private _closeDialog() {
@@ -229,7 +286,11 @@ class DialogBox extends LitElement {
   }
 
   private _dialogClosed() {
-    fireEvent(this, "dialog-closed", { dialog: this.localName });
+    // The dialog manager already tracks the new opening, which this close
+    // must not end
+    if (!this._reopening) {
+      fireEvent(this, "dialog-closed", { dialog: this.localName });
+    }
     if (!this._closeState) {
       this._cancel();
     }
@@ -261,6 +322,9 @@ class DialogBox extends LitElement {
     }
     ha-input {
       width: 100%;
+    }
+    .after-input {
+      margin-top: var(--ha-space-4);
     }
     .title {
       font-weight: inherit;

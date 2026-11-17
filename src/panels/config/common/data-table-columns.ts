@@ -38,6 +38,7 @@ export function getDomainTableColumn<T>(
     title: localize("ui.panel.config.generic.headers.domain"),
     hidden: true,
     groupable: true,
+    urlName: "entity_domain",
     filterable: true,
     sortable: false,
   };
@@ -49,6 +50,7 @@ export function getAreaTableColumn<T>(
   return {
     title: localize("ui.panel.config.generic.headers.area"),
     groupable: true,
+    urlName: "area",
     filterable: true,
     sortable: true,
     minWidth: "120px",
@@ -62,6 +64,7 @@ export function getFloorTableColumn<T>(
     title: localize("ui.panel.config.generic.headers.floor"),
     defaultHidden: true,
     groupable: true,
+    urlName: "floor",
     filterable: true,
     sortable: true,
     minWidth: "120px",
@@ -75,6 +78,7 @@ export function getCategoryTableColumn<T>(
     title: localize("ui.panel.config.generic.headers.category"),
     defaultHidden: true,
     groupable: true,
+    urlName: "category",
     filterable: true,
     sortable: true,
   };
@@ -92,21 +96,25 @@ export function getEditableTableColumn<T>(
     minWidth: "88px",
     maxWidth: "88px",
     template: (entry: any) => html`
-      ${!entry.editable
-        ? html`
-            <ha-svg-icon
-              .id="icon-edit-${slugify(entry.entity_id)}"
-              .path=${mdiPencilOff}
-              style="color: var(--secondary-text-color)"
-            ></ha-svg-icon>
-            <ha-tooltip
-              .for="icon-edit-${slugify(entry.entity_id)}"
-              placement="left"
-            >
-              ${tooltip}
-            </ha-tooltip>
-          `
-        : nothing}
+      ${
+        !entry.editable
+          ? html`
+              <ha-svg-icon
+                .id="icon-edit-${slugify(entry.entity_id)}"
+                .path=${mdiPencilOff}
+                role="img"
+                aria-label=${tooltip}
+                style="color: var(--secondary-text-color)"
+              ></ha-svg-icon>
+              <ha-tooltip
+                .for="icon-edit-${slugify(entry.entity_id)}"
+                placement="left"
+              >
+                ${tooltip}
+              </ha-tooltip>
+            `
+          : nothing
+      }
     `,
   };
 }
@@ -163,12 +171,14 @@ export const renderRelativeTimeColumn = (
   );
   const elementId = valueName + "-" + slugify(entity_id);
   return html`
-    ${dayDifference > 3
-      ? formattedTime
-      : html`
-          <ha-tooltip for=${elementId}>${formattedTime}</ha-tooltip>
-          <span id=${elementId}>${relativeTime(date, hass.locale)}</span>
-        `}
+    ${
+      dayDifference > 3
+        ? formattedTime
+        : html`
+            <ha-tooltip for=${elementId}>${formattedTime}</ha-tooltip>
+            <span id=${elementId}>${relativeTime(date, hass.locale)}</span>
+          `
+    }
   `;
 };
 
@@ -199,10 +209,10 @@ export function getModifiedAtTableColumn<T>(
 }
 
 const renderDateTimeColumn = (valueDateTime: number, hass: HomeAssistant) =>
-  html`${valueDateTime
+  valueDateTime
     ? formatShortDateTimeWithConditionalYear(
         new Date(valueDateTime * 1000),
         hass.locale,
         hass.config
       )
-    : nothing}`;
+    : nothing;

@@ -18,7 +18,7 @@ import { getExtendedEntityRegistryEntry } from "./entity/entity_registry";
 export const FORMAT_TEXT = "text";
 export const FORMAT_NUMBER = "number";
 
-export const enum AlarmControlPanelEntityFeature {
+export enum AlarmControlPanelEntityFeature {
   ARM_HOME = 1,
   ARM_AWAY = 2,
   ARM_NIGHT = 4,
@@ -38,7 +38,7 @@ export interface AlarmControlPanelEntity extends HassEntityBase {
 }
 
 export const callAlarmAction = (
-  hass: HomeAssistant,
+  hass: Pick<HomeAssistant, "callService">,
   entity: string,
   action:
     | "arm_away"
@@ -49,7 +49,7 @@ export const callAlarmAction = (
     | "disarm",
   code?: string
 ) => {
-  hass!.callService("alarm_control_panel", `alarm_${action}`, {
+  hass.callService("alarm_control_panel", `alarm_${action}`, {
     entity_id: entity,
     code,
   });
@@ -108,7 +108,7 @@ export const supportedAlarmModes = (stateObj: AlarmControlPanelEntity) =>
 
 export const setProtectedAlarmControlPanelMode = async (
   element: HTMLElement,
-  hass: HomeAssistant,
+  hass: Pick<HomeAssistant, "callService" | "localize" | "callWS">,
   stateObj: AlarmControlPanelEntity,
   mode: AlarmMode
 ) => {
@@ -123,7 +123,7 @@ export const setProtectedAlarmControlPanelMode = async (
     (mode === "disarmed" && stateObj.attributes.code_format)
   ) {
     const entry = await getExtendedEntityRegistryEntry(
-      hass,
+      hass.callWS,
       stateObj.entity_id
     ).catch(() => undefined);
     const defaultCode = entry?.options?.alarm_control_panel?.default_code;

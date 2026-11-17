@@ -1,9 +1,14 @@
 import type { HaListItemBase } from "../item/ha-list-item-base";
+import type { HaListBase } from "./ha-list-base";
 
-export interface HaListSelectedDetail {
-  index: number | Set<number>;
-  diff?: { added: Set<number>; removed: Set<number> };
-  value?: string | string[];
+/** Where `moveActiveItem()` moves the active row of a list. */
+export type HaListMoveTarget =
+  "next" | "previous" | "first" | "last" | "next-page" | "previous-page";
+
+/** Range of rows a virtualized list currently shows. */
+export interface HaListVisibilityChangedDetail {
+  first: number;
+  last: number;
 }
 
 export interface HaListActivatedDetail {
@@ -13,12 +18,15 @@ export interface HaListActivatedDetail {
 
 export interface HaListItemRegistrationDetail {
   item: HaListItemBase;
+  list?: HaListBase;
 }
 
 declare global {
   interface HASSDomEvents {
-    "ha-list-selected": HaListSelectedDetail;
+    "ha-list-item-selected": number;
+    "ha-list-item-deselected": number;
     "ha-list-activated": HaListActivatedDetail;
+    "ha-list-visibility-changed": HaListVisibilityChangedDetail;
     "ha-list-item-register": HaListItemRegistrationDetail;
     "ha-list-item-unregister": HaListItemRegistrationDetail;
   }

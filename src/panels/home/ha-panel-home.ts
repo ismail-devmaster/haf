@@ -15,9 +15,12 @@ import { updateDeviceRegistryEntry } from "../../data/device/device_registry";
 import {
   fetchFrontendSystemData,
   saveFrontendSystemData,
+  subscribeFrontendSystemData,
   type HomeFrontendSystemData,
+  type SecurityFrontendSystemData,
 } from "../../data/frontend";
 import type { LovelaceDashboardStrategyConfig } from "../../data/lovelace/config/types";
+import { SubscribeMixin } from "../../mixins/subscribe-mixin";
 import { mdiHomeAssistant } from "../../resources/home-assistant-logo-svg";
 import type { HomeAssistant, PanelInfo, Route } from "../../types";
 import { showToast } from "../../util/toast";
@@ -26,14 +29,17 @@ import { showDeviceRegistryDetailDialog } from "../config/devices/device-registr
 import { showAddIntegrationDialog } from "../config/integrations/show-add-integration-dialog";
 import "../lovelace/hui-root";
 import type { ExtraActionItem } from "../lovelace/hui-root";
-import { expandLovelaceConfigStrategies } from "../lovelace/strategies/get-strategy";
+import {
+  checkStrategyShouldRegenerate,
+  generateLovelaceDashboardStrategy,
+} from "../lovelace/strategies/get-strategy";
 import type { Lovelace } from "../lovelace/types";
 import { showEditHomeDialog } from "./dialogs/show-dialog-edit-home";
 import { showNewOverviewDialog } from "./dialogs/show-dialog-new-overview";
 import { hasLegacyOverviewPanel } from "../../data/panel";
 
 @customElement("ha-panel-home")
-class PanelHome extends LitElement {
+class PanelHome extends SubscribeMixin(LitElement) {
   @property({ attribute: false }) public hass!: HomeAssistant;
 
   @property({ type: Boolean, reflect: true }) public narrow = false;
@@ -44,7 +50,9 @@ class PanelHome extends LitElement {
 
   @state() private _lovelace?: Lovelace;
 
-  @state() private _config: FrontendSystemData["home"] = {};
+  @state() private _config?: HomeFrontendSystemData;
+
+  @state() private _securityConfig: SecurityFrontendSystemData = {};
 
   @state() private _extraActionItems?: ExtraActionItem[];
 
@@ -52,9 +60,31 @@ class PanelHome extends LitElement {
 
   private _loadConfigPromise?: Promise<void>;
 
+  private _securityConfigRevision = 0;
+
+  public hassSubscribe() {
+    return [
+      subscribeFrontendSystemData(
+        this.hass.connection,
+        "security",
+        ({ value }) => {
+          this._securityConfigRevision++;
+          const config = value || {};
+          if (deepEqual(config, this._securityConfig)) {
+            return;
+          }
+          this._securityConfig = config;
+          if (this.hasUpdated) {
+            this._setLovelace();
+          }
+        }
+      ),
+    ];
+  }
+
   private get _showBanner(): boolean {
-    // Don't show if already dismissed
-    if (this._config.welcome_banner_dismissed) {
+    // Don't show until the config loaded or if already dismissed
+    if (!this._config || this._config.welcome_banner_dismissed) {
       return false;
     }
     // Don't show if HA is not running
@@ -93,37 +123,54 @@ class PanelHome extends LitElement {
       return;
     }
 
-    const oldHass = changedProps.get("hass") as this["hass"];
-    if (oldHass && oldHass.localize !== this.hass.localize) {
+    const oldHass = changedProps.get("hass") as this["hass"] | undefined;
+    if (!oldHass) {
+      return;
+    }
+
+    // Locale changed: regenerate to refresh translated content
+    if (oldHass.localize !== this.hass.localize) {
       this._setLovelace();
       return;
     }
 
-    if (oldHass && this.hass) {
-      // If the entity registry changed, ask the user if they want to refresh the config
-      if (
-        oldHass.entities !== this.hass.entities ||
-        oldHass.devices !== this.hass.devices ||
-        oldHass.areas !== this.hass.areas ||
-        oldHass.floors !== this.hass.floors ||
-        oldHass.panels !== this.hass.panels
-      ) {
-        if (this.hass.config.state === "RUNNING") {
-          this._debounceRegistriesChanged();
-          return;
-        }
-      }
-      // If ha started, refresh the config
-      if (
-        this.hass.config.state === "RUNNING" &&
-        oldHass.config.state !== "RUNNING"
-      ) {
-        this._setup();
-      }
+    if (this.hass.config.state !== "RUNNING") {
+      return;
+    }
+
+    // Home Assistant just started: run the full setup
+    if (oldHass.config.state !== "RUNNING") {
+      this._setup();
+      return;
+    }
+
+    // A registry the strategy depends on changed: regenerate
+    if (
+      checkStrategyShouldRegenerate(
+        "dashboard",
+        this._strategyConfig.strategy,
+        oldHass,
+        this.hass
+      )
+    ) {
+      this._debounceRegenerateStrategy();
     }
   }
 
   private async _setup() {
+    void import("../lovelace/strategies/home/home-dashboard-strategy").catch(
+      () => undefined
+    );
+    void import("../lovelace/strategies/home/home-overview-view-strategy")
+      .then(({ preloadHomeEnergyPreferences }) => {
+        const path = this.route?.path?.split("/")[1];
+        return !path || path === "overview"
+          ? preloadHomeEnergyPreferences(this.hass)
+          : undefined;
+      })
+      .catch(() => undefined);
+    void import("../lovelace/views/hui-sections-view").catch(() => undefined);
+
     this._updateExtraActionItems();
     this._loadConfigPromise = this._loadConfig();
     await this._loadConfigPromise;
@@ -131,25 +178,50 @@ class PanelHome extends LitElement {
   }
 
   private async _loadConfig() {
-    try {
-      const [_, data] = await Promise.all([
+    const securityConfigRevision = this._securityConfigRevision;
+    const [translationsResult, homeResult, securityResult] =
+      await Promise.allSettled([
         this.hass.loadFragmentTranslation("lovelace"),
         fetchFrontendSystemData(this.hass.connection, "home"),
+        fetchFrontendSystemData(this.hass.connection, "security"),
       ]);
-      this._config = data || {};
-    } catch (err) {
+
+    if (translationsResult.status === "rejected") {
       // eslint-disable-next-line no-console
-      console.error("Failed to load favorites:", err);
-      this._config = {};
+      console.error(
+        "Failed to load Lovelace translations:",
+        translationsResult.reason
+      );
+    }
+
+    if (homeResult.status === "rejected") {
+      // eslint-disable-next-line no-console
+      console.error("Failed to load home configuration:", homeResult.reason);
+      this._config = undefined;
+    } else {
+      this._config = homeResult.value || {};
+    }
+
+    if (securityResult.status === "rejected") {
+      // eslint-disable-next-line no-console
+      console.error(
+        "Failed to load security configuration:",
+        securityResult.reason
+      );
+      if (securityConfigRevision === this._securityConfigRevision) {
+        this._securityConfig = {};
+      }
+    } else if (securityConfigRevision === this._securityConfigRevision) {
+      this._securityConfig = securityResult.value || {};
     }
   }
 
-  private _debounceRegistriesChanged = debounce(
-    () => this._registriesChanged(),
+  private _debounceRegenerateStrategy = debounce(
+    () => this._regenerateStrategyConfig(),
     200
   );
 
-  private _registriesChanged = async () => {
+  private _regenerateStrategyConfig() {
     // If on an area view that no longer exists, redirect to overview
     const path = this.route?.path?.split("/")[1];
     if (path?.startsWith("areas-")) {
@@ -160,7 +232,7 @@ class PanelHome extends LitElement {
       }
     }
     this._setLovelace();
-  };
+  }
 
   private _updateExtraActionItems() {
     const path = this.route?.path?.split("/")[1];
@@ -188,7 +260,7 @@ class PanelHome extends LitElement {
 
   private _editHome = () => {
     showEditHomeDialog(this, {
-      config: this._config,
+      config: this._config ?? {},
       saveConfig: async (config) => {
         await this._saveConfig(config);
       },
@@ -209,7 +281,7 @@ class PanelHome extends LitElement {
     showAreaRegistryDetailDialog(this, {
       entry: area,
       updateEntry: (values) =>
-        updateAreaRegistryEntry(this.hass, areaId, values),
+        updateAreaRegistryEntry(this.hass.callWS, areaId, values),
     });
   };
 
@@ -244,7 +316,7 @@ class PanelHome extends LitElement {
     showDeviceRegistryDetailDialog(this, {
       device,
       updateEntry: async (updates) => {
-        await updateDeviceRegistryEntry(this.hass, deviceId, updates);
+        await updateDeviceRegistryEntry(this.hass.callWS, deviceId, updates);
       },
     });
   }
@@ -290,7 +362,7 @@ class PanelHome extends LitElement {
           </span>
         </div>
         <div class="banner-actions">
-          <ha-button size="small" appearance="filled" @click=${this._learnMore}>
+          <ha-button size="s" appearance="filled" @click=${this._learnMore}>
             ${this.hass.localize("ui.panel.home.banner.learn_more")}
           </ha-button>
         </div>
@@ -310,6 +382,9 @@ class PanelHome extends LitElement {
   private _learnMore() {
     showNewOverviewDialog(this, {
       dismiss: async () => {
+        if (!this._config) {
+          return;
+        }
         const newConfig = {
           ...this._config,
           welcome_banner_dismissed: true,
@@ -320,29 +395,28 @@ class PanelHome extends LitElement {
     });
   }
 
+  private get _strategyConfig(): LovelaceDashboardStrategyConfig {
+    return {
+      strategy: {
+        type: "home",
+        alert_entities: this._securityConfig.alert_entities,
+        favorite_entities: this._config?.favorite_entities,
+        home_panel: true,
+        hide_welcome_message: this._config?.hide_welcome_message,
+        hide_suggested_entities: this._config?.hide_suggested_entities,
+        shortcuts: this._config?.shortcuts,
+      },
+    };
+  }
+
   private async _setLovelace() {
     if (this._loadConfigPromise) {
       await this._loadConfigPromise;
     }
-    const strategyConfig: LovelaceDashboardStrategyConfig = {
-      strategy: {
-        type: "home",
-        favorite_entities: this._config.favorite_entities,
-        home_panel: true,
-        hide_welcome_message: this._config.hide_welcome_message,
-        hide_suggested_entities: this._config.hide_suggested_entities,
-        shortcuts: this._config.shortcuts,
-      },
-    };
-
-    const config = await expandLovelaceConfigStrategies(
-      strategyConfig,
+    const config = await generateLovelaceDashboardStrategy(
+      this._strategyConfig,
       this.hass
     );
-
-    if (deepEqual(config, this._lovelace?.config)) {
-      return;
-    }
 
     this._lovelace = {
       config: config,

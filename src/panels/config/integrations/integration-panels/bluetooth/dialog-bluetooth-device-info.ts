@@ -1,7 +1,8 @@
-import type { TemplateResult } from "lit";
-import { html, LitElement, nothing } from "lit";
+import type { CSSResultGroup, TemplateResult } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { fireEvent } from "../../../../../common/dom/fire_event";
+import { navigate } from "../../../../../common/navigate";
 import { copyToClipboard } from "../../../../../common/util/copy-clipboard";
 import "../../../../../components/ha-button";
 import "../../../../../components/ha-dialog-footer";
@@ -48,6 +49,14 @@ class DialogBluetoothDeviceInfo extends LitElement {
     showToast(this, {
       message: this.hass.localize("ui.common.copied_clipboard"),
     });
+  }
+
+  private _openDevice(): void {
+    if (!this._params?.deviceId) {
+      return;
+    }
+    navigate(`/config/devices/device/${this._params.deviceId}`);
+    this.closeDialog();
   }
 
   protected render(): TemplateResult | typeof nothing {
@@ -121,7 +130,33 @@ class DialogBluetoothDeviceInfo extends LitElement {
             )}
           </tbody>
         </table>
+
+        ${
+          this._params.entry.raw
+            ? html`
+                <h4>
+                  ${this.hass.localize(
+                    "ui.panel.config.bluetooth.raw_advertisement"
+                  )}
+                </h4>
+                <div class="raw">
+                  ${this.showDataAsHex(this._params.entry.raw)}
+                </div>
+              `
+            : nothing
+        }
         <ha-dialog-footer slot="footer">
+          ${
+            this._params.deviceId
+              ? html`
+                  <ha-button slot="primaryAction" @click=${this._openDevice}>
+                    ${this.hass.localize(
+                      "ui.panel.config.bluetooth.open_device"
+                    )}
+                  </ha-button>
+                `
+              : nothing
+          }
           <ha-button
             slot="secondaryAction"
             appearance="plain"
@@ -133,6 +168,14 @@ class DialogBluetoothDeviceInfo extends LitElement {
       </ha-dialog>
     `;
   }
+
+  static readonly styles: CSSResultGroup = css`
+    .raw {
+      word-break: break-all;
+      font-family: var(--ha-font-family-code);
+      font-size: var(--ha-font-size-s);
+    }
+  `;
 }
 
 declare global {

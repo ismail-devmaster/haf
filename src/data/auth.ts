@@ -6,13 +6,15 @@ export interface AuthUrlSearchParams {
   client_id?: string;
   redirect_uri?: string;
   state?: string;
+  code_challenge?: string;
+  code_challenge_method?: string;
+  response_type?: string;
 }
 
 export interface AuthProvider {
   name: string;
   id: string;
   type: string;
-  users?: Record<string, string>;
 }
 
 export interface Credential {
@@ -52,7 +54,7 @@ export const autocompleteLoginFields = (schema: HaFormSchema[]) =>
   });
 
 export const getSignedPath = (
-  hass: HomeAssistant,
+  hass: Pick<HomeAssistant, "callWS">,
   path: string
 ): Promise<SignedPath> => hass.callWS({ type: "auth/sign_path", path });
 
@@ -64,7 +66,10 @@ export const fetchAuthProviders = () =>
 export const createLoginFlow = (
   client_id: string | undefined,
   redirect_uri: string | undefined,
-  handler: (string | null)[]
+  handler: (string | null)[],
+  code_challenge?: string,
+  code_challenge_method?: string,
+  response_type?: string
 ) =>
   fetch("/auth/login_flow", {
     method: "POST",
@@ -73,6 +78,9 @@ export const createLoginFlow = (
       client_id,
       handler,
       redirect_uri,
+      code_challenge,
+      code_challenge_method,
+      response_type,
     }),
   });
 
@@ -98,13 +106,13 @@ export const redirectWithAuthCode = (
   // OAuth 2: 3.1.2 we need to retain query component of a redirect URI
   if (!url.includes("?")) {
     url += "?";
-  } else if (!url.endsWith("&")) {
+  } else if (!url.endsWith("?") && !url.endsWith("&")) {
     url += "&";
   }
 
   url += `code=${encodeURIComponent(authCode)}`;
 
-  if (oauth2State) {
+  if (oauth2State !== undefined) {
     url += `&state=${encodeURIComponent(oauth2State)}`;
   }
   if (storeToken) {

@@ -50,6 +50,10 @@ export class HaDateInput extends LitElement {
 
   @property() public label?: string;
 
+  /** Accessible name for the input when it has no visible label. */
+  @property({ attribute: "accessible-label" })
+  public accessibleLabel?: string;
+
   @property() public helper?: string;
 
   @property({ attribute: "can-clear", type: Boolean }) public canClear = false;
@@ -65,19 +69,22 @@ export class HaDateInput extends LitElement {
       .label=${this.label ?? ""}
       .hint=${this.helper ?? ""}
       .disabled=${this.disabled}
+      .accessibleLabel=${this.accessibleLabel}
       readonly
       @click=${this._openDialog}
       @keydown=${this._keyDown}
-      .value=${this.value
-        ? formatDateNumeric(
-            new Date(`${this.value.split("T")[0]}T00:00:00`),
-            {
-              ...this.locale,
-              time_zone: TimeZone.local,
-            },
-            {} as HassConfig
-          )
-        : ""}
+      .value=${
+        this.value
+          ? formatDateNumeric(
+              new Date(`${this.value.split("T")[0]}T00:00:00`),
+              {
+                ...this.locale,
+                time_zone: TimeZone.local,
+              },
+              {} as HassConfig
+            )
+          : ""
+      }
       .required=${this.required}
     >
       <ha-svg-icon slot="end" .path=${mdiCalendar}></ha-svg-icon>

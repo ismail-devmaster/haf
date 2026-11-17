@@ -1,8 +1,9 @@
 import "@home-assistant/webawesome/dist/components/tag/tag";
-import { mdiHelpCircleOutline } from "@mdi/js";
+import { mdiCheckCircle, mdiHelpCircleOutline } from "@mdi/js";
 import type { TemplateResult } from "lit";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property } from "lit/decorators";
+import "../../../../components/ha-app-icon";
 import "../../../../components/ha-svg-icon";
 import type { AddonStage, AddonState } from "../../../../data/hassio/addon";
 import type { HomeAssistant } from "../../../../types";
@@ -25,7 +26,9 @@ class SupervisorAppsCardContent extends LitElement {
 
   @property() public stage: AddonStage = "stable";
 
-  @property() public state: AddonState = null;
+  @property() public state?: AddonState;
+
+  @property({ type: Boolean }) public installed = false;
 
   @property() public description?: string;
 
@@ -39,28 +42,37 @@ class SupervisorAppsCardContent extends LitElement {
 
   @property() public icon = mdiHelpCircleOutline;
 
-  @property({ attribute: false }) public iconImage?: string;
+  @property({ attribute: false }) public appSlug?: string;
+
+  @property({ attribute: false }) public hasAppIcon?: boolean;
 
   protected render(): TemplateResult {
     return html`
       <div class="app">
         <div class="icon-wrapper">
-          ${this.iconImage
-            ? html`
-                <img
-                  class="icon-image"
-                  src=${this.iconImage}
-                  .title=${this.iconTitle}
-                  alt=${this.iconTitle ?? ""}
-                />
-              `
-            : html`
-                <ha-svg-icon
-                  class="app-icon"
-                  .path=${this.icon}
-                  .title=${this.iconTitle}
-                ></ha-svg-icon>
-              `}
+          ${
+            this.appSlug
+              ? html`
+                  <ha-app-icon
+                    .slug=${this.appSlug}
+                    .hasIcon=${this.hasAppIcon}
+                    .alt=${this.iconTitle ?? ""}
+                    .title=${this.iconTitle ?? ""}
+                  >
+                    <ha-svg-icon
+                      class="app-icon"
+                      .path=${this.icon}
+                    ></ha-svg-icon>
+                  </ha-app-icon>
+                `
+              : html`
+                  <ha-svg-icon
+                    class="app-icon"
+                    .path=${this.icon}
+                    .title=${this.iconTitle}
+                  ></ha-svg-icon>
+                `
+          }
         </div>
         <div>
           <div class="title-row">
@@ -77,28 +89,44 @@ class SupervisorAppsCardContent extends LitElement {
           </div>
         </div>
       </div>
-      ${this.tags?.length || this.state
-        ? html`
-            <div class="footer">
-              <supervisor-apps-state
-                .state=${this.state || "unknown"}
-              ></supervisor-apps-state>
-
-              ${this.tags?.length
-                ? html`<div class="tags">
-                    ${this.tags.map(
-                      (tag) =>
-                        html`<supervisor-apps-tag
-                          .variant=${tag.variant}
-                          .iconPath=${tag.iconPath}
-                          .label=${tag.label}
-                        ></supervisor-apps-tag>`
-                    )}
-                  </div>`
-                : nothing}
-            </div>
-          `
-        : nothing}
+      ${
+        this.tags?.length || this.state !== undefined || this.installed
+          ? html`
+              <div class="footer">
+                ${
+                  this.state !== undefined
+                    ? html`<supervisor-apps-state
+                        .state=${this.state || "unknown"}
+                      ></supervisor-apps-state>`
+                    : this.installed
+                      ? html`<div class="installed">
+                          <ha-svg-icon .path=${mdiCheckCircle}></ha-svg-icon>
+                          <span
+                            >${this.hass.localize(
+                              "ui.panel.config.apps.state.installed"
+                            )}</span
+                          >
+                        </div>`
+                      : html`<span></span>`
+                }
+                ${
+                  this.tags?.length
+                    ? html`<div class="tags">
+                        ${this.tags.map(
+                          (tag) =>
+                            html`<supervisor-apps-tag
+                              .variant=${tag.variant}
+                              .iconPath=${tag.iconPath}
+                              .label=${tag.label}
+                            ></supervisor-apps-tag>`
+                        )}
+                      </div>`
+                    : nothing
+                }
+              </div>
+            `
+          : nothing
+      }
     `;
   }
 
@@ -114,15 +142,15 @@ class SupervisorAppsCardContent extends LitElement {
       width: 40px;
       height: 40px;
       flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .app-icon {
-      margin-left: var(--ha-space-2);
-      margin-top: var(--ha-space-2);
       color: var(--secondary-text-color);
     }
-    .icon-image {
-      max-height: 40px;
-      max-width: 40px;
+    ha-app-icon {
+      --ha-app-icon-size: 40px;
     }
     .title {
       flex: 1;
@@ -147,8 +175,6 @@ class SupervisorAppsCardContent extends LitElement {
       line-height: var(--ha-line-height-condensed);
     }
     .footer {
-      border-top: var(--ha-border-width-sm) solid
-        var(--ha-color-border-neutral-quiet);
       padding-top: var(--ha-space-2);
       display: flex;
       gap: var(--ha-space-2);
@@ -158,6 +184,17 @@ class SupervisorAppsCardContent extends LitElement {
     .tags {
       display: flex;
       gap: var(--ha-space-2);
+    }
+    .installed {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--ha-space-2);
+      color: var(--ha-color-text-secondary);
+      font-size: var(--ha-font-size-m);
+    }
+    .installed ha-svg-icon {
+      --mdc-icon-size: 16px;
+      color: var(--ha-color-on-success-normal);
     }
   `;
 }

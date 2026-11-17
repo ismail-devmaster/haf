@@ -1,3 +1,4 @@
+import { sanitizeHttpUrl } from "../../../common/url/sanitize-http-url";
 import {
   getCustomBadgeEntry,
   getCustomCardEntry,
@@ -24,6 +25,11 @@ const NON_STANDARD_CARD_URLS = {
   "energy-devices-graph": "energy/#devices-energy-graph",
   "energy-devices-detail-graph": "energy/#detail-devices-energy-graph",
   "energy-sankey": "energy/#sankey-energy-graph",
+  "power-sankey": "energy/#power-flow-sankey-graph",
+  "water-sankey": "energy/#water-sankey-graph",
+  "water-flow-sankey": "energy/#water-flow-sankey-graph",
+  "gas-sankey": "energy/#gas-sankey-graph",
+  "gas-flow-sankey": "energy/#gas-flow-sankey-graph",
   "power-sources-graph": "energy/#power-sources-graph",
 };
 
@@ -38,7 +44,9 @@ export const getCardDocumentationURL = (
   type: string
 ): string | undefined => {
   if (isCustomType(type)) {
-    return getCustomCardEntry(stripCustomPrefix(type))?.documentationURL;
+    return sanitizeHttpUrl(
+      getCustomCardEntry(stripCustomPrefix(type))?.documentationURL
+    );
   }
 
   return `${documentationUrl(hass, "/dashboards/")}${NON_STANDARD_CARD_URLS[type] || type}`;
@@ -49,7 +57,9 @@ export const getBadgeDocumentationURL = (
   type: string
 ): string | undefined => {
   if (isCustomType(type)) {
-    return getCustomBadgeEntry(stripCustomPrefix(type))?.documentationURL;
+    return sanitizeHttpUrl(
+      getCustomBadgeEntry(stripCustomPrefix(type))?.documentationURL
+    );
   }
 
   return `${documentationUrl(hass, "/dashboards/")}${NON_STANDARD_BADGE_URLS[type] || "badges"}`;

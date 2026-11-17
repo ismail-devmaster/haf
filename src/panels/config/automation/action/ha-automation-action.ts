@@ -12,10 +12,10 @@ import "../../../../components/ha-sortable";
 import "../../../../components/ha-svg-icon";
 import {
   ACTION_BUILDING_BLOCKS,
-  VIRTUAL_ACTIONS,
+  getAutomationActionType,
 } from "../../../../data/action";
-import { getValueFromDynamic, isDynamic } from "../../../../data/automation";
 import type { Action } from "../../../../data/script";
+import { createAction } from "../automation-element-config";
 import { EDITOR_SAVE_FAB_TOAST_BOTTOM_OFFSET } from "../editor-toast";
 import {
   getAddAutomationElementTargetFromQuery,
@@ -25,7 +25,7 @@ import {
 import { AutomationSortableListMixin } from "../ha-automation-sortable-list-mixin";
 import { automationRowsStyles } from "../styles";
 import type HaAutomationActionRow from "./ha-automation-action-row";
-import { getAutomationActionType } from "./ha-automation-action-row";
+import "./ha-automation-action-row";
 
 @customElement("ha-automation-action")
 export default class HaAutomationAction extends AutomationSortableListMixin<Action>(
@@ -85,6 +85,7 @@ export default class HaAutomationAction extends AutomationSortableListMixin<Acti
                 @duplicate=${this.duplicateItem}
                 @paste=${this.pasteItem}
                 @insert-after=${this.insertAfter}
+                @replace-item=${this.replaceItem}
                 @move-down=${this.moveDown}
                 @move-up=${this.moveUp}
                 @value-changed=${this.itemChanged}
@@ -94,24 +95,26 @@ export default class HaAutomationAction extends AutomationSortableListMixin<Acti
                 .sortSelected=${this.rowSortSelected === idx}
                 @stop-sort-selection=${this.stopSortSelection}
               >
-                ${!this.disabled
-                  ? html`
-                      <div
-                        tabindex="0"
-                        class="handle ${this.rowSortSelected === idx
-                          ? "active"
-                          : ""}"
-                        slot="icons"
-                        @keydown=${this.handleDragKeydown}
-                        @click=${stopPropagation}
-                        .index=${idx}
-                      >
-                        <ha-svg-icon
-                          .path=${mdiDragHorizontalVariant}
-                        ></ha-svg-icon>
-                      </div>
-                    `
-                  : nothing}
+                ${
+                  !this.disabled
+                    ? html`
+                        <div
+                          tabindex="0"
+                          class="handle ${
+                            this.rowSortSelected === idx ? "active" : ""
+                          }"
+                          slot="icons"
+                          @keydown=${this.handleDragKeydown}
+                          @click=${stopPropagation}
+                          .index=${idx}
+                        >
+                          <ha-svg-icon
+                            .path=${mdiDragHorizontalVariant}
+                          ></ha-svg-icon>
+                        </div>
+                      `
+                    : nothing
+                }
               </ha-automation-action-row>
             `
           )}
@@ -120,7 +123,7 @@ export default class HaAutomationAction extends AutomationSortableListMixin<Acti
               .disabled=${this.disabled}
               @click=${this._addActionDialog}
               .appearance=${this.root ? "accent" : "filled"}
-              .size=${this.root ? "medium" : "small"}
+              .size=${this.root ? "m" : "s"}
             >
               <ha-svg-icon .path=${mdiPlus} slot="start"></ha-svg-icon>
               ${this.hass.localize(
@@ -143,6 +146,7 @@ export default class HaAutomationAction extends AutomationSortableListMixin<Acti
     const addActionTargetFromQuery = getAddAutomationElementTargetFromQuery(
       this.hass.states,
       this.hass.devices,
+      this.hass.areas,
       "action"
     );
 
@@ -185,12 +189,6 @@ export default class HaAutomationAction extends AutomationSortableListMixin<Acti
           (!ACTION_BUILDING_BLOCKS.includes(type) || mode === "moved")
         ) {
           row.openSidebar();
-          if (this.narrow) {
-            row.scrollIntoView({
-              block: "start",
-              behavior: "smooth",
-            });
-          }
         }
 
         if (mode === "new") {
@@ -233,27 +231,12 @@ export default class HaAutomationAction extends AutomationSortableListMixin<Acti
   }
 
   private _addAction = (action: string, target?: HassServiceTarget) => {
-    let actions: Action[];
-    if (action === PASTE_VALUE) {
-      actions = this.actions.concat(deepClone(this._clipboard!.action!));
-    } else if (action in VIRTUAL_ACTIONS) {
-      actions = this.actions.concat(VIRTUAL_ACTIONS[action]);
-    } else if (isDynamic(action)) {
-      actions = this.actions.concat({
-        action: getValueFromDynamic(action),
-        metadata: {},
-        target,
-      });
-    } else {
-      const elClass = customElements.get(
-        `ha-automation-action-${action}`
-      ) as CustomElementConstructor & { defaultConfig: Action };
-      actions = this.actions.concat(
-        elClass ? { ...elClass.defaultConfig } : { [action]: {} }
-      );
-    }
+    const newAction =
+      action === PASTE_VALUE
+        ? deepClone(this._clipboard!.action!)
+        : createAction(action, target);
     this.focusLastItemOnChange = true;
-    fireEvent(this, "value-changed", { value: actions });
+    fireEvent(this, "value-changed", { value: this.actions.concat(newAction) });
   };
 
   static styles = automationRowsStyles;

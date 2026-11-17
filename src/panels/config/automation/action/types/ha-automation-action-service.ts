@@ -10,6 +10,7 @@ import "../../../../../components/input/ha-input";
 import type { HaInput } from "../../../../../components/input/ha-input";
 import type { ServiceAction } from "../../../../../data/script";
 import { serviceActionStruct } from "../../../../../data/script";
+import type { LocalizeFunc } from "../../../../../common/translations/localize";
 import type { HomeAssistant } from "../../../../../types";
 import type { ActionElement } from "../ha-automation-action-row";
 
@@ -31,28 +32,33 @@ export class HaServiceAction extends LitElement implements ActionElement {
     return { action: "", data: {} };
   }
 
+  public static checkUiSupport(
+    localize: LocalizeFunc,
+    action: ServiceAction
+  ): Error | undefined {
+    try {
+      assert(action, serviceActionStruct);
+    } catch (err: any) {
+      return err;
+    }
+    if (
+      action &&
+      Object.entries(action).some(
+        ([key, val]) => !["data", "target"].includes(key) && hasTemplate(val)
+      )
+    ) {
+      return Error(localize("ui.errors.config.no_template_editor_support"));
+    }
+    return undefined;
+  }
+
   protected willUpdate(changedProperties: PropertyValues<this>) {
     if (!changedProperties.has("action")) {
       return;
     }
-    try {
-      assert(this.action, serviceActionStruct);
-    } catch (err: any) {
+    const err = HaServiceAction.checkUiSupport(this.hass.localize, this.action);
+    if (err) {
       fireEvent(this, "ui-mode-not-available", err);
-      return;
-    }
-
-    if (
-      this.action &&
-      Object.entries(this.action).some(
-        ([key, val]) => !["data", "target"].includes(key) && hasTemplate(val)
-      )
-    ) {
-      fireEvent(
-        this,
-        "ui-mode-not-available",
-        Error(this.hass.localize("ui.errors.config.no_template_editor_support"))
-      );
       return;
     }
     if (this.action.entity_id) {
@@ -88,49 +94,59 @@ export class HaServiceAction extends LitElement implements ActionElement {
         .hidePicker=${!!this._action.metadata}
         @value-changed=${this._actionChanged}
       ></ha-service-control>
-      ${domain && service && this.hass.services[domain]?.[service]?.response
-        ? html`<ha-settings-row .narrow=${this.narrow}>
-            ${optionalResponse
-              ? html`<ha-checkbox
-                  .checked=${!!this._action.response_variable ||
-                  this._responseChecked}
-                  .disabled=${this.disabled}
-                  @change=${this._responseCheckboxChanged}
-                  slot="prefix"
-                ></ha-checkbox>`
-              : html`<div slot="prefix" class="checkbox-spacer"></div>`}
-            <span
-              slot="heading"
-              class=${optionalResponse ? "clickable" : ""}
-              @click=${optionalResponse ? this._toggleCheckbox : undefined}
-              >${this.hass.localize(
-                "ui.panel.config.automation.editor.actions.type.service.response_variable"
-              )}</span
-            >
-            <span
-              slot="description"
-              class=${optionalResponse ? "clickable" : ""}
-              @click=${optionalResponse ? this._toggleCheckbox : undefined}
-            >
-              ${optionalResponse
-                ? this.hass.localize(
-                    "ui.panel.config.automation.editor.actions.type.service.has_optional_response"
-                  )
-                : this.hass.localize(
-                    "ui.panel.config.automation.editor.actions.type.service.has_response"
-                  )}
-            </span>
-            <ha-input
-              .value=${this._action.response_variable || ""}
-              .required=${!optionalResponse}
-              .disabled=${this.disabled ||
-              (optionalResponse &&
-                !this._action.response_variable &&
-                !this._responseChecked)}
-              @change=${this._responseVariableChanged}
-            ></ha-input>
-          </ha-settings-row>`
-        : nothing}
+      ${
+        domain && service && this.hass.services[domain]?.[service]?.response
+          ? html`<ha-settings-row .narrow=${this.narrow}>
+              ${
+                optionalResponse
+                  ? html`<ha-checkbox
+                      .checked=${
+                        !!this._action.response_variable ||
+                        this._responseChecked
+                      }
+                      .disabled=${this.disabled}
+                      @change=${this._responseCheckboxChanged}
+                      slot="prefix"
+                    ></ha-checkbox>`
+                  : html`<div slot="prefix" class="checkbox-spacer"></div>`
+              }
+              <span
+                slot="heading"
+                class=${optionalResponse ? "clickable" : ""}
+                @click=${optionalResponse ? this._toggleCheckbox : undefined}
+                >${this.hass.localize(
+                  "ui.panel.config.automation.editor.actions.type.service.response_variable"
+                )}</span
+              >
+              <span
+                slot="description"
+                class=${optionalResponse ? "clickable" : ""}
+                @click=${optionalResponse ? this._toggleCheckbox : undefined}
+              >
+                ${
+                  optionalResponse
+                    ? this.hass.localize(
+                        "ui.panel.config.automation.editor.actions.type.service.has_optional_response"
+                      )
+                    : this.hass.localize(
+                        "ui.panel.config.automation.editor.actions.type.service.has_response"
+                      )
+                }
+              </span>
+              <ha-input
+                .value=${this._action.response_variable || ""}
+                .required=${!optionalResponse}
+                .disabled=${
+                  this.disabled ||
+                  (optionalResponse &&
+                    !this._action.response_variable &&
+                    !this._responseChecked)
+                }
+                @change=${this._responseVariableChanged}
+              ></ha-input>
+            </ha-settings-row>`
+          : nothing
+      }
     `;
   }
 

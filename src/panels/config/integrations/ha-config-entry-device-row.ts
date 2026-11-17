@@ -10,19 +10,27 @@ import {
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
-import { stopPropagation } from "../../../common/dom/stop_propagation";
+import { styleMap } from "lit/directives/style-map";
+import {
+  stopKeydownEnterSpacePropagation,
+  stopPropagation,
+} from "../../../common/dom/stop_propagation";
 import { computeDeviceNameDisplay } from "../../../common/entity/compute_device_name";
 import { getDeviceArea } from "../../../common/entity/context/get_device_context";
 import { navigate } from "../../../common/navigate";
+import { computeRTL } from "../../../common/util/compute_rtl";
 import "../../../components/ha-dropdown";
 import "../../../components/ha-dropdown-item";
+import "../../../components/ha-tree-indicator";
+import { bidiIsolate } from "../../../common/bidi";
+import "../../../components/item/ha-list-item-button";
 import {
   disableConfigEntry,
   type ConfigEntry,
   type DisableConfigEntryResult,
 } from "../../../data/config_entries";
 import {
-  removeConfigEntryFromDevice,
+  removeDeviceFromRegistry,
   updateDeviceRegistryEntry,
   type DeviceRegistryEntry,
 } from "../../../data/device/device_registry";
@@ -34,7 +42,6 @@ import {
   showConfirmationDialog,
 } from "../../lovelace/custom-card-helpers";
 import { showDeviceRegistryDetailDialog } from "../devices/device-registry-detail/show-dialog-device-registry-detail";
-import "./ha-config-sub-entry-row";
 
 @customElement("ha-config-entry-device-row")
 class HaConfigEntryDeviceRow extends LitElement {
@@ -48,64 +55,100 @@ class HaConfigEntryDeviceRow extends LitElement {
 
   @property({ attribute: false }) public entities!: EntityRegistryEntry[];
 
+  // Rendered indented under its parent device.
+  @property({ type: Boolean, reflect: true, attribute: "is-child" })
+  public isChild = false;
+
+  // The last child of its parent, so the tree connector draws its end.
+  @property({ attribute: false }) public isLastChild = false;
+
   protected render() {
     const device = this.device;
 
     const entities = this._getEntities();
 
-    const area = getDeviceArea(device, this.hass.areas);
+    const area = getDeviceArea(device, this.hass.areas, this.hass.devices);
+
+    const rtl = computeRTL(
+      this.hass.language,
+      this.hass.translationMetadata.translations
+    );
 
     const supportingText = [
-      device.model || device.sw_version || device.manufacturer,
-      area ? area.name : undefined,
-    ].filter(Boolean);
-
-    return html`<ha-md-list-item
-      type="button"
-      @click=${this._handleNavigateToDevice}
-      class=${classMap({ disabled: Boolean(device.disabled_by) })}
-    >
-      <ha-svg-icon
-        .path=${device.entry_type === "service"
-          ? mdiTransitConnectionVariant
-          : mdiDevices}
-        slot="start"
-      ></ha-svg-icon>
-      <div slot="headline">
-        ${computeDeviceNameDisplay(
-          device,
-          this.hass.localize,
-          this.hass.states
-        )}
-      </div>
-      <span slot="supporting-text"
-        >${supportingText.join(" • ")}
-        ${supportingText.length && entities.length ? " • " : nothing}
-        ${entities.length
-          ? this.hass.localize(
+      area ? html`<span class="area">${area.name}</span>` : undefined,
+      device.model ||
+        device.model_id ||
+        device.sw_version ||
+        device.manufacturer,
+      entities.length
+        ? bidiIsolate(
+            this.hass.localize(
               "ui.panel.config.integrations.config_entry.entities",
               { count: entities.length }
             )
-          : nothing}</span
+          )
+        : undefined,
+    ].filter(Boolean);
+
+    return html`<ha-list-item-button
+      @click=${this._handleNavigateToDevice}
+      class=${classMap({ disabled: Boolean(device.disabled_by) })}
+    >
+      ${
+        this.isChild
+          ? html`<ha-tree-indicator
+              style=${styleMap({
+                position: "absolute",
+                // Span the full row height so consecutive children form one
+                // continuous line; the elbow sits at the vertical centre.
+                top: "0",
+                // Align the connector under the parent device icon; the leading
+                // space (and thus the icon column) is smaller in narrow mode.
+                left: rtl ? undefined : this.narrow ? "4px" : "44px",
+                right: rtl ? (this.narrow ? "4px" : "44px") : undefined,
+                transform: rtl ? "scaleX(-1)" : "",
+              })}
+              .end=${this.isLastChild}
+              slot="start"
+            ></ha-tree-indicator>`
+          : nothing
+      }
+      <ha-svg-icon
+        .path=${
+          device.entry_type === "service"
+            ? mdiTransitConnectionVariant
+            : mdiDevices
+        }
+        slot="start"
+      ></ha-svg-icon>
+      <div slot="headline">
+        ${computeDeviceNameDisplay(device, this.hass.localize)}
+      </div>
+      <span slot="supporting-text"
+        >${supportingText.map(
+          (part, index) => html`${index ? " • " : nothing}${part}`
+        )}</span
       >
-      ${!this.narrow
-        ? html`<ha-icon-next slot="end"> </ha-icon-next>`
-        : nothing}
-      <div class="vertical-divider" slot="end" @click=${stopPropagation}></div>
-      ${!this.narrow
-        ? html`<ha-icon-button
-            slot="end"
-            @click=${this._handleEditDeviceButton}
-            .path=${mdiPencil}
-            .label=${this.hass.localize(
-              "ui.panel.config.integrations.config_entry.device.edit"
-            )}
-          ></ha-icon-button>`
-        : nothing}
+      ${!this.narrow ? html`<ha-icon-next slot="end"></ha-icon-next>` : nothing}
+      <div class="vertical-divider" slot="end"></div>
+      ${
+        !this.narrow
+          ? html`<ha-icon-button
+              slot="end"
+              @click=${this._handleEditDeviceButton}
+              @keydown=${stopKeydownEnterSpacePropagation}
+              .path=${mdiPencil}
+              .label=${this.hass.localize(
+                "ui.panel.config.integrations.config_entry.device.edit"
+              )}
+            ></ha-icon-button>`
+          : nothing
+      }
 
       <ha-dropdown
         slot="end"
         @click=${stopPropagation}
+        @keydown=${stopKeydownEnterSpacePropagation}
         @wa-select=${this._handleMenuAction}
       >
         <ha-icon-button
@@ -113,26 +156,33 @@ class HaConfigEntryDeviceRow extends LitElement {
           .label=${this.hass.localize("ui.common.menu")}
           .path=${mdiDotsVertical}
         ></ha-icon-button>
-        ${this.narrow
-          ? html`<ha-dropdown-item value="edit">
-              <ha-svg-icon .path=${mdiPencil} slot="icon"></ha-svg-icon>
-              ${this.hass.localize(
-                "ui.panel.config.integrations.config_entry.device.edit"
-              )}
-            </ha-dropdown-item>`
-          : nothing}
-        ${entities.length
-          ? html`
-              <ha-dropdown-item value="entities">
-                <ha-svg-icon .path=${mdiShapeOutline} slot="icon"></ha-svg-icon>
+        ${
+          this.narrow
+            ? html`<ha-dropdown-item value="edit">
+                <ha-svg-icon .path=${mdiPencil} slot="icon"></ha-svg-icon>
                 ${this.hass.localize(
-                  `ui.panel.config.integrations.config_entry.entities`,
-                  { count: entities.length }
+                  "ui.panel.config.integrations.config_entry.device.edit"
                 )}
-                <ha-icon-next slot="details"></ha-icon-next>
-              </ha-dropdown-item>
-            `
-          : nothing}
+              </ha-dropdown-item>`
+            : nothing
+        }
+        ${
+          entities.length
+            ? html`
+                <ha-dropdown-item value="entities">
+                  <ha-svg-icon
+                    .path=${mdiShapeOutline}
+                    slot="icon"
+                  ></ha-svg-icon>
+                  ${this.hass.localize(
+                    `ui.panel.config.integrations.config_entry.entities`,
+                    { count: entities.length }
+                  )}
+                  <ha-icon-next slot="details"></ha-icon-next>
+                </ha-dropdown-item>
+              `
+            : nothing
+        }
         <ha-dropdown-item
           .variant=${device.disabled_by !== "user" ? "danger" : "default"}
           value="disable"
@@ -140,38 +190,42 @@ class HaConfigEntryDeviceRow extends LitElement {
         >
           <ha-svg-icon .path=${mdiStopCircleOutline} slot="icon"></ha-svg-icon>
 
-          ${device.disabled_by && device.disabled_by !== "user"
-            ? this.hass.localize(
-                "ui.dialogs.device-registry-detail.enabled_cause",
-                {
-                  type: this.hass.localize(
-                    `ui.dialogs.device-registry-detail.type.${
-                      device.entry_type || "device"
-                    }`
-                  ),
-                  cause: this.hass.localize(
-                    `config_entry.disabled_by.${device.disabled_by}`
-                  ),
-                }
-              )
-            : device.disabled_by
+          ${
+            device.disabled_by && device.disabled_by !== "user"
               ? this.hass.localize(
-                  "ui.panel.config.integrations.config_entry.device.enable"
+                  "ui.dialogs.device-registry-detail.enabled_cause",
+                  {
+                    type: this.hass.localize(
+                      `ui.dialogs.device-registry-detail.type.${
+                        device.entry_type || "device"
+                      }`
+                    ),
+                    cause: this.hass.localize(
+                      `config_entry.disabled_by.${device.disabled_by}`
+                    ),
+                  }
                 )
-              : this.hass.localize(
-                  "ui.panel.config.integrations.config_entry.device.disable"
-                )}
+              : device.disabled_by
+                ? this.hass.localize(
+                    "ui.panel.config.integrations.config_entry.device.enable"
+                  )
+                : this.hass.localize(
+                    "ui.panel.config.integrations.config_entry.device.disable"
+                  )
+          }
         </ha-dropdown-item>
-        ${this.entry.supports_remove_device
-          ? html`<ha-dropdown-item variant="danger" value="delete">
-              <ha-svg-icon .path=${mdiDelete} slot="icon"></ha-svg-icon>
-              ${this.hass.localize(
-                "ui.panel.config.integrations.config_entry.device.delete"
-              )}
-            </ha-dropdown-item>`
-          : nothing}
+        ${
+          this.entry.supports_remove_device
+            ? html`<ha-dropdown-item variant="danger" value="delete">
+                <ha-svg-icon .path=${mdiDelete} slot="icon"></ha-svg-icon>
+                ${this.hass.localize(
+                  "ui.panel.config.integrations.config_entry.device.delete"
+                )}
+              </ha-dropdown-item>`
+            : nothing
+        }
       </ha-dropdown>
-    </ha-md-list-item> `;
+    </ha-list-item-button>`;
   }
 
   private _getEntities = (): EntityRegistryEntry[] =>
@@ -204,13 +258,17 @@ class HaConfigEntryDeviceRow extends LitElement {
     showDeviceRegistryDetailDialog(this, {
       device: this.device,
       updateEntry: async (updates) => {
-        await updateDeviceRegistryEntry(this.hass, this.device.id, updates);
+        await updateDeviceRegistryEntry(
+          this.hass.callWS,
+          this.device.id,
+          updates
+        );
       },
     });
   };
 
   private _handleNavigateToEntities = () => {
-    navigate(`/config/entities/?historyBack=1&device=${this.device.id}`);
+    navigate(`/config/entities?historyBack=1&device=${this.device.id}`);
   };
 
   private _doDisableDevice = async () => {
@@ -275,11 +333,7 @@ class HaConfigEntryDeviceRow extends LitElement {
         text: this.hass.localize(
           "ui.panel.config.integrations.config_entry.device.confirm_disable_message",
           {
-            name: computeDeviceNameDisplay(
-              this.device,
-              this.hass.localize,
-              this.hass.states
-            ),
+            name: computeDeviceNameDisplay(this.device, this.hass.localize),
           }
         ),
         destructive: true,
@@ -292,16 +346,16 @@ class HaConfigEntryDeviceRow extends LitElement {
       }
     }
 
-    await updateDeviceRegistryEntry(this.hass, this.device.id, {
+    await updateDeviceRegistryEntry(this.hass.callWS, this.device.id, {
       disabled_by: disable ? "user" : null,
     });
   };
 
   private _handleDeleteDevice = async () => {
-    const entry = this.entry;
     const confirmed = await showConfirmationDialog(this, {
+      title: this.hass.localize("ui.panel.config.devices.confirm_delete_title"),
       text: this.hass.localize("ui.panel.config.devices.confirm_delete"),
-      confirmText: this.hass.localize("ui.common.delete"),
+      confirmText: this.hass.localize("ui.common.remove"),
       dismissText: this.hass.localize("ui.common.cancel"),
       destructive: true,
     });
@@ -311,11 +365,7 @@ class HaConfigEntryDeviceRow extends LitElement {
     }
 
     try {
-      await removeConfigEntryFromDevice(
-        this.hass!,
-        this.device.id,
-        entry.entry_id
-      );
+      await removeDeviceFromRegistry(this.hass!, this.device.id);
     } catch (err: any) {
       showAlertDialog(this, {
         title: this.hass.localize("ui.panel.config.devices.error_delete"),
@@ -331,27 +381,42 @@ class HaConfigEntryDeviceRow extends LitElement {
   static styles = [
     haStyle,
     css`
-      :host {
+      ha-list-item-button {
         border-top: 1px solid var(--divider-color);
+        --ha-row-item-padding-inline: 56px 16px;
       }
-      ha-md-list-item {
-        --md-list-item-leading-space: 56px;
-        --md-ripple-hover-color: transparent;
-        --md-ripple-pressed-color: transparent;
+      ha-icon-button,
+      ha-list-item-button > ha-icon-next,
+      ha-list-item-button > ha-svg-icon {
+        color: var(--ha-color-fill-neutral-loud-resting);
+      }
+      :host([is-child]) ha-list-item-button {
+        --ha-row-item-padding-inline: 88px 16px;
       }
       .disabled {
         opacity: 0.5;
       }
-      :host([narrow]) ha-md-list-item {
-        --md-list-item-leading-space: 16px;
+      .area {
+        color: var(--primary-text-color);
+      }
+      :host([narrow]) ha-list-item-button {
+        --ha-row-item-padding-inline: 16px;
+      }
+      :host([narrow][is-child]) ha-list-item-button {
+        --ha-row-item-padding-inline: 48px 16px;
+      }
+      ha-tree-indicator {
+        width: 48px;
+        height: 100%;
       }
       .vertical-divider {
         height: 100%;
         width: 1px;
         background: var(--divider-color);
       }
-      a {
-        text-decoration: none;
+      ha-list-item-button::part(end) {
+        align-self: stretch;
+        gap: var(--ha-space-4);
       }
     `,
   ];

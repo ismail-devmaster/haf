@@ -32,52 +32,64 @@ class SupervisorAppConfigDashboard extends LitElement {
 
     return html`
       <div class="content">
-        ${this.addon.system_managed &&
-        (hasConfiguration || this.addon.network || this.addon.audio)
-          ? html`
-              <supervisor-app-system-managed
-                .hass=${this.hass}
-                .narrow=${this.narrow}
-                .hideButton=${this.controlEnabled}
-              ></supervisor-app-system-managed>
-            `
-          : nothing}
-        ${hasConfiguration || this.addon.network || this.addon.audio
-          ? html`
-              ${hasConfiguration
-                ? html`
-                    <supervisor-app-config
-                      .hass=${this.hass}
-                      .addon=${this.addon}
-                      .disabled=${this.addon.system_managed &&
-                      !this.controlEnabled}
-                    ></supervisor-app-config>
-                  `
-                : nothing}
-              ${this.addon.network
-                ? html`
-                    <supervisor-app-network
-                      .hass=${this.hass}
-                      .addon=${this.addon}
-                      .disabled=${this.addon.system_managed &&
-                      !this.controlEnabled}
-                    ></supervisor-app-network>
-                  `
-                : nothing}
-              ${this.addon.audio
-                ? html`
-                    <supervisor-app-audio
-                      .hass=${this.hass}
-                      .addon=${this.addon}
-                      .disabled=${this.addon.system_managed &&
-                      !this.controlEnabled}
-                    ></supervisor-app-audio>
-                  `
-                : nothing}
-            `
-          : this.hass.localize(
-              "ui.panel.config.apps.configuration.no_configuration"
-            )}
+        ${
+          this.addon.system_managed &&
+          (hasConfiguration || this.addon.network || this.addon.audio)
+            ? html`
+                <supervisor-app-system-managed
+                  .narrow=${this.narrow}
+                  .hideButton=${this.controlEnabled}
+                ></supervisor-app-system-managed>
+              `
+            : nothing
+        }
+        ${
+          hasConfiguration || this.addon.network || this.addon.audio
+            ? html`
+                ${
+                  hasConfiguration
+                    ? html`
+                        <supervisor-app-config
+                          .hass=${this.hass}
+                          .addon=${this.addon}
+                          .disabled=${
+                            this.addon.system_managed && !this.controlEnabled
+                          }
+                        ></supervisor-app-config>
+                      `
+                    : nothing
+                }
+                ${
+                  this.addon.network
+                    ? html`
+                        <supervisor-app-network
+                          .hass=${this.hass}
+                          .addon=${this.addon}
+                          .disabled=${
+                            this.addon.system_managed && !this.controlEnabled
+                          }
+                        ></supervisor-app-network>
+                      `
+                    : nothing
+                }
+                ${
+                  this.addon.audio
+                    ? html`
+                        <supervisor-app-audio
+                          .hass=${this.hass}
+                          .addon=${this.addon}
+                          .disabled=${
+                            this.addon.system_managed && !this.controlEnabled
+                          }
+                        ></supervisor-app-audio>
+                      `
+                    : nothing
+                }
+              `
+            : this.hass.localize(
+                "ui.panel.config.apps.configuration.no_configuration"
+              )
+        }
       </div>
     `;
   }
@@ -89,8 +101,8 @@ class SupervisorAppConfigDashboard extends LitElement {
       css`
         .content {
           margin: auto;
-          padding: var(--ha-space-2);
-          max-width: 1024px;
+          padding: var(--ha-space-2) var(--ha-content-gutter);
+          max-width: var(--ha-content-width-narrow);
         }
         supervisor-app-network,
         supervisor-app-audio,

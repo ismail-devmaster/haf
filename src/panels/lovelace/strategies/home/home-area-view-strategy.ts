@@ -17,6 +17,7 @@ import type {
 } from "../../cards/types";
 import type { ButtonHeadingBadgeConfig } from "../../heading-badges/types";
 import { computeAreaTileCardConfig } from "../areas/helpers/areas-strategy-helper";
+import type { LovelaceStrategyDependency } from "../types";
 import {
   getSummaryLabel,
   HOME_SUMMARIES,
@@ -33,6 +34,13 @@ export interface HomeAreaViewStrategyConfig {
 
 @customElement("home-area-view-strategy")
 export class HomeAreaViewStrategy extends ReactiveElement {
+  static registryDependencies: readonly LovelaceStrategyDependency[] = [
+    "entities",
+    "devices",
+    "areas",
+    "panels",
+  ];
+
   static async generate(
     config: HomeAreaViewStrategyConfig,
     hass: HomeAssistant
@@ -74,11 +82,18 @@ export class HomeAreaViewStrategy extends ReactiveElement {
       });
     }
 
-    const computeTileCard = computeAreaTileCardConfig(hass, area.name, true);
+    const computeTileCard = computeAreaTileCardConfig(hass, true);
 
-    const areaFilter = generateEntityFilter(hass, {
-      area: config.area,
-    });
+    const areaFilter = generateEntityFilter(
+      hass.states,
+      hass.entities,
+      hass.devices,
+      hass.areas,
+      hass.floors,
+      {
+        area: config.area,
+      }
+    );
 
     const allEntities = Object.keys(hass.states);
     const areaEntities = allEntities.filter(areaFilter);
@@ -87,7 +102,14 @@ export class HomeAreaViewStrategy extends ReactiveElement {
       (acc, summary) => {
         const summariesFilters = HOME_SUMMARIES_FILTERS[summary];
         const filterFunctions = summariesFilters.map((filter) =>
-          generateEntityFilter(hass, filter)
+          generateEntityFilter(
+            hass.states,
+            hass.entities,
+            hass.devices,
+            hass.areas,
+            hass.floors,
+            filter
+          )
         );
         acc[summary] = findEntities(areaEntities, filterFunctions);
         return acc;
@@ -130,6 +152,10 @@ export class HomeAreaViewStrategy extends ReactiveElement {
                 type: "button",
                 icon: "mdi:power",
                 text: hass.localize("ui.panel.lovelace.strategy.light.off"),
+                label: hass.localize(
+                  "ui.panel.lovelace.strategy.light.turn_on_area",
+                  { area: area.name }
+                ),
                 tap_action: {
                   action: "perform-action",
                   perform_action: "light.turn_on",
@@ -149,6 +175,10 @@ export class HomeAreaViewStrategy extends ReactiveElement {
                 icon: "mdi:power",
                 color: "orange",
                 text: hass.localize("ui.panel.lovelace.strategy.light.on"),
+                label: hass.localize(
+                  "ui.panel.lovelace.strategy.light.turn_off_area",
+                  { area: area.name }
+                ),
                 tap_action: {
                   action: "perform-action",
                   perform_action: "light.turn_off",
@@ -228,10 +258,17 @@ export class HomeAreaViewStrategy extends ReactiveElement {
     const summaryEntities = Object.values(partialEntitiesBySummary).flat();
 
     // Scenes section
-    const sceneFilter = generateEntityFilter(hass, {
-      domain: "scene",
-      entity_category: "none",
-    });
+    const sceneFilter = generateEntityFilter(
+      hass.states,
+      hass.entities,
+      hass.devices,
+      hass.areas,
+      hass.floors,
+      {
+        domain: "scene",
+        entity_category: "none",
+      }
+    );
     const scenes = areaEntities.filter(sceneFilter);
 
     if (scenes.length > 0) {
@@ -255,10 +292,17 @@ export class HomeAreaViewStrategy extends ReactiveElement {
     }
 
     // Automations section
-    const automationFilter = generateEntityFilter(hass, {
-      domain: "automation",
-      entity_category: "none",
-    });
+    const automationFilter = generateEntityFilter(
+      hass.states,
+      hass.entities,
+      hass.devices,
+      hass.areas,
+      hass.floors,
+      {
+        domain: "automation",
+        entity_category: "none",
+      }
+    );
     const automations = areaEntities.filter(automationFilter);
 
     // Rest of entities grouped by device
@@ -305,14 +349,28 @@ export class HomeAreaViewStrategy extends ReactiveElement {
       });
     }
 
-    const batteryFilter = generateEntityFilter(hass, {
-      domain: "sensor",
-      device_class: "battery",
-    });
+    const batteryFilter = generateEntityFilter(
+      hass.states,
+      hass.entities,
+      hass.devices,
+      hass.areas,
+      hass.floors,
+      {
+        domain: "sensor",
+        device_class: "battery",
+      }
+    );
 
-    const primaryFilter = generateEntityFilter(hass, {
-      entity_category: "none",
-    });
+    const primaryFilter = generateEntityFilter(
+      hass.states,
+      hass.entities,
+      hass.devices,
+      hass.areas,
+      hass.floors,
+      {
+        entity_category: "none",
+      }
+    );
 
     for (const deviceEntities of otherDeviceEntities) {
       if (deviceEntities.entities.length === 0) continue;
@@ -418,7 +476,6 @@ export class HomeAreaViewStrategy extends ReactiveElement {
           {
             type: "empty-state",
             icon: area.icon || "mdi:shape-square-rounded-plus",
-            icon_color: "primary",
             content_only: true,
             title: hass.localize(
               "ui.panel.lovelace.strategy.home-area.no_devices_title"

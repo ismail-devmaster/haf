@@ -7,6 +7,7 @@ import "../../../../components/ha-button";
 import "../../../../components/ha-svg-icon";
 import type { LovelaceConfig } from "../../../../data/lovelace/config/types";
 import type { HomeAssistant } from "../../../../types";
+import { showSaveSuccessToast } from "../../../../util/toast-saved-success";
 import { computeUnusedEntities } from "../../common/compute-unused-entities";
 import {
   computeCards,
@@ -52,28 +53,32 @@ export class HuiUnusedEntities extends LitElement {
 
     return html`
       <div class="container">
-        ${!this.narrow
-          ? html`
-              <ha-card
-                header=${this.hass.localize(
-                  "ui.panel.lovelace.unused_entities.title"
-                )}
-              >
-                <div class="card-content">
-                  ${this.hass.localize(
-                    "ui.panel.lovelace.unused_entities.available_entities"
+        ${
+          !this.narrow
+            ? html`
+                <ha-card
+                  header=${this.hass.localize(
+                    "ui.panel.lovelace.unused_entities.title"
                   )}
-                  ${this.lovelace.mode === "storage"
-                    ? html`
-                        <br />${this.hass.localize(
-                          "ui.panel.lovelace.unused_entities.select_to_add"
-                        )}
-                      `
-                    : ""}
-                </div>
-              </ha-card>
-            `
-          : ""}
+                >
+                  <div class="card-content">
+                    ${this.hass.localize(
+                      "ui.panel.lovelace.unused_entities.available_entities"
+                    )}
+                    ${
+                      this.lovelace.mode === "storage"
+                        ? html`
+                            <br />${this.hass.localize(
+                              "ui.panel.lovelace.unused_entities.select_to_add"
+                            )}
+                          `
+                        : ""
+                    }
+                  </div>
+                </ha-card>
+              `
+            : ""
+        }
         <hui-entity-picker-table
           .hass=${this.hass}
           .narrow=${this.narrow}
@@ -86,7 +91,7 @@ export class HuiUnusedEntities extends LitElement {
           selected: this._selectedEntities.length,
         })}"
       >
-        <ha-button size="large" @click=${this._addToLovelaceView}>
+        <ha-button size="l" @click=${this._addToLovelaceView}>
           <ha-svg-icon slot="start" .path=${mdiPlus}></ha-svg-icon>
           ${this.hass.localize("ui.panel.lovelace.editor.edit_card.add")}
         </ha-button>
@@ -107,6 +112,11 @@ export class HuiUnusedEntities extends LitElement {
     this._selectedEntities = ev.detail.selectedEntities;
   }
 
+  private _saveConfig = async (config: LovelaceConfig): Promise<void> => {
+    await this.lovelace.saveConfig(config);
+    showSaveSuccessToast(this, this.hass);
+  };
+
   private _addToLovelaceView(): void {
     const cardConfig = computeCards(this.hass, this._selectedEntities, {});
     const sectionConfig = computeSection(this._selectedEntities, {});
@@ -114,8 +124,8 @@ export class HuiUnusedEntities extends LitElement {
     if (this.lovelace.config.views.length === 1) {
       showSuggestCardDialog(this, {
         lovelaceConfig: this.lovelace.config!,
-        saveConfig: this.lovelace.saveConfig,
-        path: [0],
+        saveConfig: this._saveConfig,
+        path: ["views", 0],
         entities: this._selectedEntities,
         cardConfig,
         sectionConfig,
@@ -128,8 +138,8 @@ export class HuiUnusedEntities extends LitElement {
       viewSelectedCallback: (_urlPath, _selectedDashConfig, viewIndex) => {
         showSuggestCardDialog(this, {
           lovelaceConfig: this.lovelace.config!,
-          saveConfig: this.lovelace.saveConfig,
-          path: [viewIndex],
+          saveConfig: this._saveConfig,
+          path: ["views", viewIndex],
           entities: this._selectedEntities,
           cardConfig,
           sectionConfig,

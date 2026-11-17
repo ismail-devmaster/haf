@@ -1,4 +1,4 @@
-import type { HomeAssistant } from "../../types";
+import type { HomeAssistant, HomeAssistantApi } from "../../types";
 import type { DeviceRegistryEntry } from "../device/device_registry";
 import type {
   EntityRegistryDisplayEntry,
@@ -39,7 +39,7 @@ export interface AreaRegistryEntryMutableParams {
 }
 
 export const createAreaRegistryEntry = (
-  hass: HomeAssistant,
+  hass: HomeAssistantApi,
   values: AreaRegistryEntryMutableParams
 ) =>
   hass.callWS<AreaRegistryEntry>({
@@ -48,11 +48,11 @@ export const createAreaRegistryEntry = (
   });
 
 export const updateAreaRegistryEntry = (
-  hass: HomeAssistant,
+  callWS: HomeAssistant["callWS"],
   areaId: string,
   updates: Partial<AreaRegistryEntryMutableParams>
 ) =>
-  hass.callWS<AreaRegistryEntry>({
+  callWS<AreaRegistryEntry>({
     type: "config/area_registry/update",
     area_id: areaId,
     ...updates,

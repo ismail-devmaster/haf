@@ -1,9 +1,7 @@
 import { getCollection, type Connection } from "home-assistant-js-websocket";
-import { atLeastVersion } from "../../common/config/version";
 import type { HomeAssistant } from "../../types";
+import type { AddonState } from "./addon";
 import { supervisorApiWsRequest } from "../supervisor/supervisor";
-import type { HassioResponse } from "./common";
-import type { CreateSessionResponse } from "./supervisor";
 
 function setIngressCookie(session: string): string {
   document.cookie = `ingress_session=${session};path=/api/hassio_ingress/;SameSite=Strict${
@@ -12,22 +10,29 @@ function setIngressCookie(session: string): string {
   return session;
 }
 
-export const createHassioSession = async (
-  hass: HomeAssistant
-): Promise<string> => {
-  if (atLeastVersion(hass.config.version, 2021, 2, 4)) {
-    const wsResponse: { session: string } = await hass.callWS({
-      type: "supervisor/api",
-      endpoint: "/ingress/session",
-      method: "post",
-    });
-    return setIngressCookie(wsResponse.session);
-  }
+export interface IngressAppInfo {
+  name: string;
+  slug: string;
+  version: string | null;
+  state: AddonState | null;
+  ingress_url: string | null;
+}
 
-  const restResponse: { data: { session: string } } = await hass.callApi<
-    HassioResponse<CreateSessionResponse>
-  >("POST", "hassio/ingress/session");
-  return setIngressCookie(restResponse.data.session);
+export const fetchIngressAppInfo = (
+  hass: Pick<HomeAssistant, "callWS">,
+  slug: string
+): Promise<IngressAppInfo> =>
+  hass.callWS({ type: "supervisor/ingress/info", slug });
+
+export const createHassioSession = async (
+  hass: Pick<HomeAssistant, "callWS">,
+  slug: string
+): Promise<string> => {
+  const wsResponse: { session: string } = await hass.callWS({
+    type: "supervisor/ingress/session",
+    slug,
+  });
+  return setIngressCookie(wsResponse.session);
 };
 
 export interface IngressPanelInfo {
@@ -50,22 +55,23 @@ export const getIngressPanelInfoCollection = (conn: Connection) =>
   );
 
 export const validateHassioSession = async (
-  hass: HomeAssistant,
+  hass: Pick<HomeAssistant, "callWS">,
   session: string
 ): Promise<void> => {
-  if (atLeastVersion(hass.config.version, 2021, 2, 4)) {
-    await hass.callWS({
-      type: "supervisor/api",
-      endpoint: "/ingress/validate_session",
-      method: "post",
-      data: { session },
-    });
-    return;
-  }
+  await hass.callWS({ type: "supervisor/ingress/validate_session", session });
+};
 
-  await hass.callApi<HassioResponse<void>>(
-    "POST",
-    "hassio/ingress/validate_session",
-    { session }
-  );
+// Extends the session, or replaces it with a new one for the app if it has
+// expired. Returns the session to keep using.
+export const refreshHassioSession = async (
+  hass: Pick<HomeAssistant, "callWS">,
+  slug: string,
+  session: string
+): Promise<string> => {
+  try {
+    await validateHassioSession(hass, session);
+    return session;
+  } catch (_err: any) {
+    return createHassioSession(hass, slug);
+  }
 };

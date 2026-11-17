@@ -7,43 +7,41 @@ import {
   mdiPencil,
   mdiPlusCircleMultipleOutline,
 } from "@mdi/js";
-import deepClone from "deep-clone-simple";
 import type { CSSResultGroup, TemplateResult } from "lit";
 import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators";
 import { classMap } from "lit/directives/class-map";
-import { storage } from "../../../common/decorators/storage";
+import type { ConfigPath } from "../../../common/util/config-path";
+import { consumeLocalize } from "../../../common/decorators/consume-context-entry";
+import type { LocalizeFunc } from "../../../common/translations/localize";
 import { fireEvent } from "../../../common/dom/fire_event";
 import "../../../components/ha-dropdown";
 import type { HaDropdownSelectEvent } from "../../../components/ha-dropdown";
 import "../../../components/ha-dropdown-item";
 import "../../../components/ha-icon-button";
 import "../../../components/ha-svg-icon";
-import {
-  ensureBadgeConfig,
-  type LovelaceBadgeConfig,
-} from "../../../data/lovelace/config/badge";
+import type { LovelaceBadgeConfig } from "../../../data/lovelace/config/badge";
 import { haStyle } from "../../../resources/styles";
-import type { HomeAssistant } from "../../../types";
 import { showEditBadgeDialog } from "../editor/badge-editor/show-edit-badge-dialog";
-import type { LovelaceCardPath } from "../editor/lovelace-path";
 import {
-  findLovelaceItems,
-  getLovelaceContainerPath,
-  parseLovelaceCardPath,
+  appendAtPath,
+  getAtPath,
+  getParentPath,
 } from "../editor/lovelace-path";
 import type { Lovelace } from "../types";
 
 @customElement("hui-badge-edit-mode")
 export class HuiBadgeEditMode extends LitElement {
-  @property({ attribute: false }) public hass!: HomeAssistant;
-
   @property({ attribute: false }) public lovelace!: Lovelace;
 
-  @property({ type: Array }) public path!: LovelaceCardPath;
+  @property({ attribute: false }) public path!: ConfigPath;
 
   @property({ attribute: "hidden-overlay", type: Boolean })
   public hiddenOverlay = false;
+
+  @state()
+  @consumeLocalize()
+  private _localize!: LocalizeFunc;
 
   @state()
   public _menuOpened = false;
@@ -54,17 +52,8 @@ export class HuiBadgeEditMode extends LitElement {
   @state()
   public _focused = false;
 
-  @storage({
-    key: "dashboardBadgeClipboard",
-    state: false,
-    subscribe: false,
-    storage: "sessionStorage",
-  })
-  protected _clipboard?: string | Partial<LovelaceBadgeConfig>;
-
-  private get _badges() {
-    const containerPath = getLovelaceContainerPath(this.path!);
-    return findLovelaceItems("badges", this.lovelace!.config, containerPath)!;
+  private get _badgeConfig() {
+    return getAtPath<LovelaceBadgeConfig>(this.lovelace.config, this.path)!;
   }
 
   private _touchStarted = false;
@@ -116,6 +105,10 @@ export class HuiBadgeEditMode extends LitElement {
       <div class="badge-overlay ${classMap({ visible: showOverlay })}">
         <div
           class="edit"
+          role="button"
+          aria-label=${this._localize(
+            "ui.panel.lovelace.editor.edit_badge.edit_label"
+          )}
           @click=${this._handleOverlayClick}
           @keydown=${this._handleOverlayClick}
           tabindex="0"
@@ -134,28 +127,26 @@ export class HuiBadgeEditMode extends LitElement {
           </ha-icon-button>
           <ha-dropdown-item value="edit">
             <ha-svg-icon slot="icon" .path=${mdiPencil}></ha-svg-icon>
-            ${this.hass.localize("ui.panel.lovelace.editor.edit_card.edit")}
+            ${this._localize("ui.panel.lovelace.editor.edit_card.edit")}
           </ha-dropdown-item>
           <ha-dropdown-item value="duplicate">
             <ha-svg-icon
               slot="icon"
               .path=${mdiPlusCircleMultipleOutline}
             ></ha-svg-icon>
-            ${this.hass.localize(
-              "ui.panel.lovelace.editor.edit_card.duplicate"
-            )}
+            ${this._localize("ui.panel.lovelace.editor.edit_card.duplicate")}
           </ha-dropdown-item>
           <ha-dropdown-item value="copy">
             <ha-svg-icon slot="icon" .path=${mdiContentCopy}></ha-svg-icon>
-            ${this.hass.localize("ui.panel.lovelace.editor.edit_card.copy")}
+            ${this._localize("ui.panel.lovelace.editor.edit_card.copy")}
           </ha-dropdown-item>
           <ha-dropdown-item value="cut">
             <ha-svg-icon slot="icon" .path=${mdiContentCut}></ha-svg-icon>
-            ${this.hass.localize("ui.panel.lovelace.editor.edit_card.cut")}
+            ${this._localize("ui.panel.lovelace.editor.edit_card.cut")}
           </ha-dropdown-item>
           <wa-divider></wa-divider>
           <ha-dropdown-item value="delete" variant="danger">
-            ${this.hass.localize("ui.panel.lovelace.editor.edit_card.delete")}
+            ${this._localize("ui.panel.lovelace.editor.edit_card.delete")}
             <ha-svg-icon slot="icon" .path=${mdiDelete}></ha-svg-icon>
           </ha-dropdown-item>
         </ha-dropdown>
@@ -205,34 +196,36 @@ export class HuiBadgeEditMode extends LitElement {
   }
 
   private _cutBadge(): void {
-    this._copyBadge();
-    fireEvent(this, "ll-delete-badge", { path: this.path!, silent: true });
+    fireEvent(this, "ll-cut-badge", { path: this.path });
   }
 
   private _copyBadge(): void {
-    const { cardIndex } = parseLovelaceCardPath(this.path!);
-    const cardConfig = this._badges[cardIndex];
-    this._clipboard = deepClone(cardConfig);
+    fireEvent(this, "ll-copy-badge", { path: this.path });
   }
 
   private _duplicateBadge(): void {
-    const { cardIndex } = parseLovelaceCardPath(this.path!);
-    const containerPath = getLovelaceContainerPath(this.path!);
-    const badgeConfig = ensureBadgeConfig(this._badges![cardIndex]);
+    const badgesPath = getParentPath(this.path);
     showEditBadgeDialog(this, {
-      lovelaceConfig: this.lovelace!.config,
-      saveConfig: this.lovelace!.saveConfig,
-      path: containerPath as [number],
-      badgeConfig,
+      lovelaceConfig: this.lovelace.config,
+      saveBadgeConfig: async (newBadgeConfig) => {
+        const newConfig = appendAtPath(
+          this.lovelace.config,
+          badgesPath,
+          newBadgeConfig
+        );
+        await this.lovelace.saveConfig(newConfig);
+      },
+      badgeConfig: this._badgeConfig,
+      isNew: true,
     });
   }
 
   private _editBadge(): void {
-    fireEvent(this, "ll-edit-badge", { path: this.path! });
+    fireEvent(this, "ll-edit-badge", { path: this.path });
   }
 
   private _deleteBadge(): void {
-    fireEvent(this, "ll-delete-badge", { path: this.path!, silent: false });
+    fireEvent(this, "ll-delete-badge", { path: this.path, silent: false });
   }
 
   static get styles(): CSSResultGroup {

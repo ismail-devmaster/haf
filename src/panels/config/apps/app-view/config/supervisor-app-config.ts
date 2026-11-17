@@ -1,5 +1,5 @@
 import { mdiDotsVertical } from "@mdi/js";
-import { DEFAULT_SCHEMA, Type } from "js-yaml";
+import { defineScalarTag, YAML11_SCHEMA } from "js-yaml";
 import type { CSSResultGroup, PropertyValues, TemplateResult } from "lit";
 import { css, html, LitElement } from "lit";
 import { customElement, property, query, state } from "lit/decorators";
@@ -16,7 +16,6 @@ import type {
   HaFormDataContainer,
   HaFormSchema,
 } from "../../../../../components/ha-form/types";
-import "../../../../../components/ha-formfield";
 import "../../../../../components/ha-icon-button";
 import "../../../../../components/ha-switch";
 import "../../../../../components/ha-yaml-editor";
@@ -32,10 +31,12 @@ import {
 import { extractApiErrorMessage } from "../../../../../data/hassio/common";
 import type { ObjectSelector, Selector } from "../../../../../data/selector";
 import { showConfirmationDialog } from "../../../../../dialogs/generic/show-dialog-box";
+import { DirtyStateProviderMixin } from "../../../../../mixins/dirty-state-provider-mixin";
 import { haStyle } from "../../../../../resources/styles";
 import type { HomeAssistant } from "../../../../../types";
 import { supervisorAppsStyle } from "../../resources/supervisor-apps-style";
 import { suggestSupervisorAppRestart } from "../dialogs/suggestSupervisorAppRestart";
+import { KeyboardShortcutMixin } from "../../../../../mixins/keyboard-shortcut-mixin";
 
 const SUPPORTED_UI_TYPES = [
   "string",
@@ -46,24 +47,24 @@ const SUPPORTED_UI_TYPES = [
   "schema",
 ];
 
-const ADDON_YAML_SCHEMA = DEFAULT_SCHEMA.extend([
-  new Type("!secret", {
-    kind: "scalar",
-    construct: (data) => `!secret ${data}`,
-  }),
-]);
+const secretTag = defineScalarTag("!secret", {
+  resolve: (data) => `!secret ${data}`,
+  identify: () => false,
+});
+
+const ADDON_YAML_SCHEMA = YAML11_SCHEMA.withTags(secretTag);
 
 const MASKED_FIELDS = ["password", "secret", "token"];
 
 @customElement("supervisor-app-config")
-class SupervisorAppConfig extends LitElement {
+class SupervisorAppConfig extends DirtyStateProviderMixin<
+  Record<string, unknown>
+>()(KeyboardShortcutMixin(LitElement)) {
   @property({ attribute: false }) public addon!: HassioAddonDetails;
 
   @property({ attribute: false }) public hass!: HomeAssistant;
 
   @property({ type: Boolean }) public disabled = false;
-
-  @state() private _configHasChanged = false;
 
   @state() private _valid = true;
 
@@ -255,14 +256,14 @@ class SupervisorAppConfig extends LitElement {
           this._filteredSchema(this.addon.options, this.addon.schema!)
         );
     return html`
-      <h1>${this.addon.name}</h1>
+      <h2 class="app-name">${this.addon.name}</h2>
       <ha-card outlined>
         <div class="header">
-          <h2>
+          <h3>
             ${this.hass.localize(
               "ui.panel.config.apps.configuration.options.header"
             )}
-          </h2>
+          </h3>
           <div class="card-menu">
             <ha-dropdown @wa-select=${this._handleAction}>
               <ha-icon-button
@@ -274,13 +275,15 @@ class SupervisorAppConfig extends LitElement {
                 value="toggle_yaml"
                 .disabled=${!this._canShowSchema || this.disabled}
               >
-                ${this._yamlMode
-                  ? this.hass.localize(
-                      "ui.panel.config.apps.configuration.options.edit_in_ui"
-                    )
-                  : this.hass.localize(
-                      "ui.panel.config.apps.configuration.options.edit_in_yaml"
-                    )}
+                ${
+                  this._yamlMode
+                    ? this.hass.localize(
+                        "ui.panel.config.apps.configuration.options.edit_in_ui"
+                      )
+                    : this.hass.localize(
+                        "ui.panel.config.apps.configuration.options.edit_in_yaml"
+                      )
+                }
               </ha-dropdown-item>
               <ha-dropdown-item
                 value="reset"
@@ -296,64 +299,66 @@ class SupervisorAppConfig extends LitElement {
         </div>
 
         <div class="card-content">
-          ${showForm
-            ? html`<ha-form
-                .hass=${this.hass}
-                .disabled=${this.disabled}
-                .data=${this._options!}
-                @value-changed=${this._configChanged}
-                .computeLabel=${this.computeLabel}
-                .computeHelper=${this.computeHelper}
-                .schema=${this._convertSchema(
-                  this._showOptional
-                    ? this.addon.schema!
-                    : this._filteredSchema(
-                        this.addon.options,
-                        this.addon.schema!
-                      ),
-                  this.hass.language,
-                  this.addon.translations
-                )}
-              ></ha-form>`
-            : html`<ha-yaml-editor
-                @value-changed=${this._configChanged}
-                .yamlSchema=${ADDON_YAML_SCHEMA}
-              ></ha-yaml-editor>`}
-          ${this._error
-            ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
-            : ""}
-          ${!this._yamlMode ||
-          (this._canShowSchema && this.addon.schema) ||
-          this._valid
-            ? ""
-            : html`
-                <ha-alert alert-type="error">
-                  ${this.hass.localize(
-                    "ui.panel.config.apps.configuration.options.invalid_yaml"
+          ${
+            showForm
+              ? html`<ha-form
+                  .hass=${this.hass}
+                  .disabled=${this.disabled}
+                  .data=${this._options!}
+                  @value-changed=${this._configChanged}
+                  .computeLabel=${this.computeLabel}
+                  .computeHelper=${this.computeHelper}
+                  .schema=${this._convertSchema(
+                    this._showOptional
+                      ? this.addon.schema!
+                      : this._filteredSchema(
+                          this.addon.options,
+                          this.addon.schema!
+                        ),
+                    this.hass.language,
+                    this.addon.translations
                   )}
-                </ha-alert>
-              `}
+                ></ha-form>`
+              : html`<ha-yaml-editor
+                  @value-changed=${this._configChanged}
+                  .yamlSchema=${ADDON_YAML_SCHEMA}
+                ></ha-yaml-editor>`
+          }
+          ${
+            this._error
+              ? html`<ha-alert alert-type="error">${this._error}</ha-alert>`
+              : ""
+          }
+          ${
+            !this._yamlMode ||
+            (this._canShowSchema && this.addon.schema) ||
+            this._valid
+              ? ""
+              : html`
+                  <ha-alert alert-type="error">
+                    ${this.hass.localize(
+                      "ui.panel.config.apps.configuration.options.invalid_yaml"
+                    )}
+                  </ha-alert>
+                `
+          }
         </div>
-        ${hasHiddenOptions
-          ? html`<ha-formfield
-              class="show-additional"
-              .label=${this.hass.localize(
-                "ui.panel.config.apps.configuration.options.show_unused_optional"
-              )}
-            >
-              <ha-switch
+        ${
+          hasHiddenOptions
+            ? html`<ha-switch
                 @change=${this._toggleOptional}
                 .checked=${this._showOptional}
-              >
-              </ha-switch>
-            </ha-formfield>`
-          : ""}
+                class="show-additional"
+                >${this.hass.localize(
+                  "ui.panel.config.apps.configuration.options.show_unused_optional"
+                )}</ha-switch
+              >`
+            : ""
+        }
         <div class="card-actions right">
           <ha-progress-button
             @click=${this._saveTapped}
-            .disabled=${this.disabled ||
-            !this._configHasChanged ||
-            !this._valid}
+            .disabled=${this.disabled || !this.isDirtyState || !this._valid}
           >
             ${this.hass.localize("ui.common.save")}
           </ha-progress-button>
@@ -377,6 +382,7 @@ class SupervisorAppConfig extends LitElement {
   protected updated(changedProperties: PropertyValues): void {
     if (changedProperties.has("addon")) {
       this._options = { ...this.addon.options };
+      this._initDirtyTracking({ type: "deep" }, this.addon.options);
     }
     super.updated(changedProperties);
     if (
@@ -401,11 +407,25 @@ class SupervisorAppConfig extends LitElement {
 
     switch (action) {
       case "toggle_yaml":
-        this._yamlMode = !this._yamlMode;
+        this._toggleYamlMode();
         return;
       case "reset":
         this._resetTapped(ev);
     }
+  }
+
+  private async _toggleYamlMode() {
+    this._yamlMode = !this._yamlMode;
+    if (this._yamlMode) {
+      await this.updateComplete;
+      this._editor?.focus();
+    }
+  }
+
+  protected supportedShortcutsInInput(): SupportedShortcuts {
+    return this._canShowSchema && !this.disabled
+      ? { Y: () => this._toggleYamlMode() }
+      : {};
   }
 
   private _toggleOptional() {
@@ -415,11 +435,13 @@ class SupervisorAppConfig extends LitElement {
   private _configChanged(ev): void {
     if (this.addon.schema && this._canShowSchema && !this._yamlMode) {
       this._valid = true;
-      this._configHasChanged = true;
       this._options = ev.detail.value;
+      this._updateDirtyState(ev.detail.value);
     } else {
-      this._configHasChanged = true;
       this._valid = ev.detail.isValid;
+      if (ev.detail.isValid) {
+        this._updateDirtyState(ev.detail.value);
+      }
     }
   }
 
@@ -434,7 +456,7 @@ class SupervisorAppConfig extends LitElement {
       text: this.hass.localize(
         "ui.panel.config.apps.configuration.confirm.reset_options.text"
       ),
-      confirmText: this.hass.localize("ui.common.reset_options"),
+      confirmText: this.hass.localize("ui.common.reset"),
       dismissText: this.hass.localize("ui.common.cancel"),
       destructive: true,
     });
@@ -450,7 +472,7 @@ class SupervisorAppConfig extends LitElement {
     };
     try {
       await setHassioAddonOption(this.hass.callWS, this.addon.slug, data);
-      this._configHasChanged = false;
+      this._markDirtyStateClean();
       const eventdata = {
         success: true,
         response: undefined,
@@ -469,7 +491,7 @@ class SupervisorAppConfig extends LitElement {
   }
 
   private async _saveTapped(ev: CustomEvent): Promise<void> {
-    if (this.disabled || !this._configHasChanged || !this._valid) {
+    if (this.disabled || !this.isDirtyState || !this._valid) {
       return;
     }
 
@@ -499,7 +521,7 @@ class SupervisorAppConfig extends LitElement {
         options,
       });
 
-      this._configHasChanged = false;
+      this._markDirtyStateClean();
       if (this.addon?.state === "started") {
         await suggestSupervisorAppRestart(this, this.hass, this.addon);
       }
@@ -540,11 +562,22 @@ class SupervisorAppConfig extends LitElement {
         ha-dropdown-item[disabled] {
           --mdc-theme-text-primary-on-background: var(--disabled-text-color);
         }
+        .app-name {
+          margin-block: var(--ha-space-4) var(--ha-space-2);
+          padding-inline-start: var(--ha-space-2);
+          color: var(--primary-text-color);
+          font-family: var(--ha-font-family-body);
+          font-size: var(--ha-font-size-2xl);
+          font-weight: var(--ha-font-weight-normal);
+          line-height: var(--ha-line-height-condensed);
+          white-space: normal;
+          overflow: visible;
+        }
         .header {
           display: flex;
           justify-content: space-between;
         }
-        .header h2 {
+        .header h3 {
           color: var(--ha-card-header-color, var(--primary-text-color));
           font-family: var(--ha-card-header-font-family, inherit);
           font-size: var(--ha-card-header-font-size, var(--ha-font-size-2xl));
@@ -554,6 +587,9 @@ class SupervisorAppConfig extends LitElement {
           display: block;
           margin-block: 0px;
           font-weight: var(--ha-font-weight-normal);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         .card-actions.right {
           justify-content: flex-end;

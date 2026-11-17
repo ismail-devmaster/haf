@@ -42,8 +42,7 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
   public assistConfiguration?: AssistSatelliteConfiguration;
 
   @property({ attribute: false }) public localOption!:
-    | "focused_local"
-    | "full_local";
+    "focused_local" | "full_local";
 
   @property({ attribute: false }) public language!: string;
 
@@ -60,6 +59,7 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
 
   protected override render() {
     return html`<div class="content">
+<<<<<<< HEAD
       ${this._state === "INSTALLING"
         ? html`<img
               src="/static/images/voice-assistant/update.png"
@@ -83,58 +83,45 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
           ? html`<img
                 src="/static/images/voice-assistant/error.png"
                 alt="Casita Domolux error logo"
+=======
+      ${
+        this._state === "INSTALLING"
+          ? html`<img
+                src="/static/images/voice-assistant/update.png"
+                alt="Casita Home Assistant loading logo"
+>>>>>>> dev
               />
               <h1>
                 ${this.hass.localize(
-                  "ui.panel.config.voice_assistants.satellite_wizard.local.failed_title"
+                  "ui.panel.config.voice_assistants.satellite_wizard.local.title"
                 )}
               </h1>
-              <p>${this._error}</p>
               <p>
                 ${this.hass.localize(
-                  "ui.panel.config.voice_assistants.satellite_wizard.local.failed_secondary"
+                  "ui.panel.config.voice_assistants.satellite_wizard.local.secondary"
                 )}
               </p>
-              <ha-button
-                appearance="plain"
-                size="small"
-                @click=${this._prevStep}
-                >${this.hass.localize("ui.common.back")}</ha-button
-              >
-              <ha-button
-                href=${documentationUrl(
-                  this.hass,
-                  "/voice_control/voice_remote_local_assistant/"
-                )}
-                target="_blank"
-                rel="noreferrer noopener"
-                size="small"
-                appearance="plain"
-              >
-                <ha-svg-icon .path=${mdiOpenInNew} slot="start"></ha-svg-icon>
-                ${this.hass.localize(
-                  "ui.panel.config.common.learn_more"
-                )}</ha-button
-              >`
-          : this._state === "NOT_SUPPORTED"
+              <ha-spinner></ha-spinner>
+              <p>
+                ${this._detailState || "Installation can take several minutes"}
+              </p>`
+          : this._state === "ERROR"
             ? html`<img
                   src="/static/images/voice-assistant/error.png"
                   alt="Casita Domolux error logo"
                 />
                 <h1>
                   ${this.hass.localize(
-                    "ui.panel.config.voice_assistants.satellite_wizard.local.not_supported_title"
+                    "ui.panel.config.voice_assistants.satellite_wizard.local.failed_title"
                   )}
                 </h1>
+                <p>${this._error}</p>
                 <p>
                   ${this.hass.localize(
-                    "ui.panel.config.voice_assistants.satellite_wizard.local.not_supported_secondary"
+                    "ui.panel.config.voice_assistants.satellite_wizard.local.failed_secondary"
                   )}
                 </p>
-                <ha-button
-                  appearance="plain"
-                  size="small"
-                  @click=${this._prevStep}
+                <ha-button appearance="plain" size="s" @click=${this._prevStep}
                   >${this.hass.localize("ui.common.back")}</ha-button
                 >
                 <ha-button
@@ -144,15 +131,55 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
                   )}
                   target="_blank"
                   rel="noreferrer noopener"
+                  size="s"
                   appearance="plain"
-                  size="small"
                 >
                   <ha-svg-icon .path=${mdiOpenInNew} slot="start"></ha-svg-icon>
                   ${this.hass.localize(
                     "ui.panel.config.common.learn_more"
                   )}</ha-button
                 >`
-            : nothing}
+            : this._state === "NOT_SUPPORTED"
+              ? html`<img
+                    src="/static/images/voice-assistant/error.png"
+                    alt="Casita Home Assistant error logo"
+                  />
+                  <h1>
+                    ${this.hass.localize(
+                      "ui.panel.config.voice_assistants.satellite_wizard.local.not_supported_title"
+                    )}
+                  </h1>
+                  <p>
+                    ${this.hass.localize(
+                      "ui.panel.config.voice_assistants.satellite_wizard.local.not_supported_secondary"
+                    )}
+                  </p>
+                  <ha-button
+                    appearance="plain"
+                    size="s"
+                    @click=${this._prevStep}
+                    >${this.hass.localize("ui.common.back")}</ha-button
+                  >
+                  <ha-button
+                    href=${documentationUrl(
+                      this.hass,
+                      "/voice_control/voice_remote_local_assistant/"
+                    )}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    appearance="plain"
+                    size="s"
+                  >
+                    <ha-svg-icon
+                      .path=${mdiOpenInNew}
+                      slot="start"
+                    ></ha-svg-icon>
+                    ${this.hass.localize(
+                      "ui.panel.config.common.learn_more"
+                    )}</ha-button
+                  >`
+              : nothing
+      }
     </div>`;
   }
 
@@ -284,7 +311,7 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
         this.hass,
         wyomingEntities.map((ent) => ent.entity_id)
       )
-    );
+    ).filter((ent): ent is ExtEntityRegistryEntry => ent !== null);
 
     this._localTts = entityRegs.filter(
       (ent) =>
@@ -309,7 +336,7 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
 
     if (configFlow) {
       const step = await handleConfigFlowStep(
-        this.hass,
+        this.hass.callApi,
         configFlow.flow_id,
         {}
       );
@@ -332,7 +359,7 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
           flow.context.configuration_url.includes(
             type === "tts" ? this._ttsAddonName : this._sttAddonName
           )) ||
-          (flow.context.title_placeholders.name &&
+          (flow.context.title_placeholders?.name &&
             flow.context.title_placeholders.name
               .toLowerCase()
               .includes(
@@ -342,14 +369,18 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
   }
 
   private async _createConfigEntry(type: "tts" | "stt") {
-    const configFlow = await createConfigFlow(this.hass, "wyoming");
-    const step = await handleConfigFlowStep(this.hass, configFlow.flow_id, {
-      host: type === "tts" ? this._ttsHostName : this._sttHostName,
-      port: type === "tts" ? this._ttsPort : this._sttPort,
-    });
+    const configFlow = await createConfigFlow(this.hass.callApi, "wyoming");
+    const step = await handleConfigFlowStep(
+      this.hass.callApi,
+      configFlow.flow_id,
+      {
+        host: type === "tts" ? this._ttsHostName : this._sttHostName,
+        port: type === "tts" ? this._ttsPort : this._sttPort,
+      }
+    );
     if (step.type !== "create_entry") {
       throw new Error(
-        `${this.hass.localize("ui.panel.config.voice_assistants.satellite_wizard.local.errors.failed_create_entry", { app: type === "tts" ? this._ttsProviderName : this._sttProviderName })}${"errors" in step ? `: ${step.errors.base}` : ""}`
+        `${this.hass.localize("ui.panel.config.voice_assistants.satellite_wizard.local.errors.failed_create_entry", { app: type === "tts" ? this._ttsProviderName : this._sttProviderName })}${"errors" in step ? `: ${step.errors?.base}` : ""}`
       );
     }
   }
@@ -361,7 +392,7 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
       return;
     }
 
-    const pipelines = await listAssistPipelines(this.hass);
+    const pipelines = await listAssistPipelines(this.hass.callWS);
 
     if (pipelines.preferred_pipeline) {
       pipelines.pipelines.sort((a) =>
@@ -393,7 +424,7 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
       "select",
       "select_option",
       { option: localPipeline.name },
-      { entity_id: this.assistConfiguration?.pipeline_entity_id }
+      { entity_id: this.assistConfiguration?.pipeline_entity_id ?? undefined }
     );
     this._nextStep();
   }
@@ -401,11 +432,11 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
   private async _createPipeline(ttsEntityId: string, sttEntityId: string) {
     // Create a pipeline with local TTS and STT
 
-    const pipelines = await listAssistPipelines(this.hass);
+    const pipelines = await listAssistPipelines(this.hass.callWS);
 
     const agent = (
       await listAgents(
-        this.hass,
+        this.hass.callWS,
         this.language || this.hass.config.language,
         this.hass.config.country || undefined
       )
@@ -419,7 +450,7 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
 
     const ttsEngine = (
       await listTTSEngines(
-        this.hass,
+        this.hass.callWS,
         this.language,
         this.hass.config.country || undefined
       )
@@ -430,7 +461,7 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
     }
 
     const ttsVoices = await listTTSVoices(
-      this.hass,
+      this.hass.callWS,
       ttsEntityId,
       ttsEngine.supported_languages[0]
     );
@@ -441,7 +472,7 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
 
     const sttEngine = (
       await listSTTEngines(
-        this.hass,
+        this.hass.callWS,
         this.language,
         this.hass.config.country || undefined
       )
@@ -502,7 +533,7 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
       "select",
       "select_option",
       { option: localPipeline.name },
-      { entity_id: this.assistConfiguration?.pipeline_entity_id }
+      { entity_id: this.assistConfiguration?.pipeline_entity_id ?? undefined }
     );
     this._nextStep();
     return undefined;
