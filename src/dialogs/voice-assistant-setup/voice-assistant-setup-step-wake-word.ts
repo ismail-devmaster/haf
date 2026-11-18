@@ -97,16 +97,10 @@ export class HaVoiceAssistantSetupStepWakeWord extends LitElement {
     }
 
     return html`<div class="content">
-<<<<<<< HEAD
-        ${!this._detected
-          ? html`
-          <img src="/static/images/voice-assistant/sleep.png" alt="Casita Domolux logo"/>
-=======
         ${
           !this._detected
             ? html`
-          <img src="/static/images/voice-assistant/sleep.png" alt="Casita Home Assistant logo"/>
->>>>>>> dev
+          <img src="/static/images/voice-assistant/sleep.png" alt="Casita Domolux logo"/>
           <h1>
           ${this.hass.localize(
             "ui.panel.config.voice_assistants.satellite_wizard.wake_word.title",
@@ -117,39 +111,9 @@ export class HaVoiceAssistantSetupStepWakeWord extends LitElement {
             "ui.panel.config.voice_assistants.satellite_wizard.wake_word.secondary"
           )}</p>
         </div>`
-<<<<<<< HEAD
-          : html`<img
-                src="/static/images/voice-assistant/ok-nabu.png"
-                alt="Casita Domolux logo"
-              />
-              <h1>
-                ${this.hass.localize(
-                  "ui.panel.config.voice_assistants.satellite_wizard.wake_word.title_2",
-                  { wakeword: this._activeWakeWord(this.assistConfiguration) }
-                )}
-              </h1>
-              <p class="secondary">
-                ${this.hass.localize(
-                  "ui.panel.config.voice_assistants.satellite_wizard.wake_word.secondary_2"
-                )}
-              </p>`}
-        ${this._timedout
-          ? html`<ha-alert alert-type="warning"
-              >${this.hass.localize(
-                "ui.panel.config.voice_assistants.satellite_wizard.wake_word.time_out"
-              )}</ha-alert
-            >`
-          : this._muteSwitchEntity &&
-              this.hass.states[this._muteSwitchEntity].state === "on"
-            ? html`<ha-alert
-                alert-type="warning"
-                .title=${this.hass.localize(
-                  "ui.panel.config.voice_assistants.satellite_wizard.wake_word.muted"
-                )}
-=======
             : html`<img
                   src="/static/images/voice-assistant/ok-nabu.png"
-                  alt="Casita Home Assistant logo"
+                  alt="Casita Domolux logo"
                 />
                 <h1>
                   ${this.hass.localize(
@@ -166,7 +130,6 @@ export class HaVoiceAssistantSetupStepWakeWord extends LitElement {
         ${
           this._timedout
             ? html`<ha-alert alert-type="warning"
->>>>>>> dev
                 >${this.hass.localize(
                   "ui.panel.config.voice_assistants.satellite_wizard.wake_word.time_out"
                 )}</ha-alert

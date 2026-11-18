@@ -209,21 +209,16 @@ class HaGallery extends LitElement {
         .open=${this._drawerOpen}
         .type=${this._narrow ? "modal" : "dismissible"}
       >
-<<<<<<< HEAD
-        <div class="drawer-title">Domolux Design</div>
-        <div class="sidebar">${sidebar}</div>
-=======
         <ha-sidebar
           .hass=${this._galleryHass}
           .narrow=${this._narrow}
           .route=${{ prefix: "", path: this._page }}
           .alwaysExpand=${true}
-          sidebar-title="Home Assistant Design"
+          sidebar-title="Domolux Design"
           @hass-toggle-menu=${this._toggleDrawer}
         >
           ${this._renderSidebarNavigation()} ${this._renderSettingsItem()}
         </ha-sidebar>
->>>>>>> dev
         <div slot="appContent" class="app-content">
           <ha-top-app-bar-fixed .narrow=${this._narrow}>
             ${

@@ -1,12 +1,11 @@
-```
-bin/
+.DS_Store
+Thumbs.db
+.reify-cache
 
-<<<<<<< HEAD
-node_modules/
-=======
 # build
 build/
 dist/
+target/
 /hass_frontend/
 /translations/
 /.compress-cache/
@@ -16,17 +15,24 @@ dist/
 
 # Node
 node_modules/
+yarn-error.log
 npm-debug.log
 .pnpm-store/
->>>>>>> dev
 
-# Build artifacts
-dist/
-build/
-target/
+# Python stuff
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+*.egg
+*.egg-info
 
-# Home Assistant Frontend
-/hass_frontend/
+# venv stuff
+pyvenv.cfg
+pip-selfcheck.json
+/venv/
+.venv
 
 # Logs and temp files
 *.log
@@ -37,15 +43,24 @@ target/
 .env.local
 *.env.*
 
-# Editors
-.vscode/
+# Editors / IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
 .idea/
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# Cast dev settings
+src/cast/dev_const.ts
+
+# Secrets
+.lokalise_token
+
+# asdf
+.tool-versions
+
+# Home Assistant config
+/config/
 
 # Compression
 *.zip
@@ -71,28 +86,15 @@ __pycache__/
 *.tar.xz
 *.tar.zst
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Testing
+# Testing & Coverage
 .coverage
 coverage/
 htmlcov/
-
-<<<<<<< HEAD
-# Cache
+test/coverage/
 .mypy_cache/
 .pytest_cache/
 .gradle/
-```
 
-# Domolux E2E run artifacts that hold live test credentials.
-evidence/E2E/state/
-evidence/E2E/browser-state/
-evidence/E2E/logs/
-graphify-out/
-=======
 # Playwright e2e output
 test/e2e/reports/
 test/e2e/test-results/
@@ -109,4 +111,9 @@ test/e2e/app/dist/
 .serena
 
 test/benchmarks/results/
->>>>>>> dev
+
+# Domolux E2E run artifacts that hold live test credentials.
+evidence/E2E/state/
+evidence/E2E/browser-state/
+evidence/E2E/logs/
+graphify-out/

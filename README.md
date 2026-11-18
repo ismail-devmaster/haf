@@ -4,15 +4,9 @@ This is the repository for the official [Domolux](https://home-assistant.io) fro
 
 [![Screenshot of the frontend](https://raw.githubusercontent.com/home-assistant/frontend/master/docs/screenshot.png)](https://demo.home-assistant.io/)
 
-<<<<<<< HEAD
 - [View demo of Domolux](https://demo.home-assistant.io/)
 - [More information about Domolux](https://home-assistant.io)
-- [Frontend development instructions](https://developers.home-assistant.io/docs/frontend/development/)
-=======
-- [View demo of Home Assistant](https://demo.home-assistant.io/)
-- [More information about Home Assistant](https://home-assistant.io)
 - [Frontend development instructions](https://contributors.home-assistant.io/frontend/development/)
->>>>>>> dev
 
 ## Development
 

@@ -191,20 +191,12 @@ export class HaTileContainer extends LitElement {
       padding: 0 14px 14px 14px;
     }
 
-<<<<<<< HEAD
-    .container.horizontal ::slotted([slot="features"]) {
-      width: calc(50% - var(--column-gap, 0px) / 2 - 12px);
-      flex: none;
-      --feature-height: 36px;
-      padding: 0 12px;
-=======
     .container.inline ::slotted([slot="features-inline"]) {
       /* size the feature on the 6 column grid track, so it lines up with neighbouring tiles */
       width: calc(50% - var(--column-gap, 0px) / 2 - var(--ha-space-3));
       --feature-columns: 2;
       flex: none;
       padding: 0 var(--ha-space-3);
->>>>>>> dev
       padding-inline-start: 0;
     }
     /* the inline feature keeps the icon height, unless the card reserves a row it can fill */

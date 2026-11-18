@@ -45,36 +45,6 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
         return;
       }
       if (oldHass?.config?.state !== this.hass!.config.state) {
-<<<<<<< HEAD
-        if (this.hass!.config.state === STATE_NOT_RUNNING) {
-          showToast(this, {
-            message:
-              this.hass!.localize("ui.notification_toast.starting") ||
-              "Domolux is starting. Not everything will be available until it is finished.",
-            duration: -1,
-            dismissable: false,
-            action: {
-              text:
-                this.hass!.localize("ui.notification_toast.dismiss") ||
-                "Dismiss",
-              action: () => {
-                this._unsubscribeBootstrapIntegrations();
-              },
-            },
-          });
-          this._subscribeBootstrapIntegrations();
-        } else if (
-          oldHass?.config &&
-          oldHass.config.state === STATE_NOT_RUNNING &&
-          (this.hass!.config.state === STATE_STARTING ||
-            this.hass!.config.state === STATE_RUNNING)
-        ) {
-          this._unsubscribeBootstrapIntegrations();
-          showToast(this, {
-            message: this.hass!.localize("ui.notification_toast.started"),
-            duration: 5000,
-          });
-=======
         const transition = startupTransition(
           oldHass?.config?.state,
           this.hass!.config.state
@@ -83,7 +53,6 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
           this._showStartupProgress();
         } else if (transition === "finish") {
           this._requestFinishStartupProgress();
->>>>>>> dev
         }
       }
       this._updateStartupProgress();

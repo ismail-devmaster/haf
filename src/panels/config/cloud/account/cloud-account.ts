@@ -65,12 +65,8 @@ export class CloudAccount extends SubscribeMixin(LitElement) {
       <hass-subpage
         .hass=${this.hass}
         .narrow=${this.narrow}
-<<<<<<< HEAD
-        header="Domolux Cloud"
-=======
         back-path="/config"
-        header="Home Assistant Cloud"
->>>>>>> dev
+        header="Domolux Cloud"
       >
         <ha-dropdown slot="toolbar-icon" @wa-select=${this._handleMenuAction}>
           <ha-icon-button
@@ -93,163 +89,7 @@ export class CloudAccount extends SubscribeMixin(LitElement) {
           </ha-dropdown-item>
         </ha-dropdown>
         <div class="content">
-<<<<<<< HEAD
-          <ha-config-section .isWide=${this.isWide}>
-            <span slot="header">Domolux Cloud</span>
-            <div slot="introduction">
-              <p>
-                ${this.hass.localize(
-                  "ui.panel.config.cloud.account.thank_you_note"
-                )}
-              </p>
-            </div>
-
-            <ha-card
-              outlined
-              .header=${this.hass.localize(
-                "ui.panel.config.cloud.account.nabu_casa_account"
-              )}
-            >
-              <div class="account-row">
-                <ha-list-item noninteractive twoline>
-                  ${this.cloudStatus.email.replace(
-                    /(\w{3})[\w.-]+@([\w.]+\w)/,
-                    "$1***@$2"
-                  )}
-                  <span slot="secondary" class="wrap">
-                    ${this._subscription
-                      ? this._subscription.human_description.replace(
-                          "{periodEnd}",
-                          this._subscription.plan_renewal_date
-                            ? formatDateTime(
-                                new Date(
-                                  this._subscription.plan_renewal_date * 1000
-                                ),
-                                this.hass.locale,
-                                this.hass.config
-                              )
-                            : ""
-                        )
-                      : this.hass.localize(
-                          "ui.panel.config.cloud.account.fetching_subscription"
-                        )}
-                  </span>
-                </ha-list-item>
-              </div>
-
-              ${this.cloudStatus.cloud === "connecting" &&
-              this.cloudStatus.cloud_last_disconnect_reason
-                ? html`
-                    <ha-alert
-                      alert-type="warning"
-                      .title=${this.cloudStatus.cloud_last_disconnect_reason
-                        .reason}
-                    ></ha-alert>
-                  `
-                : ""}
-
-              <div class="account-row">
-                <ha-list-item noninteractive>
-                  ${this.hass.localize(
-                    "ui.panel.config.cloud.account.connection_status"
-                  )}:
-                  ${this.cloudStatus.cloud === "connected"
-                    ? this.hass.localize(
-                        "ui.panel.config.cloud.account.connected"
-                      )
-                    : this.cloudStatus.cloud === "disconnected"
-                      ? this.hass.localize(
-                          "ui.panel.config.cloud.account.not_connected"
-                        )
-                      : this.hass.localize(
-                          "ui.panel.config.cloud.account.connecting"
-                        )}
-                </ha-list-item>
-              </div>
-
-              <div class="card-actions">
-                <ha-button
-                  appearance="filled"
-                  href="https://account.nabucasa.com"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  ${this.hass.localize(
-                    "ui.panel.config.cloud.account.manage_account"
-                  )}
-                </ha-button>
-                <ha-button
-                  @click=${this._signOut}
-                  variant="danger"
-                  appearance="plain"
-                >
-                  ${this.hass.localize(
-                    "ui.panel.config.cloud.account.sign_out"
-                  )}
-                </ha-button>
-              </div>
-            </ha-card>
-          </ha-config-section>
-
-          <ha-config-section .isWide=${this.isWide}>
-            <span slot="header"
-              >${this.hass.localize(
-                "ui.panel.config.cloud.account.integrations"
-              )}</span
-            >
-            <div slot="introduction">
-              <p>
-                ${this.hass.localize(
-                  "ui.panel.config.cloud.account.integrations_introduction"
-                )}
-              </p>
-              <p>
-                ${this.hass.localize(
-                  "ui.panel.config.cloud.account.integrations_introduction2"
-                )}
-                <a
-                  href="https://www.nabucasa.com"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  ${this.hass.localize(
-                    "ui.panel.config.cloud.account.integrations_link_all_features"
-                  )}</a
-                >.
-              </p>
-            </div>
-
-            <cloud-remote-pref
-              .hass=${this.hass}
-              .cloudStatus=${this.cloudStatus}
-            ></cloud-remote-pref>
-
-            <cloud-tts-pref
-              .hass=${this.hass}
-              .narrow=${this.narrow}
-              .cloudStatus=${this.cloudStatus}
-            ></cloud-tts-pref>
-
-            <cloud-ice-servers-pref
-              .hass=${this.hass}
-              .cloudStatus=${this.cloudStatus}
-            ></cloud-ice-servers-pref>
-
-            <ha-tip .hass=${this.hass}>
-              <a href="/config/voice-assistants">
-                ${this.hass.localize(
-                  "ui.panel.config.cloud.account.tip_moved_voice_assistants"
-                )}
-              </a>
-            </ha-tip>
-
-            <cloud-webhooks
-              .hass=${this.hass}
-              .cloudStatus=${this.cloudStatus}
-            ></cloud-webhooks>
-          </ha-config-section>
-=======
-          ${
+${
             this._showOnboarding
               ? html`
                   <cloud-account-onboarding
@@ -269,7 +109,6 @@ export class CloudAccount extends SubscribeMixin(LitElement) {
             .webhooks=${this._webhooks}
             @cloud-sign-out=${this._signOut}
           ></cloud-account-overview>
->>>>>>> dev
         </div>
       </hass-subpage>
     `;

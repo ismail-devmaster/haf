@@ -123,6 +123,10 @@ export class HaDomoluxFamilyManager extends LitElement {
 
   @state() private _expandedDashboardIds: Set<string> = new Set();
 
+  @state() private _selectedDashboardId = "all";
+
+  @state() private _dashboardSearchQuery = "";
+
   // Form Inputs (Passwords cleared immediately after WS call)
   @state() private _createDisplayName = "";
 
@@ -410,6 +414,8 @@ export class HaDomoluxFamilyManager extends LitElement {
     this._deviceRoomFilter = "all";
     this._expandedDeviceIds = new Set();
     this._expandedDashboardIds = new Set();
+    this._selectedDashboardId = "all";
+    this._dashboardSearchQuery = "";
     this._error = null;
     this._showPermissionDialog = true;
 
@@ -426,6 +432,8 @@ export class HaDomoluxFamilyManager extends LitElement {
     this._evalResult = null;
     this._catalogDevices = [];
     this._catalogDashboards = [];
+    this._selectedDashboardId = "all";
+    this._dashboardSearchQuery = "";
   }
 
   private async _loadCatalog(): Promise<void> {
@@ -491,6 +499,35 @@ export class HaDomoluxFamilyManager extends LitElement {
       }
       return true;
     });
+  }
+
+  private _getFilteredDashboards(): DashboardSummary[] {
+    let list = this._catalogDashboards;
+    if (this._selectedDashboardId !== "all") {
+      list = list.filter((dash) => dash.dashboard_id === this._selectedDashboardId);
+    }
+    if (this._dashboardSearchQuery.trim()) {
+      const q = this._dashboardSearchQuery.toLowerCase();
+      list = list
+        .map((dash) => {
+          const matchTitle =
+            dash.title.toLowerCase().includes(q) ||
+            dash.dashboard_id.toLowerCase().includes(q);
+          const matchingViews = dash.views.filter(
+            (v) =>
+              v.title.toLowerCase().includes(q) ||
+              v.view_path.toLowerCase().includes(q) ||
+              v.entities.some((eid) => eid.toLowerCase().includes(q))
+          );
+          if (matchTitle) return dash;
+          if (matchingViews.length > 0) {
+            return { ...dash, views: matchingViews };
+          }
+          return null;
+        })
+        .filter((dash): dash is DashboardSummary => dash !== null);
+    }
+    return list;
   }
 
   private _getEffectiveDeviceLevel(
@@ -1509,7 +1546,11 @@ export class HaDomoluxFamilyManager extends LitElement {
       ${filteredDevices.length === 0
         ? html`
             <div class="empty-state">
-              <p>No household devices found.</p>
+              <p>
+                ${this._catalogDevices.length === 0
+                  ? "No household devices found."
+                  : "No household devices match the search or room filter."}
+              </p>
             </div>
           `
         : html`
@@ -1533,6 +1574,11 @@ export class HaDomoluxFamilyManager extends LitElement {
                                 >${dev.area_name}</span
                               >`
                             : nothing}
+                          ${dev.target_type === "entity"
+                            ? html`<span class="standalone-badge"
+                                >Standalone</span
+                              >`
+                            : nothing}
                           ${dev.is_multi_entity
                             ? html`<span class="multi-badge"
                                 >${dev.channels.length} channels</span
@@ -1540,6 +1586,11 @@ export class HaDomoluxFamilyManager extends LitElement {
                             : nothing}
                         </div>
                         <div class="device-meta">
+                          ${dev.primary_entity_id
+                            ? html`<span class="entity-id-meta"
+                                >${dev.primary_entity_id}</span
+                              > • `
+                            : nothing}
                           Capabilities: ${dev.capabilities.join(", ")}
                         </div>
                       </div>
@@ -1637,6 +1688,9 @@ export class HaDomoluxFamilyManager extends LitElement {
                                       <span class="channel-name"
                                         >${ch.name}</span
                                       >
+                                      <span class="channel-entity-id"
+                                        >(${ch.entity_id})</span
+                                      >
                                     </div>
                                     <div class="segmented-control small">
                                       <button
@@ -1712,16 +1766,112 @@ export class HaDomoluxFamilyManager extends LitElement {
       `;
     }
 
+    const filteredDashboards = this._getFilteredDashboards();
+
     return html`
-      <div class="dashboards-list">
+      <div class="filter-toolbar">
+        <div class="search-box">
+          <ha-svg-icon .path=${mdiMagnify}></ha-svg-icon>
+          <input
+            type="text"
+            placeholder="Search dashboards and views..."
+            .value=${this._dashboardSearchQuery}
+            @input=${(e: Event) => {
+              this._dashboardSearchQuery = (e.target as HTMLInputElement).value;
+            }}
+          />
+        </div>
+        <div class="room-filter dashboard-select-container">
+          <select
+            class="dashboard-select"
+            .value=${this._selectedDashboardId}
+            @change=${(e: Event) => {
+              this._selectedDashboardId = (e.target as HTMLSelectElement).value;
+            }}
+          >
+            <option value="all">
+              All dashboards (${this._catalogDashboards.length})
+            </option>
+            ${this._catalogDashboards.map(
+              (dash) =>
+                html`<option value=${dash.dashboard_id}>
+                  ${dash.title}
+                </option>`
+            )}
+          </select>
+        </div>
+      </div>
+
+      <div class="dashboard-selector-chips">
+        <button
+          class="dash-chip ${this._selectedDashboardId === 'all'
+            ? 'active'
+            : ''}"
+          @click=${() => {
+            this._selectedDashboardId = "all";
+          }}
+        >
+          <ha-svg-icon .path=${mdiLayersOutline}></ha-svg-icon>
+          <span>All dashboards</span>
+        </button>
         ${this._catalogDashboards.map(
           (dash) => html`
-            <div class="dashboard-block">
-              <div class="dashboard-title">
-                <ha-svg-icon .path=${mdiLayersOutline}></ha-svg-icon>
-                <h3>${dash.title}</h3>
-              </div>
-              <div class="views-grid">
+            <button
+              class="dash-chip ${this._selectedDashboardId === dash.dashboard_id
+                ? 'active'
+                : ''}"
+              @click=${() => {
+                this._selectedDashboardId = dash.dashboard_id;
+              }}
+            >
+              <ha-svg-icon .path=${mdiViewDashboard}></ha-svg-icon>
+              <span>${dash.title}</span>
+              <span class="chip-count">${dash.views.length}</span>
+            </button>
+          `
+        )}
+      </div>
+
+      ${filteredDashboards.length === 0
+        ? html`
+            <div class="empty-state">
+              <p>No dashboards match the selected filter.</p>
+            </div>
+          `
+        : html`
+            <div class="dashboards-list">
+              ${filteredDashboards.map(
+                (dash) => html`
+                  <div
+                    class="dashboard-block"
+                    data-dashboard-id=${dash.dashboard_id}
+                  >
+                    <div
+                      class="dashboard-title ${this._selectedDashboardId ===
+                      dash.dashboard_id
+                        ? 'selected-focus'
+                        : ''}"
+                    >
+                      <ha-svg-icon .path=${mdiLayersOutline}></ha-svg-icon>
+                      <h3>${dash.title}</h3>
+                      <span class="views-count-badge"
+                        >${dash.views.length} views</span
+                      >
+                      ${this._selectedDashboardId === dash.dashboard_id
+                        ? html`
+                            <button
+                              class="show-all-btn"
+                              @click=${(e: Event) => {
+                                e.stopPropagation();
+                                this._selectedDashboardId = "all";
+                              }}
+                            >
+                              Show all
+                            </button>
+                          `
+                        : nothing}
+                    </div>
+                    <div class="views-grid">
                 ${dash.views.map((v) => {
                   const vRule = this._userPermissionSet?.view_rules[v.view_path];
                   const vEffect =
@@ -1834,11 +1984,12 @@ export class HaDomoluxFamilyManager extends LitElement {
                     </div>
                   `;
                 })}
-              </div>
+                    </div>
+                  </div>
+                `
+              )}
             </div>
-          `
-        )}
-      </div>
+          `}
     `;
   }
 
@@ -2448,6 +2599,21 @@ export class HaDomoluxFamilyManager extends LitElement {
       font-weight: 500;
     }
 
+    .standalone-badge {
+      background: var(--warning-color-subtle, rgba(255, 152, 0, 0.14));
+      color: var(--warning-color, #ff9800);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .entity-id-meta {
+      font-family: var(--code-font-family, monospace);
+      font-size: 0.75rem;
+      color: var(--secondary-text-color);
+    }
+
     .device-meta {
       font-size: 0.8rem;
       color: var(--secondary-text-color);
@@ -2558,7 +2724,95 @@ export class HaDomoluxFamilyManager extends LitElement {
       font-weight: 500;
     }
 
+    .channel-entity-id {
+      font-family: var(--code-font-family, monospace);
+      font-size: 0.75rem;
+      color: var(--secondary-text-color);
+    }
+
     /* Dashboards Tab */
+    .dashboard-select-container select {
+      padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px);
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 8px;
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color);
+      font-size: 0.95rem;
+      height: 100%;
+    }
+
+    .dashboard-selector-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--ha-space-2, 8px);
+      margin-bottom: var(--ha-space-3, 12px);
+    }
+
+    .dash-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--ha-space-2, 8px);
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--divider-color, #ccc);
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+    }
+
+    .dash-chip:hover {
+      background: var(--secondary-background-color, #f5f5f5);
+    }
+
+    .dash-chip.active {
+      background: var(--primary-color, #03a9f4);
+      border-color: var(--primary-color, #03a9f4);
+      color: #fff;
+    }
+
+    .dash-chip.active .chip-count {
+      background: rgba(255, 255, 255, 0.25);
+      color: #fff;
+    }
+
+    .chip-count {
+      background: var(--secondary-background-color, #e0e0e0);
+      color: var(--secondary-text-color);
+      padding: 1px 6px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .views-count-badge {
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: var(--primary-color-subtle, rgba(3, 169, 244, 0.12));
+      color: var(--primary-color);
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-left: 6px;
+    }
+
+    .show-all-btn {
+      background: none;
+      border: 1px solid var(--primary-color);
+      border-radius: 6px;
+      color: var(--primary-color);
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    .show-all-btn:hover {
+      background: var(--primary-color);
+      color: #fff;
+    }
+
     .dashboards-list {
       display: flex;
       flex-direction: column;

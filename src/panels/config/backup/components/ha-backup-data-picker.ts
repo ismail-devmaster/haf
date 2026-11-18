@@ -242,23 +242,6 @@ export class HaBackupDataPicker extends LitElement {
     const selectedItems = this._parseValue(this.value);
 
     return html`
-<<<<<<< HEAD
-      ${homeAssistantItems.length
-        ? html`
-            <div class="section">
-              <ha-checkbox
-                .id=${"homeassistant"}
-                .checked=${selectedItems.homeassistant.length ===
-                homeAssistantItems.length}
-                .indeterminate=${selectedItems.homeassistant.length > 0 &&
-                selectedItems.homeassistant.length < homeAssistantItems.length}
-                @change=${this._sectionChanged}
-                ?disabled=${this.requiredItems.length > 0}
-              >
-                <ha-backup-formfield-label
-                  label="Domolux"
-                  .iconPath=${mdiHomeAssistant}
-=======
       ${
         homeAssistantItems.length
           ? html`
@@ -276,10 +259,9 @@ export class HaBackupDataPicker extends LitElement {
                   }
                   @change=${this._sectionChanged}
                   ?disabled=${this.requiredItems.length > 0}
->>>>>>> dev
                 >
                   <ha-backup-formfield-label
-                    label="Home Assistant"
+                    label="Domolux"
                     .iconPath=${mdiHomeAssistant}
                   >
                   </ha-backup-formfield-label>

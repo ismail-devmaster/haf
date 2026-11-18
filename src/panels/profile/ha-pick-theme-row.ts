@@ -66,112 +66,6 @@ export class HaPickThemeRow extends SubscribeMixin(LitElement) {
           >
             ${this.hass.localize("ui.panel.profile.themes.link_promo")}
           </a>
-<<<<<<< HEAD
-        </span>
-        <ha-select
-          .label=${this.hass.localize("ui.panel.profile.themes.dropdown_label")}
-          .disabled=${!hasThemes}
-          .value=${this.hass.selectedTheme?.theme || USE_DEFAULT_THEME}
-          @selected=${this._handleThemeSelection}
-          .options=${[
-            {
-              value: USE_DEFAULT_THEME,
-              label: this.hass.localize("ui.panel.profile.themes.use_default"),
-            },
-            { value: HOME_ASSISTANT_THEME, label: "Domolux" },
-            ...this._themeNames.map((theme) => ({
-              value: theme,
-              label: theme,
-            })),
-          ]}
-        >
-        </ha-select>
-      </ha-settings-row>
-      ${curTheme === HOME_ASSISTANT_THEME ||
-      (curThemeIsUseDefault &&
-        this.hass.themes.default_dark_theme &&
-        this.hass.themes.default_theme) ||
-      this._supportsModeSelection(curTheme)
-        ? html`<div class="inputs">
-            <ha-radio-group
-              @change=${this._handleDarkMode}
-              name="dark_mode"
-              .ariaLabel=${this.hass.localize(
-                "ui.panel.profile.themes.theme_mode"
-              )}
-              .value=${themeSettings?.dark === undefined
-                ? "light"
-                : themeSettings.dark
-                  ? "dark"
-                  : "light"}
-              orientation="horizontal"
-            >
-              <ha-radio-option value="auto">
-                ${this.hass.localize("ui.panel.profile.themes.dark_mode.auto")}
-              </ha-radio-option>
-              <ha-radio-option value="light">
-                ${this.hass.localize("ui.panel.profile.themes.dark_mode.light")}
-              </ha-radio-option>
-              <ha-radio-option value="dark">
-                ${this.hass.localize("ui.panel.profile.themes.dark_mode.dark")}
-              </ha-radio-option>
-            </ha-radio-group>
-            ${curTheme === HOME_ASSISTANT_THEME
-              ? html`<div class="color-pickers">
-                  <ha-input
-                    .value=${themeSettings?.primaryColor || DefaultPrimaryColor}
-                    type="color"
-                    .label=${this.hass.localize(
-                      "ui.panel.profile.themes.primary_color"
-                    )}
-                    .name=${"primaryColor"}
-                    @change=${this._handleColorChange}
-                  ></ha-input>
-                  <ha-input
-                    .value=${themeSettings?.accentColor || DefaultAccentColor}
-                    type="color"
-                    .label=${this.hass.localize(
-                      "ui.panel.profile.themes.accent_color"
-                    )}
-                    .name=${"accentColor"}
-                    @change=${this._handleColorChange}
-                  ></ha-input>
-                  ${themeSettings?.primaryColor || themeSettings?.accentColor
-                    ? html` <ha-button
-                        appearance="plain"
-                        size="small"
-                        @click=${this._resetColors}
-                      >
-                        ${this.hass.localize("ui.panel.profile.themes.reset")}
-                      </ha-button>`
-                    : ""}
-                </div>`
-              : ""}
-          </div>`
-        : ""}
-      ${showMigration
-        ? html`
-            <ha-settings-row .narrow=${this.narrow}>
-              <span slot="heading">
-                ${this.hass.localize("ui.panel.profile.themes.migrate_header")}
-              </span>
-              <span slot="description">
-                ${this.hass.localize(
-                  "ui.panel.profile.themes.migrate_description"
-                )}
-              </span>
-              <ha-button
-                appearance="plain"
-                size="small"
-                .disabled=${this._migrating}
-                @click=${this._migrateThemePreferences}
-              >
-                ${this.hass.localize("ui.panel.profile.themes.migrate_button")}
-              </ha-button>
-            </ha-settings-row>
-          `
-        : ""}
-=======
         `}
         .labels=${{
           theme: this.hass.localize("ui.panel.profile.themes.dropdown_label"),
@@ -223,7 +117,6 @@ export class HaPickThemeRow extends SubscribeMixin(LitElement) {
             `
           : nothing
       }
->>>>>>> dev
     `;
   }
 

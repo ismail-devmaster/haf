@@ -156,50 +156,6 @@ class DialogTagDetail
                   `
             }
           </div>
-<<<<<<< HEAD
-          ${this._params.entry
-            ? html`
-                <div>
-                  <p>
-                    ${this.hass!.localize("ui.panel.config.tag.detail.usage", {
-                      companion_link: html`<a
-                        href="https://companion.home-assistant.io/"
-                        target="_blank"
-                        rel="noreferrer"
-                        >${this.hass!.localize(
-                          "ui.panel.config.tag.detail.companion_apps"
-                        )}</a
-                      >`,
-                    })}
-                  </p>
-                </div>
-                <div id="qr">
-                  ${this._qrReady
-                    ? html`
-                        <ha-qr-code
-                          .data=${`${documentationUrl(this.hass, "/tag/")}${this._params!.entry!.id}`}
-                          center-image="/static/images/domolux.png"
-                          error-correction-level="quartile"
-                          scale="5"
-                        >
-                        </ha-qr-code>
-                      `
-                    : nothing}
-                </div>
-                <div class="tag-id">
-                  <span class="tag-id-label">
-                    ${this.hass!.localize("ui.panel.config.tag.detail.tag_id")}:
-                  </span>
-                  <span class="tag-id-value">${this._params.entry.id}</span>
-                  <ha-icon-button
-                    .path=${mdiContentCopy}
-                    .label=${this.hass!.localize("ui.common.copy")}
-                    @click=${this._copyId}
-                  ></ha-icon-button>
-                </div>
-              `
-            : ``}
-=======
           ${
             this._params.entry
               ? html`
@@ -249,7 +205,6 @@ class DialogTagDetail
                 `
               : ``
           }
->>>>>>> dev
         </div>
         <ha-dialog-footer slot="footer">
           ${

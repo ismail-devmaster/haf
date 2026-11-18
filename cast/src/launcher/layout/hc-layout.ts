@@ -25,22 +25,7 @@ class HcLayout extends LitElement {
             src="/images/google-nest-hub.png"
           />
           <h1 class="card-header">
-<<<<<<< HEAD
             Domolux Cast${this.subtitle ? ` – ${this.subtitle}` : ""}
-            ${this.auth
-              ? html`
-                  <div class="subtitle">
-                    <a href=${this.auth.data.hassUrl} target="_blank"
-                      >${this.auth.data.hassUrl.substr(
-                        this.auth.data.hassUrl.indexOf("//") + 2
-                      )}</a
-                    >
-                    ${this.user ? html` – ${this.user.name} ` : ""}
-                  </div>
-                `
-              : ""}
-=======
-            Home Assistant Cast${this.subtitle ? ` – ${this.subtitle}` : ""}
             ${
               this.auth
                 ? html`
@@ -55,7 +40,6 @@ class HcLayout extends LitElement {
                   `
                 : ""
             }
->>>>>>> dev
           </h1>
           <slot></slot>
         </div>

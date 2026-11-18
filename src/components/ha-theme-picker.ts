@@ -49,7 +49,7 @@ export class HaThemePicker extends LitElement {
       const items: PickerComboBoxItem[] = [];
 
       if (includeDefault) {
-        items.push({ id: DEFAULT_THEME, primary: "Home Assistant" });
+        items.push({ id: DEFAULT_THEME, primary: "Domolux" });
       }
 
       const themeNames = Object.keys(themes).sort((a, b) =>
@@ -76,29 +76,6 @@ export class HaThemePicker extends LitElement {
     >`;
 
   protected render(): TemplateResult {
-<<<<<<< HEAD
-    const options: HaSelectOption[] = Object.keys(
-      this.hass?.themes.themes || {}
-    ).map((theme) => ({
-      value: theme,
-    }));
-
-    if (this.includeDefault) {
-      options.unshift({
-        value: DEFAULT_THEME,
-        label: "Domolux",
-      });
-    }
-
-    if (!this.required) {
-      options.unshift({
-        value: "remove",
-        label: this.hass!.localize("ui.components.theme-picker.no_theme"),
-      });
-    }
-
-=======
->>>>>>> dev
     return html`
       <ha-generic-picker
         .label=${

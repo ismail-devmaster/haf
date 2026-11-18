@@ -118,11 +118,7 @@ interface BaseTrace {
     // Script execution stops because of an unexpected exception:
     | "error"
     // The exception is in the trace itself or in the last element of the trace
-<<<<<<< HEAD
     // Script execution stopped by async_stop called on the script run because Domolux is shutting down, script mode is SCRIPT_MODE_RESTART etc:
-    | "cancelled";
-=======
-    // Script execution stopped by async_stop called on the script run because home assistant is shutting down, script mode is SCRIPT_MODE_RESTART etc:
     | "cancelled"
     // No action was executed because a trigger evaluated a relevant change but
     // decided not to fire; the reason is in the trigger step of the trace
@@ -131,7 +127,6 @@ interface BaseTrace {
     | "disallowed_recursion_detected"
     // The run has not stopped yet, so it has no stop reason
     | null;
->>>>>>> dev
 }
 
 interface BaseTraceExtended {

@@ -255,6 +255,8 @@ try {
     const devCount = (mgr._catalogDevices || []).length;
     const emptyState = !!mgr.shadowRoot?.querySelector(".empty-state");
     const deviceCards = mgr.shadowRoot?.querySelectorAll(".device-card")?.length || 0;
+    const devNames = Array.from(mgr.shadowRoot?.querySelectorAll(".device-name") || []).map((el) => el.textContent?.trim()).filter(Boolean);
+    const entityMetas = Array.from(mgr.shadowRoot?.querySelectorAll(".entity-id-meta") || []).map((el) => el.textContent?.trim()).filter(Boolean);
     return {
       found: true,
       open: Boolean(mgr._showPermissionDialog),
@@ -262,6 +264,8 @@ try {
       devCount,
       emptyState,
       deviceCards,
+      devNamesCount: devNames.length,
+      entityMetasCount: entityMetas.length,
     };
   })()`);
 
@@ -272,6 +276,15 @@ try {
       permDialogState.deviceCards > 0 &&
       permDialogState.emptyState === false,
     { state: permDialogState }
+  );
+
+  record(
+    "browser.household_devices_display_friendly_name_and_entities",
+    permDialogState.devNamesCount > 0 && permDialogState.entityMetasCount > 0,
+    {
+      devNamesCount: permDialogState.devNamesCount,
+      entityMetasCount: permDialogState.entityMetasCount,
+    }
   );
   await shot(father, "father-household-devices-catalog");
 
@@ -312,6 +325,46 @@ try {
     { state: dashboardsTabState }
   );
   await shot(father, "father-dashboards-views-catalog");
+
+  // Verify selecting a dashboard displays its actual views (Acceptance Criterion)
+  const selectDashboardState = await father.evaluate(`(async () => {
+    ${findMgrFunc}
+    const mgr = findDomoluxMgr();
+    if (!mgr) return { found: false };
+    mgr._selectedDashboardId = "dashboard-user";
+    await mgr.updateComplete;
+    const dashBlocks = mgr.shadowRoot?.querySelectorAll(".dashboard-block")?.length || 0;
+    const viewCards = mgr.shadowRoot?.querySelectorAll(".view-card")?.length || 0;
+    const titles = Array.from(mgr.shadowRoot?.querySelectorAll(".view-title") || []).map((el) => el.textContent?.trim());
+    return {
+      found: true,
+      selected: mgr._selectedDashboardId,
+      dashBlocks,
+      viewCards,
+      titles,
+    };
+  })()`);
+
+  record(
+    "browser.selecting_dashboard_displays_actual_views",
+    selectDashboardState.found &&
+      selectDashboardState.dashBlocks === 1 &&
+      selectDashboardState.viewCards >= 2 &&
+      selectDashboardState.titles.includes("Overview") &&
+      selectDashboardState.titles.includes("Kids Room"),
+    { state: selectDashboardState }
+  );
+  await shot(father, "father-selected-dashboard-views");
+
+  // Restore dashboard selection to "all"
+  await father.evaluate(`(async () => {
+    ${findMgrFunc}
+    const mgr = findDomoluxMgr();
+    if (mgr) {
+      mgr._selectedDashboardId = "all";
+      await mgr.updateComplete;
+    }
+  })()`);
 
   // Father assigns view permission to Child A directly through UI method
   await father.evaluate(`(async () => {

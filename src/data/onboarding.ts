@@ -3,18 +3,16 @@ import { handleFetchPromise } from "../util/hass-call-api";
 
 export interface InstallationType {
   installation_type:
-<<<<<<< HEAD
     | "Domolux Operating System"
+    | "Domolux OS"
     | "Domolux Container"
     | "Domolux Supervised"
     | "Domolux Core"
-=======
     | "Home Assistant OS"
     | "Home Assistant Container"
     | "Unsupported Third Party Container"
     | "Home Assistant Supervised"
     | "Home Assistant Core"
->>>>>>> dev
     | "Unknown";
 }
 

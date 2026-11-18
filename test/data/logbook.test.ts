@@ -74,15 +74,9 @@ describe("localizeStateMessage", () => {
 });
 
 describe("localizeTriggerSource", () => {
-<<<<<<< HEAD
-  it("replaces a known phrase with the prefixed translation", () => {
-    expect(localizeTriggerSource(fakeLocalize, "Domolux starting")).toBe(
-      "<ui.components.logbook.triggered_by_homeassistant_starting>"
-=======
   it("replaces a known phrase with the bare translation", () => {
-    expect(localizeTriggerSource(fakeLocalize, "Home Assistant starting")).toBe(
+    expect(localizeTriggerSource(fakeLocalize, "Domolux starting")).toBe(
       "<ui.components.logbook.homeassistant_starting>"
->>>>>>> dev
     );
   });
 
@@ -105,13 +99,6 @@ describe("localizeTriggerSource", () => {
   });
 });
 
-<<<<<<< HEAD
-describe("localizeTriggerDescription", () => {
-  it("returns just the bare-phrase translation, without 'triggered by'", () => {
-    expect(
-      localizeTriggerDescription(fakeLocalize, "Domolux starting")
-    ).toBe("<ui.components.logbook.homeassistant_starting>");
-=======
 describe("parseTriggerSource", () => {
   it("extracts the platform and entity id for state triggers", () => {
     expect(parseTriggerSource("state of binary_sensor.foo")).toEqual({
@@ -122,7 +109,6 @@ describe("parseTriggerSource", () => {
       platform: "numeric_state",
       entityId: "sensor.bar",
     });
->>>>>>> dev
   });
 
   it("returns the platform without an entity for time triggers", () => {
@@ -137,7 +123,7 @@ describe("parseTriggerSource", () => {
   });
 
   it("maps Home Assistant start/stop to the homeassistant platform", () => {
-    expect(parseTriggerSource("Home Assistant starting")).toEqual({
+    expect(parseTriggerSource("Domolux starting")).toEqual({
       platform: "homeassistant",
       entityId: undefined,
     });

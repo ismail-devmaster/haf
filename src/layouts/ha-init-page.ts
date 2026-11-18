@@ -19,17 +19,11 @@ export class HaInitPage extends LitElement {
   protected render() {
     return this.error
       ? html`
-<<<<<<< HEAD
-          <p>Unable to connect to Domolux.</p>
-          <p class="retry-text">
-            Retrying in ${this._retryInSeconds} seconds...
-=======
           <p>
             ${
               this.localize?.("ui.init.error.title") ||
-              "Unable to connect to Home Assistant."
+              "Unable to connect to Domolux."
             }
->>>>>>> dev
           </p>
           <p class="retry-text">
             ${
@@ -43,37 +37,6 @@ export class HaInitPage extends LitElement {
               this.localize?.("ui.init.error.retry_now") || "Retry now"
             }</ha-button
           >
-<<<<<<< HEAD
-          ${location.host.includes("ui.nabu.casa")
-            ? html`
-                <p>
-                  It is possible that you are seeing this screen because your
-                  Domolux is not currently connected. You can ask it to
-                  come online from your
-                  <a href="https://account.nabucasa.com/"
-                    >Nabu Casa account page</a
-                  >.
-                </p>
-              `
-            : ""}
-        `
-      : html`
-          <div id="progress-indicator-wrapper">
-            <ha-spinner></ha-spinner>
-          </div>
-          <div id="loading-text">
-            ${this.migration
-              ? html`
-                  Database upgrade is in progress, Domolux will not start
-                  until the upgrade is completed.
-                  <br /><br />
-                  The upgrade may need a long time to complete, please be
-                  patient.
-                `
-              : "Loading data"}
-          </div>
-        `;
-=======
           ${
             location.host.includes("ui.nabu.casa")
               ? html`<p>
@@ -87,7 +50,7 @@ export class HaInitPage extends LitElement {
                       >`,
                     }) ||
                     html`It is possible that you are seeing this screen because
-                      your Home Assistant is not currently connected. You can
+                      your Domolux is not currently connected. You can
                       ask it to come online from your
                       <a href="https://account.nabucasa.com/"
                         >Nabu Casa account page</a
@@ -105,13 +68,12 @@ export class HaInitPage extends LitElement {
               ? html`<span class="migration-text"
                   >${
                     this.localize?.("ui.init.migration") ||
-                    "Database upgrade is in progress, Home Assistant will not start until the upgrade is completed.\n\nThe upgrade may need a long time to complete, please be patient."
+                    "Database upgrade is in progress, Domolux will not start until the upgrade is completed.\n\nThe upgrade may need a long time to complete, please be patient."
                   }</span
                 >`
               : this.localize?.("ui.init.loading") || "Loading..."
           }
         </p>`;
->>>>>>> dev
   }
 
   disconnectedCallback() {

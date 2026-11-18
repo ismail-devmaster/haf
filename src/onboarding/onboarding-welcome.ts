@@ -88,18 +88,13 @@ class OnboardingWelcome extends LitElement {
           </div>
           <ha-icon-next slot="end"></ha-icon-next>
         </ha-list-item-button>
-<<<<<<< HEAD
-        <ha-list-item-button @click=${this._restoreBackupCloud}>
-          <div slot="headline">Domolux Cloud</div>
-=======
         <ha-list-item-button
           @click=${this._restoreBackupCloud}
           .disabled=${!ready}
         >
           <div slot="headline">
-            ${ready ? "Home Assistant Cloud" : renderSkeleton("headline")}
+            ${ready ? "Domolux Cloud" : renderSkeleton("headline")}
           </div>
->>>>>>> dev
           <div slot="supporting-text">
             ${
               ready

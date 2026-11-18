@@ -318,17 +318,13 @@ export interface DomoluxUI {
   suspendWhenHidden: boolean;
 }
 
-<<<<<<< HEAD
-export interface DomoluxConfig {
-=======
 export type LogFileDisabledReason = "environment";
 
 export interface HassLoggingConfig {
   log_file_disabled_reason: LogFileDisabledReason | null;
 }
 
-export interface HomeAssistantConfig {
->>>>>>> dev
+export interface DomoluxConfig {
   auth: Auth & { external?: ExternalMessaging };
   config: HassConfig & { logging?: HassLoggingConfig };
   user?: CurrentUser;

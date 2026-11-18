@@ -1,11 +1,6 @@
-<<<<<<< HEAD
 /* global require, module, __dirname */
-const { existsSync, writeFileSync } = require("fs");
-=======
 const fs = require("fs");
-
-const { existsSync } = fs;
->>>>>>> dev
+const { existsSync, writeFileSync } = fs;
 const path = require("path");
 const rspack = require("@rspack/core");
 const browserslist = require("browserslist");
@@ -587,25 +582,17 @@ const createRspackConfig = ({
     output: {
       module: latestBuild,
       filename: ({ chunk }) =>
-<<<<<<< HEAD
-        !isProdBuild || isStatsBuild || dontHash.has(chunk.name)
-          ? "[name].js"
-          : "[name].[contenthash].js",
-      chunkFilename: isDomoluxBuild
-        ? "[name].js"
-        : isProdBuild && !isStatsBuild
-          ? "[name].[contenthash].js"
-          : "[name].js",
-=======
         // Versioned instead of hashed; MapLibre gets the URL at build time
         chunk.name === bundle.mapWorkerName
           ? bundle.mapWorkerFilename()
           : !isProdBuild || isStatsBuild || dontHash.has(chunk.name)
             ? "[name].js"
             : "[name].[contenthash].js",
-      chunkFilename:
-        isProdBuild && !isStatsBuild ? "[name].[contenthash].js" : "[name].js",
->>>>>>> dev
+      chunkFilename: isDomoluxBuild
+        ? "[name].js"
+        : isProdBuild && !isStatsBuild
+          ? "[name].[contenthash].js"
+          : "[name].js",
       assetModuleFilename:
         isProdBuild && !isStatsBuild ? "[id].[contenthash][ext]" : "[id][ext]",
       crossOriginLoading: "use-credentials",
@@ -703,22 +690,29 @@ const createGalleryConfig = ({ isProdBuild, latestBuild, isTestBuild }) =>
 const createLandingPageConfig = ({ isProdBuild, latestBuild }) =>
   createRspackConfig(bundle.config.landingPage({ isProdBuild, latestBuild }));
 
-<<<<<<< HEAD
 const createDomoluxRolesConfig = ({
-=======
-const createE2eTestAppConfig = ({
->>>>>>> dev
   isProdBuild,
   latestBuild,
   isStatsBuild,
   isTestBuild,
 }) =>
   createRspackConfig(
-<<<<<<< HEAD
     bundle.config.domoluxRoles({
-=======
+      isProdBuild,
+      latestBuild,
+      isStatsBuild,
+      isTestBuild,
+    })
+  );
+
+const createE2eTestAppConfig = ({
+  isProdBuild,
+  latestBuild,
+  isStatsBuild,
+  isTestBuild,
+}) =>
+  createRspackConfig(
     bundle.config.e2eTestApp({
->>>>>>> dev
       isProdBuild,
       latestBuild,
       isStatsBuild,

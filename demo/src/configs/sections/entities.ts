@@ -526,7 +526,6 @@ export const demoEntitiesSections: DemoConfig["entities"] = (localize) =>
         friendly_name: "Outdoor motion sensor Illuminance",
       },
     },
-<<<<<<< HEAD
     "automation.home_assistant_auto_update": {
       entity_id: "automation.home_assistant_auto_update",
       state: "off",
@@ -540,8 +539,6 @@ export const demoEntitiesSections: DemoConfig["entities"] = (localize) =>
         friendly_name: "Domolux Auto-update",
       },
     },
-=======
->>>>>>> dev
     "update.home_assistant_operating_system_update": {
       entity_id: "update.home_assistant_operating_system_update",
       state: "off",

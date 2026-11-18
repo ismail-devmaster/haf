@@ -11,6 +11,7 @@ import {
   connectionContext,
   narrowViewportContext,
   uiContext,
+  userContext,
 } from "../data/context";
 import { subscribeNotifications } from "../data/persistent_notification";
 import "./ha-icon-button";
@@ -37,6 +38,10 @@ class HaMenuButton extends LitElement {
   @state()
   @consume({ context: configContext, subscribe: true })
   private _config?: ContextType<typeof configContext>;
+
+  @state()
+  @consume({ context: userContext, subscribe: true })
+  private _user?: ContextType<typeof userContext>;
 
   @state() private _hasNotifications = false;
 
@@ -89,7 +94,8 @@ class HaMenuButton extends LitElement {
       !changedProps.has("_narrow") &&
       !changedProps.has("_ui") &&
       !changedProps.has("_connection") &&
-      !changedProps.has("_config")
+      !changedProps.has("_config") &&
+      !changedProps.has("_user")
     ) {
       return;
     }
@@ -99,25 +105,11 @@ class HaMenuButton extends LitElement {
       this._unsubNotifications = undefined;
     }
 
-<<<<<<< HEAD
-    const oldShowButton =
-      oldHass?.kioskMode === false &&
-      (oldNarrow || oldHass?.dockedSidebar === "always_hidden") &&
-      oldHass?.user?.is_admin !== false;
-    const showButton =
-      this.hass.kioskMode === false &&
-      (this.narrow || this.hass.dockedSidebar === "always_hidden") &&
-      this.hass.user?.is_admin !== false;
-
-    if (this.hasUpdated && oldShowButton === showButton) {
-      return;
-    }
-=======
     const showButton =
       this._ui?.kioskMode === false &&
       this._config?.auth.external?.config.hasSidebar !== true &&
-      (this._narrow || this._ui.dockedSidebar === "always_hidden");
->>>>>>> dev
+      (this._narrow || this._ui.dockedSidebar === "always_hidden") &&
+      this._user?.is_admin !== false;
 
     this._show = showButton || this._alwaysVisible;
 

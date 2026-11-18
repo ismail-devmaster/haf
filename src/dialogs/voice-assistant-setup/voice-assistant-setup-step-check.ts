@@ -35,60 +35,11 @@ export class HaVoiceAssistantSetupStepCheck extends LitElement {
 
   protected override render() {
     return html`<div class="content">
-<<<<<<< HEAD
-      ${this._status === "timeout"
-        ? html`<img
-              src="/static/images/voice-assistant/error.png"
-              alt="Casita Domolux error logo"
-            />
-            <h1>
-              ${this.hass.localize(
-                "ui.panel.config.voice_assistants.satellite_wizard.check.failed_title"
-              )}
-            </h1>
-            <p class="secondary">
-              ${this.hass.localize(
-                "ui.panel.config.voice_assistants.satellite_wizard.check.failed_secondary"
-              )}
-            </p>
-            <div class="footer">
-              <ha-button
-                appearance="plain"
-                href=${documentationUrl(
-                  this.hass,
-                  "/voice_control/troubleshooting/#i-dont-get-a-voice-response"
-                )}
-              >
-                ${this.hass.localize(
-                  "ui.panel.config.voice_assistants.satellite_wizard.check.help"
-                )}</ha-button
-              >
-              <ha-button @click=${this._testConnection}
-                >${this.hass.localize(
-                  "ui.panel.config.voice_assistants.satellite_wizard.check.retry"
-                )}</ha-button
-              >
-            </div>`
-        : html`<img
-              src="/static/images/voice-assistant/hi.png"
-              alt="Casita Domolux hi logo"
-            />
-            <h1>
-              ${this.hass.localize(
-                "ui.panel.config.voice_assistants.satellite_wizard.check.title"
-              )}
-            </h1>
-            <p class="secondary">
-              ${this.hass.localize(
-                "ui.panel.config.voice_assistants.satellite_wizard.check.secondary"
-              )}
-            </p>
-=======
       ${
         this._status === "timeout"
           ? html`<img
                 src="/static/images/voice-assistant/error.png"
-                alt="Casita Home Assistant error logo"
+                alt="Casita Domolux error logo"
               />
               <h1>
                 ${this.hass.localize(
@@ -120,7 +71,7 @@ export class HaVoiceAssistantSetupStepCheck extends LitElement {
               </div>`
           : html`<img
                 src="/static/images/voice-assistant/hi.png"
-                alt="Casita Home Assistant hi logo"
+                alt="Casita Domolux hi logo"
               />
               <h1>
                 ${this.hass.localize(
@@ -132,8 +83,6 @@ export class HaVoiceAssistantSetupStepCheck extends LitElement {
                   "ui.panel.config.voice_assistants.satellite_wizard.check.secondary"
                 )}
               </p>
->>>>>>> dev
-
               ${this._showLoader ? html`<ha-spinner></ha-spinner>` : nothing}`
       }
     </div>`;

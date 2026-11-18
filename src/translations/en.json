@@ -77,13 +77,13 @@
   "ui": {
     "init": {
       "loading": "Loading...",
-      "migration": "Database upgrade is in progress, Home Assistant will not start until the upgrade is completed.\n\nThe upgrade may need a long time to complete, please be patient.",
+      "migration": "Database upgrade is in progress, Domolux will not start until the upgrade is completed.\n\nThe upgrade may need a long time to complete, please be patient.",
       "project_from": "A project from the",
       "error": {
-        "title": "Unable to connect to Home Assistant.",
+        "title": "Unable to connect to Domolux.",
         "retrying": "Retrying in {seconds, plural, one {# second} other {# seconds}}...",
         "retry_now": "Retry now",
-        "nabu_casa": "It is possible that you are seeing this screen because your Home Assistant is not currently connected. You can ask it to come online from your {account_link}.",
+        "nabu_casa": "It is possible that you are seeing this screen because your Domolux is not currently connected. You can ask it to come online from your {account_link}.",
         "nabu_casa_account": "Nabu Casa account page"
       }
     },
@@ -769,19 +769,6 @@
       },
       "logbook": {
         "entries_not_found": "No activity found.",
-<<<<<<< HEAD
-        "triggered_by": "triggered by",
-        "triggered_by_automation": "triggered by automation",
-        "triggered_by_script": "triggered by script",
-        "triggered_by_action": "triggered by action",
-        "triggered_by_numeric_state_of": "triggered by numeric state of",
-        "triggered_by_state_of": "triggered by state of",
-        "triggered_by_event": "triggered by event",
-        "triggered_by_time": "triggered by time",
-        "triggered_by_time_pattern": "triggered by time pattern",
-        "triggered_by_homeassistant_stopping": "triggered by Domolux stopping",
-        "triggered_by_homeassistant_starting": "triggered by Domolux starting",
-=======
         "automation_triggered": "Triggered",
         "script_ran": "Ran",
         "view_trace": "View trace",
@@ -804,19 +791,13 @@
           "webhook": "[%key:ui::panel::config::automation::editor::triggers::type::webhook::label%]",
           "zone": "[%key:ui::panel::config::automation::editor::triggers::type::zone::label%]"
         },
->>>>>>> dev
         "numeric_state_of": "numeric state of",
         "state_of": "state of",
         "event": "event",
         "time": "time",
         "time_pattern": "time pattern",
-<<<<<<< HEAD
         "homeassistant_stopping": "Domolux stopping",
         "homeassistant_starting": "Domolux starting",
-        "show_trace": "[%key:ui::panel::config::automation::editor::show_trace%]",
-=======
-        "homeassistant_stopping": "Home Assistant stopping",
-        "homeassistant_starting": "Home Assistant starting",
         "cause_filter": {
           "caption": "Triggered by",
           "automation": "Automations",
@@ -832,7 +813,6 @@
           "scheduled": "Scheduled",
           "via": "Via {name}"
         },
->>>>>>> dev
         "retrieval_error": "Could not load activity",
         "not_loaded": "[%key:ui::dialogs::helper_settings::platform_not_loaded%]",
         "messages": {
@@ -1857,15 +1837,9 @@
             "themes": "[%key:ui::panel::config::tools::tabs::yaml::section::reloading::themes%]"
           },
           "home_assistant_control": {
-<<<<<<< HEAD
             "perform_action": "{action} Domolux",
-            "restart": "[%key:ui::panel::config::developer-tools::tabs::yaml::section::server_management::restart%]",
-            "stop": "[%key:ui::panel::config::developer-tools::tabs::yaml::section::server_management::stop%]"
-=======
-            "perform_action": "{action} Home Assistant",
             "restart": "[%key:ui::panel::config::tools::tabs::yaml::section::server_management::restart%]",
             "stop": "[%key:ui::panel::config::tools::tabs::yaml::section::server_management::stop%]"
->>>>>>> dev
           },
           "types": {
             "reload": "Reload",
@@ -1942,18 +1916,12 @@
         "send_text": "Send text",
         "start_listening": "Start listening",
         "manage_assistants": "Manage assistants",
-<<<<<<< HEAD
-        "not_supported_microphone_browser": "Your connection to Domolux is not secured using HTTPS. This causes browsers to block Domolux from accessing the microphone.",
-        "not_supported_microphone_documentation": "Use the Domolux app or visit {documentation_link} to learn how to use a secure URL",
-        "not_supported_microphone_documentation_link": "the documentation",
-=======
         "microphone_permission_denied": "Home Assistant doesn't have permission to use your microphone. Allow microphone access in your browser settings and try again.",
         "microphone_not_found": "No microphone was found. Connect a microphone and try again.",
         "microphone_in_use": "Your microphone could not be started. It may be in use by another app.",
         "microphone_unknown": "Your microphone could not be started.",
         "error_playing_audio": "The response could not be played",
         "error_starting_pipeline": "Assist could not start",
->>>>>>> dev
         "unknown_error_load_assist": "Loading the Assist pipeline failed",
         "not_found_error_load_assist": "Cannot find the Assist pipeline",
         "show_details": "Show details"
@@ -2039,10 +2007,7 @@
           "install": "Install",
           "update": "Update",
           "auto_update_enabled_title": "Cannot skip version",
-<<<<<<< HEAD
           "auto_update_enabled_text": "Automatic updates for this item have been enabled; skipping it is, therefore, unavailable. You can either install this update now or wait for Domolux to do it automatically.",
-=======
-          "auto_update_enabled_text": "Automatic updates for this item have been enabled; skipping it is, therefore, unavailable. You can either install this update now or wait for Home Assistant to do it automatically.",
           "backup_in_progress": {
             "create_backup": "Home Assistant is creating a backup, so updates are paused until it finishes. You can update once it is done. {backups_link}",
             "receive_backup": "Home Assistant is uploading a backup, so updates are paused until it finishes. You can update once it is done. {backups_link}",
@@ -2051,7 +2016,6 @@
           },
           "install_failed": "The update could not be started: {error}",
           "supervisor_logs": "[%key:ui::panel::config::logs::supervisor_logs%]",
->>>>>>> dev
           "create_backup": {
             "automatic": "Automatic backup before update",
             "automatic_description_last": "Last automatic backup {relative_time}.",
@@ -2465,13 +2429,8 @@
         "view_entity": "More info about entity"
       },
       "restart": {
-<<<<<<< HEAD
         "heading": "Restart Domolux",
-        "advanced_options": "Advanced options",
-=======
-        "heading": "Restart Home Assistant",
         "more_options": "More options",
->>>>>>> dev
         "backup_in_progress": "A backup is currently being created. The action will automatically proceed once the backup process is complete.",
         "upload_in_progress": "A backup upload is currently in progress. The action will automatically proceed once the upload process is complete.",
         "restore_in_progress": "A backup restore is currently in progress. The action will automatically proceed once the restore process is complete.",
@@ -2490,25 +2449,15 @@
         "restart": {
           "title": "Restart Domolux",
           "description": "Interrupts all running automations and scripts.",
-<<<<<<< HEAD
           "confirm_title": "Restart Domolux?",
-          "confirm_description": "This will interrupt all running automations and scripts.",
-=======
-          "confirm_title": "Restart Home Assistant?",
           "confirm_description": "All integrations will be reloaded.",
->>>>>>> dev
           "confirm_action": "Restart",
           "confirm_action_backup": "Wait and restart",
           "failed": "Failed to restart Domolux"
         },
         "stop": {
-<<<<<<< HEAD
           "confirm_title": "Stop Domolux?",
-          "confirm_description": "This will interrupt all running automations and scripts.",
-=======
-          "confirm_title": "Stop Home Assistant?",
           "confirm_description": "Home Assistant will be stopped.",
->>>>>>> dev
           "confirm_action": "Stop"
         },
         "reboot": {
@@ -2900,14 +2849,9 @@
         },
         "other": {
           "title": "Other",
-<<<<<<< HEAD
           "my_link": "get My Domolux link",
-          "show_shortcuts": "show keyboard shortcuts"
-=======
-          "my_link": "get My Home Assistant link",
           "show_shortcuts": "show keyboard shortcuts",
           "toggle_yaml": "switch between visual and YAML editor"
->>>>>>> dev
         }
       }
     },
@@ -2983,16 +2927,9 @@
     "notification_toast": {
       "action_failed": "Failed to perform the action {service}.",
       "connection_lost": "Connection lost. Reconnecting…",
-<<<<<<< HEAD
       "started": "Domolux has started!",
-      "starting": "Domolux is starting. Not everything will be available until it is finished.",
-      "wrapping_up_startup": "Wrapping up startup. Not everything will be available until it is finished.",
-      "integration_starting": "Starting {integration}. Not everything will be available until it is finished.",
-=======
-      "started": "Home Assistant has started!",
       "started_with_issues": "Home Assistant has started. {count, plural,\n  one {# integration needs}\n  other {# integrations need}\n} attention.",
       "details": "Details",
->>>>>>> dev
       "triggered": "Triggered {name}",
       "dismiss": "Dismiss",
       "no_matching_link_found": "No matching My link found for {path}",
@@ -3266,14 +3203,10 @@
         },
         "updates": {
           "caption": "Updates",
-<<<<<<< HEAD
           "description": "Manage updates of Domolux, apps, and devices",
-=======
-          "description": "Manage updates of Home Assistant, apps, and devices",
           "group_system": "Home Assistant",
           "group_apps": "Apps",
           "update_all": "Update all",
->>>>>>> dev
           "no_updates": "No updates available",
           "no_update_entities": {
             "title": "Unable to check for updates",
@@ -3394,16 +3327,9 @@
           "error_loading": "Error loading apps",
           "info": {
             "what_is_an_app": "What is an app?",
-<<<<<<< HEAD
-            "what_is_an_app_description": "Apps allow you to extend the functionality around Domolux by installing additional applications. They run alongside Domolux and provide extra features like network monitoring, code editors, database management, and more.",
+            "what_is_an_app_description": "Apps run alongside Domolux and provide extra features like network monitoring, code editors, database management, and more.",
             "why_not_available": "Why you see this page instead of an app store",
-            "why_not_available_description": "Apps are only available if you've used the Domolux Operating System installation method. If you installed Domolux using any other method then you cannot use apps. Often you can achieve the same result manually, refer to the documentation by the vendor of the application you'd like to install.",
             "installation_hint": "Apps require the Domolux Operating System. Learn more about installation methods in the documentation.",
-=======
-            "what_is_an_app_description": "Apps run alongside Home Assistant and provide extra features like network monitoring, code editors, database management, and more.",
-            "why_not_available": "Why you see this page instead of an app store",
-            "installation_hint": "Apps require the Home Assistant Operating System. Learn more about installation methods in the documentation.",
->>>>>>> dev
             "learn_more": "Learn more",
             "dismiss": "Don't show again"
           },
@@ -3997,13 +3923,8 @@
           },
           "agents": {
             "cloud_agent_description": "Note: It stores only the most recent backup, regardless of your retention settings, with a maximum size of 5 GB.",
-<<<<<<< HEAD
             "cloud_agent_no_subcription": "You currently do not have an active Domolux Cloud subscription.",
-            "network_mount_agent_description": "Network storage",
-=======
-            "cloud_agent_no_subcription": "You currently do not have an active Home Assistant Cloud subscription.",
             "network_mount_agent_description": "Additional storage",
->>>>>>> dev
             "unavailable_agents": "Unavailable locations",
             "no_agents": "No locations configured",
             "encryption_turned_off": "Encryption turned off",
@@ -4133,27 +4054,15 @@
                   "addon_repositories": "[%key:ui::panel::config::backup::overview::progress::description::create_backup::app_repositories%]",
                   "addons": "[%key:ui::panel::config::backup::overview::progress::description::create_backup::apps%]",
                   "await_addon_restarts": "[%key:ui::panel::config::backup::overview::progress::description::create_backup::await_app_restarts%]",
-<<<<<<< HEAD
-                  "app_repositories": "Backing up app repositories",
-                  "apps": "Backing up apps",
-                  "await_app_restarts": "Waiting for apps to restart",
-                  "docker_config": "Backing up Docker configuration",
-                  "finishing_file": "Finishing backup file",
-                  "folders": "Backing up folders",
-                  "home_assistant": "Backing up Domolux",
-                  "upload_to_agents": "Uploading to locations",
-                  "cleaning_up": "Cleaning up"
-=======
                   "app_repositories": "Backing up app repositories...",
                   "apps": "Backing up apps...",
                   "await_app_restarts": "Waiting for apps to restart...",
                   "docker_config": "Backing up Docker configuration...",
                   "finishing_file": "Finishing backup file...",
                   "folders": "Backing up folders...",
-                  "home_assistant": "Backing up Home Assistant...",
+                  "home_assistant": "Backing up Domolux...",
                   "upload_to_agents": "Uploading backup...",
                   "cleaning_up": "Cleaning up..."
->>>>>>> dev
                 },
                 "restore_backup": {
                   "addon_repositories": "[%key:ui::panel::config::backup::overview::progress::description::restore_backup::app_repositories%]",
@@ -4505,11 +4414,7 @@
             },
             "actions": {
               "title": "Actions",
-<<<<<<< HEAD
-              "description": "The actions dev tool allows you to perform any action available in Domolux.",
-=======
-              "description": "The actions tool allows you to perform any action available in Home Assistant.",
->>>>>>> dev
+              "description": "The actions tool allows you to perform any action available in Domolux.",
               "call_service": "Perform action",
               "response": "Response",
               "column_parameter": "Parameter",
@@ -4562,13 +4467,9 @@
             },
             "templates": {
               "title": "Template",
-<<<<<<< HEAD
-              "description": "Templates are rendered using the Jinja2 template engine with some Domolux specific extensions.",
-=======
-              "description": "Templates let you generate dynamic content from your Home Assistant data, such as a notification that lists which lights are on, or a sensor whose value is calculated from several other entities.",
-              "engine_info": "Home Assistant uses the Jinja templating engine, extended with functions for working with your entities, areas, devices, and more. Write a template in the editor below and its result updates live as your states change.",
+              "description": "Templates let you generate dynamic content from your Domolux data, such as a notification that lists which lights are on, or a sensor whose value is calculated from several other entities.",
+              "engine_info": "Domolux uses the Jinja templating engine, extended with functions for working with your entities, areas, devices, and more. Write a template in the editor below and its result updates live as your states change.",
               "learn_more": "Learn more",
->>>>>>> dev
               "about": "About templates",
               "editor": "Template editor",
               "result": "Result",
@@ -4579,10 +4480,6 @@
               "confirm_reset": "Do you want to reset your current template back to the demo template?",
               "confirm_clear": "Do you want to clear your current template?",
               "result_type": "Result type",
-<<<<<<< HEAD
-              "jinja_documentation": "Jinja2 template documentation",
-              "template_extensions": "Domolux template extensions",
-=======
               "docs_introduction": "Introduction to templating",
               "docs_introduction_description": "Start here for a step-by-step guide.",
               "docs_states": "Working with states",
@@ -4591,7 +4488,6 @@
               "docs_debugging_description": "Find and fix problems in your templates.",
               "docs_functions": "Template functions reference",
               "docs_functions_description": "Search every available function, filter, and test.",
->>>>>>> dev
               "unknown_error_template": "Unknown error rendering template",
               "time": "This template updates at the start of each minute.",
               "all_listeners": "This template listens for all state changed events.",
@@ -5040,12 +4936,8 @@
               "entity_para": "Pick a sensor which measures gas consumption in either of {unit}.",
               "note_para": "Note: It is not possible to add both sensors measuring a volume of gas and sensors measuring the amount of energy contained in the gas.",
               "display_name": "[%key:ui::panel::config::energy::device_consumption::dialog::display_name%]",
-<<<<<<< HEAD
-              "cost_para": "Select how Domolux should keep track of the costs of the consumed gas.",
-=======
               "cost_tracking": "[%key:ui::panel::config::energy::grid::dialog::import_cost%]",
-              "cost_para": "Select how Home Assistant should keep track of the costs of the consumed gas.",
->>>>>>> dev
+              "cost_para": "Select how Domolux should keep track of the costs of the consumed gas.",
               "no_cost": "[%key:ui::panel::config::energy::grid::flow_dialog::from::no_cost%]",
               "cost_stat": "[%key:ui::panel::config::energy::grid::flow_dialog::from::cost_stat%]",
               "cost_stat_input": "[%key:ui::panel::config::energy::grid::flow_dialog::from::cost_stat_input%]",
@@ -5075,12 +4967,8 @@
               "header": "Configure water consumption",
               "paragraph": "Water consumption is the volume of water that flows to your home.",
               "entity_para": "Pick a sensor which measures water consumption in either of {unit}.",
-<<<<<<< HEAD
-              "cost_para": "Select how Domolux should keep track of the costs of the consumed water.",
-=======
               "cost_tracking": "[%key:ui::panel::config::energy::grid::dialog::import_cost%]",
-              "cost_para": "Select how Home Assistant should keep track of the costs of the consumed water.",
->>>>>>> dev
+              "cost_para": "Select how Domolux should keep track of the costs of the consumed water.",
               "display_name": "[%key:ui::panel::config::energy::device_consumption::dialog::display_name%]",
               "no_cost": "[%key:ui::panel::config::energy::grid::flow_dialog::from::no_cost%]",
               "cost_stat": "[%key:ui::panel::config::energy::grid::flow_dialog::from::cost_stat%]",
@@ -5304,13 +5192,8 @@
           }
         },
         "url": {
-<<<<<<< HEAD
           "caption": "Domolux URL",
-          "description": "Configure what website addresses Domolux should share with other devices when they need to fetch data from Domolux (e.g. to play text-to-speech or other hosted media).",
-=======
-          "caption": "Home Assistant URL",
-          "description": "Configure what website addresses Home Assistant should share with other devices when they need to fetch data from Home Assistant (for example, to play text-to-speech or other hosted media).",
->>>>>>> dev
+          "description": "Configure what website addresses Domolux should share with other devices when they need to fetch data from Domolux (for example, to play text-to-speech or other hosted media).",
           "internal_url_label": "Local network",
           "external_url_label": "Internet",
           "external_use_ha_cloud": "Use Domolux Cloud",
@@ -5720,13 +5603,8 @@
               "title": "Get the best assistant with {home_assistant_cloud}",
               "features": {
                 "assistants": {
-<<<<<<< HEAD
-                  "title": "Google Assistant and Amazon Alexa",
-                  "text": "Control all your Domolux devices via any Google Assistant-enabled or Alexa-enabled device."
-=======
                   "title": "Google Home and Amazon Alexa",
-                  "text": "Control all your Home Assistant devices via any Google Home-enabled or Alexa-enabled device."
->>>>>>> dev
+                  "text": "Control all your Domolux devices via any Google Home-enabled or Alexa-enabled device."
                 },
                 "speech": {
                   "title": "Amazing speech options for Assist",
@@ -5890,14 +5768,7 @@
               }
             },
             "cloud": {
-<<<<<<< HEAD
-              "title": "The power of Domolux Cloud",
-              "register": {
-                "confirm_email": "Confirm email"
-              }
-=======
-              "title": "The power of Home Assistant Cloud"
->>>>>>> dev
+              "title": "The power of Domolux Cloud"
             },
             "local": {
               "title": "Installing apps",
@@ -6246,11 +6117,7 @@
                   "context_user_picked": "User firing event",
                   "context_user_pick": "Select user",
                   "description": {
-<<<<<<< HEAD
-                    "picker": "Triggers when an event is being received (event is an advanced concept in Domolux).",
-=======
-                    "picker": "Triggers when an event is being received (events are a building block used across Home Assistant).",
->>>>>>> dev
+                    "picker": "Triggers when an event is being received (events are a building block used across Domolux).",
                     "full": "When {eventTypes} event is fired"
                   }
                 },
@@ -6802,11 +6669,7 @@
                   "event": "[%key:ui::panel::config::automation::editor::triggers::type::event::event_type%]",
                   "event_data": "[%key:ui::panel::config::automation::editor::triggers::type::event::event_data%]",
                   "description": {
-<<<<<<< HEAD
-                    "picker": "Fires an event manually (event is an advanced concept in Domolux).",
-=======
-                    "picker": "Fires an event manually (events are a building block used across Home Assistant).",
->>>>>>> dev
+                    "picker": "Fires an event manually (events are a building block used across Domolux).",
                     "full": "Manually fire event {name}",
                     "template": "based on a template"
                   }
@@ -7353,13 +7216,6 @@
           "description_features": "Control home when away and integrate with Alexa and Google Home",
           "login": {
             "title": "Cloud login",
-<<<<<<< HEAD
-            "introduction": "Domolux Cloud provides you with a secure remote connection to your instance while away from home. It also allows you to connect with cloud-only services: Amazon Alexa and Google Assistant.",
-            "introduction2": "This service is run by our partner ",
-            "introduction2a": ", a company founded by the founders of Domolux.",
-            "introduction3": "Domolux Cloud is a subscription service with a free one-month trial. No payment information necessary.",
-            "learn_more_link": "Learn more about Domolux Cloud",
-=======
             "landing_title": "[%key:ui::panel::config::cloud::account::onboarding::ha_cloud_title%]",
             "hero_title": "Tools for your home, support for the Open Home",
             "hero_lead": "The easy, secure, and private way to get more out of Home Assistant, and the simplest way to fund its development.",
@@ -7377,7 +7233,6 @@
             "feature_companion_body": "The Home Assistant app on your mobile device forms a secure connection home, encrypting your location and sensor data.",
             "feature_support_title": "Support Home Assistant",
             "feature_support_body": "Your subscription directly funds the Open Home Foundation, keeping Home Assistant independent and free from ads or data harvesting.",
->>>>>>> dev
             "sign_in": "Sign in",
             "sign_in_lead": "Sign in to your Nabu Casa account.",
             "email": "Email",
@@ -7393,13 +7248,7 @@
             "alert_email_confirm_necessary": "You need to confirm your email before logging in.",
             "alert_mfa_code_required": "You need to enter your two-factor authentication code.",
             "alert_mfa_expired_or_not_started": "Multi-factor authentication expired, or not started. Please try again.",
-<<<<<<< HEAD
-            "alert_totp_code_invalid": "Invalid two-factor authentication code.",
-            "cloud_pipeline_title": "Want to use Domolux Cloud for your voice assistant?",
-            "cloud_pipeline_text": "We created a new assistant for you, using the superior text-to-speech and speech-to-text engines from Domolux Cloud. Would you like to set this assistant as the preferred assistant?"
-=======
             "alert_totp_code_invalid": "Invalid two-factor authentication code."
->>>>>>> dev
           },
           "forgot_password": {
             "title": "Forgot password",
@@ -7411,23 +7260,9 @@
             "check_your_email": "Check your email for instructions on how to reset your password."
           },
           "register": {
-<<<<<<< HEAD
-            "title": "Register account",
-            "headline": "Start your free trial",
-            "information": "Create an account to start your free one-month trial with Domolux Cloud. No payment information necessary.",
-            "information2": "The trial will give you access to all the benefits of Domolux Cloud, including:",
-            "feature_remote_control": "Control of Domolux away from home",
-            "feature_google_home": "Integration with Google Assistant",
-            "feature_amazon_alexa": "Integration with Amazon Alexa",
-            "feature_webhook_apps": "Easy integration with webhook-based apps like OwnTracks",
-            "information3": "This service is run by our partner ",
-            "information3a": ", a company founded by the founders of Domolux.",
-            "information4": "By registering an account, you agree to the following terms and conditions.",
-=======
             "headline": "Start free trial",
-            "information": "Create an account to start your free one-month trial with Home Assistant Cloud. No payment information necessary.",
+            "information": "Create an account to start your free one-month trial with Domolux Cloud. No payment information necessary.",
             "terms_notice": "By creating an account, you agree to our {terms} and {privacy_policy}.",
->>>>>>> dev
             "link_terms_conditions": "Terms and conditions",
             "link_privacy_policy": "Privacy policy",
             "create_account": "Create account",
@@ -7582,11 +7417,7 @@
             "reset_data_confirm_text": "This will reset all your cloud settings. This includes your remote connection, Google Home, and Amazon Alexa integrations. This action cannot be undone.",
             "reset": "Reset",
             "reset_data_failed": "Failed to reset cloud data",
-<<<<<<< HEAD
-            "thank_you_note": "Thank you for being part of Domolux Cloud. It's because of people like you that we are able to make a great home automation experience for everyone. Thank you!",
-=======
             "thank_you_note": "It's because of people like you that we are able to make a great home automation experience for everyone.",
->>>>>>> dev
             "nabu_casa_account": "Nabu Casa account",
             "connection_status": "Cloud connection status",
             "manage_account": "Manage account",
@@ -7659,14 +7490,9 @@
             },
             "ice_servers": {
               "title": "WebRTC connections",
-<<<<<<< HEAD
-              "info": "Domolux Cloud provides WebRTC servers. This improves your ability to view your camera streams when you are away from home.",
-              "link_learn_how_it_works": "Learn how it works"
-=======
               "info": "Makes camera feeds and Music Assistant streaming faster and more reliable, over a secure connection. Also used by go2rtc.",
               "link_learn_how_it_works": "Learn how it works",
               "link_learn_more": "Learn more"
->>>>>>> dev
             },
             "alexa": {
               "title": "Alexa",
@@ -7688,13 +7514,8 @@
               "expose_new_entities_info": "Should new entities be exposed to Alexa automatically? Exposes supported devices that are not classified as security devices."
             },
             "google": {
-<<<<<<< HEAD
-              "title": "Google Assistant",
-              "info": "With the Google Assistant integration for Domolux Cloud, you'll be able to control all your Domolux devices via any Google Assistant-enabled device.",
-=======
               "title": "Google Home",
-              "info": "With the Google Home integration for Home Assistant Cloud, you'll be able to control all your Home Assistant devices via any Google Home-enabled device.",
->>>>>>> dev
+              "info": "With the Google Home integration for Domolux Cloud, you'll be able to control all your Domolux devices via any Google Home-enabled device.",
               "http_use_ssl_warning_title": "Local communication unavailable",
               "http_use_ssl_warning_text": "Google devices will not be able to talk locally with Domolux, because you have configured an SSL certificate for your HTTP integration.",
               "config_documentation": "Configuration documentation",
@@ -7708,13 +7529,8 @@
               "exposed_entities": "{number} {number, plural,\n  one {entity}\n  other {entities}\n} exposed",
               "manual_config": "Editing which entities are exposed via the UI is disabled because you have configured entity filters in configuration.yaml.",
               "enter_pin_error": "Unable to store PIN:",
-<<<<<<< HEAD
-              "not_configured_title": "Continue setting up Google Assistant",
-              "not_configured_text": "To start using Google Assistant, add the 'Domolux Cloud by Nabu Casa' service in the Google Home app on your smartphone.",
-=======
               "not_configured_title": "Continue setting up Google Home",
-              "not_configured_text": "To start using Google Home, add the 'Home Assistant Cloud by Nabu Casa' service in the Google Home app on your smartphone.",
->>>>>>> dev
+              "not_configured_text": "To start using Google Home, add the 'Domolux Cloud by Nabu Casa' service in the Google Home app on your smartphone.",
               "link_learn_how_it_works": "[%key:ui::panel::config::cloud::account::remote::link_learn_how_it_works%]",
               "expose_new_entities": "Expose new entities",
               "expose_new_entities_info": "Should new entities be exposed to Google Home automatically? Exposes supported devices that are not classified as security devices."
@@ -7945,10 +7761,7 @@
           "esphome": {
             "show_encryption_key": "Show encryption key",
             "encryption_key_title": "ESPHome Encryption Key",
-<<<<<<< HEAD
-            "encryption_key_description": "This is the encryption key for your ESPHome device. Keep it in a safe place, as you may need it when transferring devices between Domolux instances."
-=======
-            "encryption_key_description": "This is the encryption key for your ESPHome device. Keep it in a safe place, as you may need it when transferring devices between Home Assistant instances.",
+            "encryption_key_description": "This is the encryption key for your ESPHome device. Keep it in a safe place, as you may need it when transferring devices between Domolux instances.",
             "setup_title": "Set up your ESPHome device",
             "setup_continue_title": "Continue setup for {name}",
             "setup_intro": "{count, plural,\n  one {This device unlocks one capability in Home Assistant. Set it up now, or come back to this checklist any time.}\n  other {This device unlocks {count} simultaneous capabilities in Home Assistant. Set them up now, or come back to this checklist any time.}\n}",
@@ -8005,7 +7818,6 @@
             "setup_serial_port_rs232": "RS-232",
             "setup_serial_port_rs485": "RS-485",
             "setup_serial_port_usb_serial": "USB serial"
->>>>>>> dev
           }
         },
         "entities": {
@@ -8279,9 +8091,6 @@
             "enable_debug_logging": "Enable debug logging",
             "reconfigure": "Reconfigure",
             "reload": "Reload",
-<<<<<<< HEAD
-            "restart_confirm": "Restart Domolux to finish removing this integration",
-=======
             "health": {
               "menu": "Health",
               "title": "Health of {title}",
@@ -8304,7 +8113,7 @@
               "setup_time": "{integration} took {seconds} s to start",
               "setup_time_fast": "{integration} took less than 0.1 s to start"
             },
-            "restart_confirm": "Restart Home Assistant to finish removing this integration",
+            "restart_confirm": "Restart Domolux to finish removing this integration",
             "marketplace_uninstall": {
               "title": "Also uninstall {name}?",
               "text": "{name} came from the Marketplace. Its files stay on your system, and the Marketplace keeps checking for updates until you uninstall it.",
@@ -8312,7 +8121,6 @@
               "dismiss": "Keep",
               "failed": "Uninstall failed. Check the Home Assistant logs for details."
             },
->>>>>>> dev
             "reload_confirm": "The integration was reloaded",
             "reload_restart_confirm": "Restart Domolux to finish reloading this integration",
             "disable_restart_confirm": "Restart Domolux to finish disabling this integration",
@@ -8746,11 +8554,7 @@
           "change_channel_multiprotocol_enabled_title": "The Thread adapter has multiprotocol enabled",
           "change_channel_multiprotocol_enabled_text": "To change channel when the Thread adapter has multiprotocol enabled, please use the hardware settings menu.",
           "change_channel_range": "Channel must be in the range 11 to 26",
-<<<<<<< HEAD
           "change_channel_text": "Initiating a channel change for your Domolux Thread network should be performed with caution. Some Thread devices may not migrate to the new channel automatically and, if the new channel is congested, your Thread devices may become intermittently unavailable. Some devices may need to be manually re-joined to your Thread network before they show in Domolux again. This action cannot be reversed (without performing another channel change).",
-          "thread_network_info": "Thread network information",
-=======
-          "change_channel_text": "Initiating a channel change for your Home Assistant Thread network should be performed with caution. Some Thread devices may not migrate to the new channel automatically and, if the new channel is congested, your Thread devices may become intermittently unavailable. Some devices may need to be manually re-joined to your Thread network before they show in Home Assistant again. This action cannot be reversed (without performing another channel change).",
           "network_info": {
             "title": "Network information",
             "description": "View channel and dataset details",
@@ -8765,7 +8569,6 @@
             "loading_otbr": "Loading border router details…",
             "not_found": "Network not found"
           },
->>>>>>> dev
           "thread_network_delete_credentials": "Delete Thread network credentials",
           "thread_network_send_credentials_ha": "Send credentials to Domolux",
           "thread_network_send_credentials_ha_description": "Import Thread network credentials from your phone to Domolux. Use this if you already have a Thread network set up through another platform, like Apple Home or Google Home.",
@@ -8869,11 +8672,6 @@
             "spinner": "Waiting for Zigbee devices to join…",
             "pairing_mode": "Make sure your devices are in pairing mode. Check the instructions of your device or {documentation_link} on how to do this.",
             "pairing_mode_link": "the documentation",
-<<<<<<< HEAD
-            "discovered_text": "Devices will show up here once discovered.",
-            "no_devices_found": "No devices were found, make sure they are in pairing mode and keep them awake while Domolux is searching.",
-            "search_again": "Search again"
-=======
             "discovered_text": "Devices will show up here once they join.",
             "no_devices_found": "No devices joined. Make sure they are in pairing mode and keep them awake while the network is open for joining.",
             "search_again": "Try again"
@@ -8897,7 +8695,6 @@
               "signature": "View the raw Zigbee signature for this device.",
               "neighbors": "View neighboring Zigbee devices reported by this device."
             }
->>>>>>> dev
           },
           "add_device": "Add device",
           "clusters": {
@@ -9393,14 +9190,9 @@
             "not_included": "Not included",
             "confirm_unprovision_title": "Remove device?",
             "confirm_unprovision_text": "This device will be permanently removed from your Z-Wave network.",
-<<<<<<< HEAD
             "confirm_unprovision_text_included": "This device will be permanently removed from Domolux and your Z-Wave network.",
-            "active": "Active"
-=======
-            "confirm_unprovision_text_included": "This device will be permanently removed from Home Assistant and your Z-Wave network.",
             "active": "Active",
             "load_failed": "An unknown error occurred while loading provisioned devices."
->>>>>>> dev
           },
           "security_classes": {
             "None": {
@@ -9939,11 +9731,7 @@
           "join_chat": "Chat",
           "join_blog": "Blog",
           "join_newsletter": "Newsletter",
-<<<<<<< HEAD
-          "media_storage": "You can add network storage to your Domolux instance in the {storage} panel."
-=======
-          "media_storage": "You can add additional storage to your Home Assistant instance in the {storage} panel."
->>>>>>> dev
+          "media_storage": "You can add additional storage to your Domolux instance in the {storage} panel."
         },
         "analytics": {
           "caption": "Analytics",
@@ -10264,15 +10052,9 @@
             "no_disks": "No suitable disks were found. Connect a disk with a supported file system, then reopen this dialog.",
             "documentation": "Documentation",
             "not_supported": {
-<<<<<<< HEAD
-              "title": "The operating system does not support network storage",
-              "supervised": "Network storage is not supported on this host",
-              "os": "To use network storage you need to run at least Domolux OS {version}",
-=======
               "title": "The operating system does not support additional storage",
               "supervised": "Additional storage is not supported on this host",
-              "os": "To use additional storage you need to run at least Home Assistant OS {version}",
->>>>>>> dev
+              "os": "To use additional storage you need to run at least Domolux OS {version}",
               "navigate_to_updates": "Go to updates"
             },
             "mount_usage": {
@@ -10364,10 +10146,7 @@
           "integration_start_time": "Integration startup time"
         },
         "system_dashboard": {
-<<<<<<< HEAD
           "restart_homeassistant": "Restart Domolux"
-=======
-          "restart_homeassistant": "Restart Home Assistant"
         },
         "lorawan": {
           "devices": "Devices",
@@ -10426,7 +10205,6 @@
             "integration_not_configured": "Set up the device integration to add this device to Home Assistant.",
             "unsupported_model": "This device model is not supported by a configured integration."
           }
->>>>>>> dev
         }
       },
       "lovelace": {
@@ -13538,13 +13316,13 @@
         "load_failed": "The Marketplace could not load its data: {error}",
         "warning": {
           "title": "Before you install from the Marketplace",
-          "intro": "Marketplace items are made by community contributors and are not reviewed by the Home\u00a0Assistant project. Treat them like plugins for any other software.",
+          "intro": "Marketplace items are made by community contributors and are not reviewed by the Home Assistant project. Treat them like plugins for any other software.",
           "risks_title": "Anything you install can",
           "risks": {
-            "access": "Access and control everything in Home\u00a0Assistant",
+            "access": "Access and control everything in Home Assistant",
             "internet": "Connect to the internet",
             "data": "Share your data with others",
-            "stability": "Slow down or crash Home\u00a0Assistant"
+            "stability": "Slow down or crash Home Assistant"
           },
           "mindful_title": "So be mindful",
           "mindful": {
@@ -13823,13 +13601,8 @@
     }
   },
   "landing-page": {
-<<<<<<< HEAD
     "header": "Preparing Domolux",
-    "subheader": "This may take 20 minutes or more",
-=======
-    "header": "Preparing Home Assistant",
     "subheader": "The latest version of Home Assistant is being downloaded. This may take 20 minutes or more.",
->>>>>>> dev
     "show_details": "Show details",
     "hide_details": "Hide details",
     "network_issue": {

@@ -172,7 +172,6 @@ gulp.task("rspack-prod-app", () =>
   )
 );
 
-<<<<<<< HEAD
 gulp.task("rspack-prod-domolux-roles", () =>
   prodBuild(
     createDomoluxRolesConfig({
@@ -180,7 +179,10 @@ gulp.task("rspack-prod-domolux-roles", () =>
       latestBuild: true,
       isStatsBuild: env.isStatsBuild(),
       isTestBuild: env.isTestBuild(),
-=======
+    })
+  )
+);
+
 gulp.task("rspack-prod-app-modern", () =>
   prodBuild(
     createAppConfig({
@@ -188,7 +190,6 @@ gulp.task("rspack-prod-app-modern", () =>
       isStatsBuild: env.isStatsBuild(),
       isTestBuild: env.isTestBuild(),
       latestBuild: true,
->>>>>>> dev
     })
   )
 );

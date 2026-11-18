@@ -10,7 +10,12 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { osm } from "@versatiles/style";
+let osm;
+try {
+  ({ osm } = await import("@versatiles/style"));
+} catch {
+  // @versatiles/style not installed in environment
+}
 import fs from "fs-extra";
 import gulp from "gulp";
 import paths from "../paths.cjs";

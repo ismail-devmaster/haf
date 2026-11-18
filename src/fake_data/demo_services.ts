@@ -28,27 +28,10 @@ export const demoServices = {
         entity: { domain: "alarm_control_panel", supported_features: [2] },
       },
     },
-<<<<<<< HEAD
-    stop: { description: "Stop the Domolux service.", fields: {} },
-    restart: { description: "Restart the Domolux service.", fields: {} },
-    check_config: {
-      description:
-        "Check the Domolux configuration files for errors. Errors will be displayed in the Domolux log.",
-      fields: {},
-    },
-    update_entity: {
-      description: "Force one or more entities to update its data",
-      fields: {
-        entity_id: {
-          description: "One or multiple entity_ids to update. Can be a list.",
-          example: "light.living_room",
-        },
-=======
     alarm_arm_night: {
       fields: { code: { example: "1234", selector: { text: null } } },
       target: {
         entity: { domain: "alarm_control_panel", supported_features: [4] },
->>>>>>> dev
       },
     },
     alarm_arm_vacation: {

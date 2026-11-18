@@ -686,9 +686,20 @@ def _extract_entity_name(entry: Any) -> str | None:
     return None
 
 
+def _get_entry_domain(entry: Any) -> str:
+    """Safely resolve domain from an entity entry, state, or entity_id string."""
+    domain = getattr(entry, "domain", None)
+    if isinstance(domain, str) and domain:
+        return domain
+    eid = getattr(entry, "entity_id", None)
+    if isinstance(eid, str) and "." in eid:
+        return eid.split(".")[0]
+    return "unknown"
+
+
 def _extract_device_name(dev: Any) -> str:
     """Safely extract device name from a device registry entry or mock."""
-    for attr in ("name_by_user", "name"):
+    for attr in ("name_by_user", "name", "model", "default_name"):
         val = getattr(dev, attr, None)
         if isinstance(val, str) and val.strip():
             return val.strip()
@@ -742,7 +753,12 @@ async def ws_catalog(
             device_entities_map.setdefault(dev_id, []).append(e)
 
     # Devices from registry
-    for dev in device_reg.devices.values():
+    dev_items = (
+        list(device_reg.devices.values())
+        if hasattr(device_reg.devices, "values")
+        else (list(device_reg.devices) if isinstance(device_reg.devices, (list, tuple)) else [])
+    )
+    for dev in dev_items:
         device_id = getattr(dev, "id", None)
         if not device_id or not isinstance(device_id, str):
             continue
@@ -765,15 +781,15 @@ async def ws_catalog(
         # Filter to household / controllable entities
         hh_entries = [
             e for e in raw_entries 
-            if getattr(e, "domain", None) in HOUSEHOLD_DOMAINS or getattr(e, "domain", None) in CONTROLLABLE_DOMAINS
+            if _get_entry_domain(e) in HOUSEHOLD_DOMAINS or _get_entry_domain(e) in CONTROLLABLE_DOMAINS
         ]
         # If device has entities but none are household, skip it (e.g. update-only devices)
         if raw_entries and not hh_entries:
             continue
 
-        ctrl_entries = [e for e in hh_entries if getattr(e, "domain", None) in CONTROLLABLE_DOMAINS]
+        ctrl_entries = [e for e in hh_entries if _get_entry_domain(e) in CONTROLLABLE_DOMAINS]
         is_multi_entity = len(ctrl_entries) > 1
-        primary_domain = ctrl_entries[0].domain if ctrl_entries else (hh_entries[0].domain if hh_entries else None)
+        primary_domain = _get_entry_domain(ctrl_entries[0]) if ctrl_entries else (_get_entry_domain(hh_entries[0]) if hh_entries else None)
 
         channels = []
         target_entries = ctrl_entries if ctrl_entries else hh_entries
@@ -788,12 +804,13 @@ async def ws_catalog(
                 friendly_name = None
             entry_name = _extract_entity_name(e)
             channel_name = entry_name or friendly_name or getattr(e, "entity_id", None) or "Unknown entity"
+            e_domain = _get_entry_domain(e)
             channels.append({
                 "entity_id": e.entity_id,
                 "name": channel_name,
-                "domain": getattr(e, "domain", "unknown"),
-                "icon": _get_device_icon(getattr(e, "domain", None)),
-                "capabilities": ["read", "control"] if getattr(e, "domain", None) in CONTROLLABLE_DOMAINS else ["read"],
+                "domain": e_domain,
+                "icon": _get_device_icon(e_domain),
+                "capabilities": ["read", "control"] if e_domain in CONTROLLABLE_DOMAINS else ["read"],
             })
 
         if name == "Unnamed device" and channels:
@@ -842,7 +859,7 @@ async def ws_catalog(
             friendly_name = None
         entry_name = _extract_entity_name(entry)
         name = entry_name or friendly_name or entity_id
-        domain = getattr(entry, "domain", entity_id.split(".")[0])
+        domain = _get_entry_domain(entry)
         device_id = getattr(entry, "device_id", None)
         device_name = None
         if device_id:
@@ -936,7 +953,7 @@ async def ws_catalog(
         if not state_obj:
             continue
         seen_entity_ids.add(entity_id)
-        domain = getattr(state_obj, "domain", entity_id.split(".")[0])
+        domain = _get_entry_domain(state_obj)
         friendly_name = (
             state_obj.attributes.get("friendly_name")
             if hasattr(state_obj, "attributes") and isinstance(state_obj.attributes, dict)
@@ -1062,9 +1079,10 @@ async def ws_catalog(
                         dashboards_map[url_p] = getattr(p_obj, "config", None) or p_obj
 
         for url_path, dash_obj in dashboards_map.items():
-            is_default = url_path is None or url_path == "lovelace"
-            dash_id = "lovelace" if is_default else str(url_path)
-            dash_url = "lovelace" if is_default else str(url_path)
+            clean_url = str(url_path).strip("/") if url_path is not None else ""
+            is_default = url_path is None or clean_url == "lovelace" or clean_url == ""
+            dash_id = "lovelace" if is_default else clean_url
+            dash_url = "lovelace" if is_default else clean_url
 
             if dash_id in seen_dashboard_ids:
                 continue

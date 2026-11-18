@@ -117,26 +117,6 @@ class MoreInfoUpdate extends LitElement {
     this._subscribeBackupEvents();
   }
 
-<<<<<<< HEAD
-  private async _fetchUpdateBackupConfig(type: UpdateType) {
-    try {
-      const config = await getSupervisorUpdateConfig(this.hass);
-
-      // for Domolux and OS updates
-      if (this._isHaOrOsUpdate(type)) {
-        this._createBackup = config.core_backup_before_update;
-        return;
-      }
-
-      if (type === "addon") {
-        this._createBackup = config.add_on_backup_before_update;
-      }
-    } catch (err) {
-      // ignore error, because user can still set the config
-      // eslint-disable-next-line no-console
-      console.error(err);
-    }
-=======
   public disconnectedCallback(): void {
     super.disconnectedCallback();
     this._backupEventsUnsub?.then(
@@ -145,7 +125,6 @@ class MoreInfoUpdate extends LitElement {
     );
     this._backupEventsUnsub = undefined;
     this._backupState = "idle";
->>>>>>> dev
   }
 
   private _subscribeBackupEvents(): void {

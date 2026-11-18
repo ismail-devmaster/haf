@@ -401,17 +401,8 @@ export const provideHass = (
   } as any;
 
   const hassObj: MockHomeAssistant = {
-<<<<<<< HEAD
     // Domolux properties
-    auth: {
-      data: {
-        hassUrl: location.origin,
-      },
-    } as any,
-=======
-    // Home Assistant properties
     auth,
->>>>>>> dev
     connection: {
       // The map reads the URL of Home Assistant from here
       options: { auth },

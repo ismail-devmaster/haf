@@ -34,60 +34,12 @@ export class CloudLoginPanel extends LitElement {
       <hass-subpage
         .hass=${this.hass}
         .narrow=${this.narrow}
-<<<<<<< HEAD
-        header="Domolux Cloud"
-=======
         back-path="/config/cloud/start"
         .header=${this.hass.localize("ui.panel.config.cloud.login.sign_in")}
->>>>>>> dev
       >
         <div class="content">
-<<<<<<< HEAD
-          <ha-config-section .isWide=${this.isWide}>
-            <span slot="header">Domolux Cloud</span>
-            <div slot="introduction">
-              <p>
-                ${this.hass.localize(
-                  "ui.panel.config.cloud.login.introduction"
-                )}
-              </p>
-              <p>
-                ${this.hass.localize(
-                  "ui.panel.config.cloud.login.introduction2"
-                )}
-                <a
-                  href="https://www.nabucasa.com"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Nabu&nbsp;Casa,&nbsp;Inc</a
-                >${this.hass.localize(
-                  "ui.panel.config.cloud.login.introduction2a"
-                )}
-              </p>
-              <p>
-                ${this.hass.localize(
-                  "ui.panel.config.cloud.login.introduction3"
-                )}
-              </p>
-              <p>
-                <a
-                  href="https://www.nabucasa.com"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  ${this.hass.localize(
-                    "ui.panel.config.cloud.login.learn_more_link"
-                  )}
-                </a>
-              </p>
-            </div>
-
-            ${this.flashMessage
-=======
           ${
             this.flashMessage
->>>>>>> dev
               ? html`<ha-alert
                   dismissable
                   @alert-dismissed-clicked=${this._dismissFlash}

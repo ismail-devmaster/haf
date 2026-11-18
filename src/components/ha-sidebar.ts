@@ -171,7 +171,7 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
   public alwaysExpand = false;
 
   @property({ attribute: "sidebar-title" }) public sidebarTitle =
-    "Home Assistant";
+    "Domolux";
 
   @state() private _notifications?: PersistentNotification[];
 
@@ -339,26 +339,6 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
         hasHold: true,
       })}
     >
-<<<<<<< HEAD
-      ${!this.narrow
-        ? html`
-            <ha-icon-button
-              .label=${this.hass.localize("ui.sidebar.sidebar_toggle")}
-              .path=${this.hass.dockedSidebar === "docked"
-                ? mdiMenuOpen
-                : mdiMenu}
-              @action=${this._toggleSidebar}
-            ></ha-icon-button>
-          `
-        : ""}
-      <div class="title">
-        <ha-logo-svg
-          class="sidebar-logo"
-          .darkMode=${this.hass.themes?.darkMode || false}
-        ></ha-logo-svg>
-        <span class="brand-text">Domolux</span>
-      </div>
-=======
       ${
         !this.narrow
           ? html`
@@ -372,8 +352,13 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
             `
           : nothing
       }
-      <div class="title">${this.sidebarTitle}</div>
->>>>>>> dev
+      <div class="title">
+        <ha-logo-svg
+          class="sidebar-logo"
+          .darkMode=${this.hass.themes?.darkMode || false}
+        ></ha-logo-svg>
+        <span class="brand-text">${this.sidebarTitle}</span>
+      </div>
     </div>`;
   }
 
@@ -724,14 +709,10 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
           transition: width var(--ha-animation-duration-normal) ease;
         }
         :host([expanded]) .menu {
-<<<<<<< HEAD
-          width: calc(260px + var(--safe-area-inset-left, 0px));
-=======
           width: calc(
-            var(--ha-sidebar-expanded-width, 256px) +
+            var(--ha-sidebar-expanded-width, 260px) +
               var(--safe-area-inset-left, 0px)
           );
->>>>>>> dev
         }
         :host([narrow][expanded]) .menu {
           width: 100%;
@@ -836,12 +817,8 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
           font-weight: 500;
         }
         :host([expanded]) ha-list-item-button {
-<<<<<<< HEAD
-          width: 248px;
-          --ha-row-item-padding-inline: 14px;
-=======
           width: var(--ha-sidebar-expanded-item-width, 248px);
->>>>>>> dev
+          --ha-row-item-padding-inline: 14px;
         }
         :host([narrow][expanded]) ha-list-item-button {
           width: calc(248px - var(--safe-area-inset-left, 0px));
@@ -945,22 +922,13 @@ class HaSidebar extends SubscribeMixin(ScrollableFadeMixin(LitElement)) {
         /* Keep the rounded-square avatar clear of the row edges and
            centered in the collapsed item: 8px + 32px + 8px = 48px */
         ha-user-badge {
-<<<<<<< HEAD
           width: 36px;
           height: 36px;
-        }
-
-        ha-list-item-button.user {
-          --ha-row-item-padding-inline: 4px 0;
-=======
-          width: var(--ha-space-8);
-          height: var(--ha-space-8);
           flex-shrink: 0;
         }
 
         ha-list-item-button.user {
-          --ha-row-item-padding-inline: var(--ha-space-2) 0;
->>>>>>> dev
+          --ha-row-item-padding-inline: 4px 0;
         }
 
         .spacer {

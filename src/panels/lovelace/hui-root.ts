@@ -595,7 +595,7 @@ class HUIRoot extends KeyboardShortcutMixin(LitElement) {
         class=${classMap({
           "edit-mode": this._editMode,
           narrow: this.narrow,
-<<<<<<< HEAD
+          embedded: this.embedded,
           "no-header": this._isNonAdmin,
         })}
       >
@@ -604,166 +604,93 @@ class HUIRoot extends KeyboardShortcutMixin(LitElement) {
           : html`<div class="header">
               <slot name="toolbar">
                 <div class="toolbar">
-                  ${this._editMode
+                  ${
+                    this._editMode
+                      ? html`
+                          <div class="main-title">
+                            ${
+                              dashboardTitle ||
+                              this.hass!.localize("ui.panel.lovelace.editor.header")
+                            }
+                            <ha-icon-button
+                              slot="actionItems"
+                              .label=${this.hass!.localize(
+                                "ui.panel.lovelace.editor.edit_lovelace.edit_title"
+                              )}
+                              .path=${mdiPencil}
+                              class="edit-icon"
+                              @click=${this._editDashboard}
+                            ></ha-icon-button>
+                          </div>
+                          <div class="action-items">
+                            ${this._renderActionItems()}
+                          </div>
+                        `
+                      : html`
+                          ${
+                            this.embedded && !isSubview
+                              ? nothing
+                              : isSubview || this.backButton
+                                ? html`
+                                    <ha-icon-button-arrow-prev
+                                      slot="navigationIcon"
+                                      .href=${
+                                        this.embedded ? undefined : this._backPath
+                                      }
+                                      @click=${this._handleBackClick}
+                                    ></ha-icon-button-arrow-prev>
+                                  `
+                                : html`
+                                    <ha-menu-button
+                                      slot="navigationIcon"
+                                    ></ha-menu-button>
+                                  `
+                          }
+                          ${
+                            isSubview
+                              ? html`
+                                  <div class="main-title">
+                                    ${curViewConfig.title}
+                                  </div>
+                                `
+                              : hasTabViews
+                                ? tabs
+                                : html`
+                                    <div class="main-title">
+                                      ${views[0]?.title ?? dashboardTitle}
+                                    </div>
+                                  `
+                          }
+                          ${
+                            this.embedded
+                              ? nothing
+                              : html`<div class="action-items">
+                                  ${this._renderActionItems()}
+                                </div>`
+                          }
+                        `
+                  }
+                </div>
+                ${
+                  this._editMode
                     ? html`
-                        <div class="main-title">
-                          ${dashboardTitle ||
-                          this.hass!.localize(
-                            "ui.panel.lovelace.editor.header"
-                          )}
+                        <div class="tab-bar">
+                          ${tabs}
                           <ha-icon-button
-                            slot="actionItems"
+                            slot="nav"
+                            id="add-view"
+                            @click=${this._addView}
                             .label=${this.hass!.localize(
-                              "ui.panel.lovelace.editor.edit_lovelace.edit_title"
+                              "ui.panel.lovelace.editor.edit_view.add"
                             )}
-                            .path=${mdiPencil}
-                            class="edit-icon"
-                            @click=${this._editDashboard}
+                            .path=${mdiPlus}
                           ></ha-icon-button>
                         </div>
-                        <div class="action-items">
-                          ${this._renderActionItems()}
-                        </div>
                       `
-                    : html`
-                        ${isSubview || this.backButton
-                          ? html`
-                              <ha-icon-button-arrow-prev
-                                .hass=${this.hass}
-                                slot="navigationIcon"
-                                @click=${this._goBack}
-                              ></ha-icon-button-arrow-prev>
-                            `
-                          : html`
-                              <ha-menu-button
-                                slot="navigationIcon"
-                                .hass=${this.hass}
-                                .narrow=${this.narrow}
-                              ></ha-menu-button>
-                            `}
-                        ${isSubview
-=======
-          embedded: this.embedded,
-        })}
-      >
-        <div class="header">
-          <slot name="toolbar">
-            <div class="toolbar">
-              ${
-                this._editMode
-                  ? html`
-                      <div class="main-title">
-                        ${
-                          dashboardTitle ||
-                          this.hass!.localize("ui.panel.lovelace.editor.header")
-                        }
-                        <ha-icon-button
-                          slot="actionItems"
-                          .label=${this.hass!.localize(
-                            "ui.panel.lovelace.editor.edit_lovelace.edit_title"
-                          )}
-                          .path=${mdiPencil}
-                          class="edit-icon"
-                          @click=${this._editDashboard}
-                        ></ha-icon-button>
-                      </div>
-                      <div class="action-items">
-                        ${this._renderActionItems()}
-                      </div>
-                    `
-                  : html`
-                      ${
-                        this.embedded && !isSubview
-                          ? nothing
-                          : isSubview || this.backButton
-                            ? html`
-                                <ha-icon-button-arrow-prev
-                                  slot="navigationIcon"
-                                  .href=${
-                                    this.embedded ? undefined : this._backPath
-                                  }
-                                  @click=${this._handleBackClick}
-                                ></ha-icon-button-arrow-prev>
-                              `
-                            : html`
-                                <ha-menu-button
-                                  slot="navigationIcon"
-                                ></ha-menu-button>
-                              `
-                      }
-                      ${
-                        isSubview
->>>>>>> dev
-                          ? html`
-                              <div class="main-title">
-                                ${curViewConfig.title}
-                              </div>
-                            `
-                          : hasTabViews
-                            ? tabs
-                            : html`
-                                <div class="main-title">
-                                  ${views[0]?.title ?? dashboardTitle}
-                                </div>
-<<<<<<< HEAD
-                              `}
-                        <div class="action-items">
-                          ${this._renderActionItems()}
-                        </div>
-                      `}
-                </div>
-                ${this._editMode
-                  ? html`
-                      <div class="tab-bar">
-                        ${tabs}
-                        <ha-icon-button
-                          slot="nav"
-                          id="add-view"
-                          @click=${this._addView}
-                          .label=${this.hass!.localize(
-                            "ui.panel.lovelace.editor.edit_view.add"
-                          )}
-                          .path=${mdiPlus}
-                        ></ha-icon-button>
-                      </div>
-                    `
-                  : nothing}
+                    : nothing
+                }
               </slot>
             </div>`}
-=======
-                              `
-                      }
-                      ${
-                        this.embedded
-                          ? nothing
-                          : html`<div class="action-items">
-                              ${this._renderActionItems()}
-                            </div>`
-                      }
-                    `
-              }
-            </div>
-            ${
-              this._editMode
-                ? html`
-                    <div class="tab-bar">
-                      ${tabs}
-                      <ha-icon-button
-                        slot="nav"
-                        id="add-view"
-                        @click=${this._addView}
-                        .label=${this.hass!.localize(
-                          "ui.panel.lovelace.editor.edit_view.add"
-                        )}
-                        .path=${mdiPlus}
-                      ></ha-icon-button>
-                    </div>
-                  `
-                : nothing
-            }
-          </slot>
-        </div>
->>>>>>> dev
         <hui-view-container
           class=${this._editMode ? "has-tab-bar" : ""}
           .hass=${this.hass}
@@ -1562,34 +1489,24 @@ class HUIRoot extends KeyboardShortcutMixin(LitElement) {
           color: var(--app-header-text-color, var(--primary-text-color));
           position: fixed;
           top: 0;
-<<<<<<< HEAD
-          width: calc(
-            var(--mdc-top-app-bar-width, 100%) - var(
-                --safe-area-inset-right,
-                0px
-              )
-          );
-          -webkit-backdrop-filter: blur(20px) saturate(180%);
-          backdrop-filter: blur(20px) saturate(180%);
-=======
           width: var(--ha-top-app-bar-width, 100%);
-          backdrop-filter: var(--app-header-backdrop-filter, none);
->>>>>>> dev
+          -webkit-backdrop-filter: var(
+            --app-header-backdrop-filter,
+            blur(20px) saturate(180%)
+          );
+          backdrop-filter: var(
+            --app-header-backdrop-filter,
+            blur(20px) saturate(180%)
+          );
           padding-top: var(--safe-area-inset-top);
           z-index: 4;
           border-bottom: 1px solid rgba(0, 0, 0, 0.04);
         }
         :host([scrolled]) .header {
-<<<<<<< HEAD
-          box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04);
-=======
           box-shadow: var(
             --bar-box-shadow,
-            0px 2px 4px -1px rgba(0, 0, 0, 0.2),
-            0px 4px 5px 0px rgba(0, 0, 0, 0.14),
-            0px 1px 10px 0px rgba(0, 0, 0, 0.12)
+            0 1px 3px 0 rgba(0, 0, 0, 0.04)
           );
->>>>>>> dev
         }
         .edit-mode .header {
           background-color: var(--app-header-edit-background-color, #455a64);
@@ -1602,12 +1519,8 @@ class HUIRoot extends KeyboardShortcutMixin(LitElement) {
           align-items: center;
           font-size: 16px;
           padding: 0px 12px;
-<<<<<<< HEAD
-          font-weight: 500;
-=======
           padding-right: calc(12px + var(--safe-area-inset-right, 0px));
-          font-weight: var(--ha-font-weight-normal);
->>>>>>> dev
+          font-weight: 500;
           box-sizing: border-box;
           font-family: "Google Sans", "Product Sans", sans-serif;
         }

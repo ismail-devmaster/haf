@@ -1,0 +1,267 @@
+[35mHEAD:src/common/util/time-cache-entity-promise-func.ts[m[36m:[m[32m10[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/common/util/time-cache-entity-promise-func.ts[m[36m:[m[32m12[m[36m:[m[1;31m=======[m
+[35mHEAD:src/common/util/time-cache-entity-promise-func.ts[m[36m:[m[32m14[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/components/ha-card.ts[m[36m:[m[32m58[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/components/ha-card.ts[m[36m:[m[32m69[m[36m:[m[1;31m=======[m
+[35mHEAD:src/components/ha-card.ts[m[36m:[m[32m75[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/components/ha-menu-button.ts[m[36m:[m[32m102[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/components/ha-menu-button.ts[m[36m:[m[32m115[m[36m:[m[1;31m=======[m
+[35mHEAD:src/components/ha-menu-button.ts[m[36m:[m[32m120[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m342[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m361[m[36m:[m[1;31m=======[m
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m376[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m727[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m729[m[36m:[m[1;31m=======[m
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m734[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m839[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m842[m[36m:[m[1;31m=======[m
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m844[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m948[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m955[m[36m:[m[1;31m=======[m
+[35mHEAD:src/components/ha-sidebar.ts[m[36m:[m[32m963[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/components/ha-theme-picker.ts[m[36m:[m[32m79[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/components/ha-theme-picker.ts[m[36m:[m[32m100[m[36m:[m[1;31m=======[m
+[35mHEAD:src/components/ha-theme-picker.ts[m[36m:[m[32m101[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/components/tile/ha-tile-container.ts[m[36m:[m[32m194[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/components/tile/ha-tile-container.ts[m[36m:[m[32m200[m[36m:[m[1;31m=======[m
+[35mHEAD:src/components/tile/ha-tile-container.ts[m[36m:[m[32m207[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/data/logbook.ts[m[36m:[m[32m83[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/data/logbook.ts[m[36m:[m[32m92[m[36m:[m[1;31m=======[m
+[35mHEAD:src/data/logbook.ts[m[36m:[m[32m103[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/data/onboarding.ts[m[36m:[m[32m6[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/data/onboarding.ts[m[36m:[m[32m11[m[36m:[m[1;31m=======[m
+[35mHEAD:src/data/onboarding.ts[m[36m:[m[32m17[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/data/trace.ts[m[36m:[m[32m121[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/data/trace.ts[m[36m:[m[32m124[m[36m:[m[1;31m=======[m
+[35mHEAD:src/data/trace.ts[m[36m:[m[32m134[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/dialogs/more-info/controls/more-info-update.ts[m[36m:[m[32m120[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/dialogs/more-info/controls/more-info-update.ts[m[36m:[m[32m139[m[36m:[m[1;31m=======[m
+[35mHEAD:src/dialogs/more-info/controls/more-info-update.ts[m[36m:[m[32m148[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-check.ts[m[36m:[m[32m38[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-check.ts[m[36m:[m[32m86[m[36m:[m[1;31m=======[m
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-check.ts[m[36m:[m[32m135[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-local.ts[m[36m:[m[32m62[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-local.ts[m[36m:[m[32m86[m[36m:[m[1;31m=======[m
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-local.ts[m[36m:[m[32m92[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-wake-word.ts[m[36m:[m[32m100[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-wake-word.ts[m[36m:[m[32m104[m[36m:[m[1;31m=======[m
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-wake-word.ts[m[36m:[m[32m109[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-wake-word.ts[m[36m:[m[32m120[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-wake-word.ts[m[36m:[m[32m149[m[36m:[m[1;31m=======[m
+[35mHEAD:src/dialogs/voice-assistant-setup/voice-assistant-setup-step-wake-word.ts[m[36m:[m[32m169[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/fake_data/demo_services.ts[m[36m:[m[32m31[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/fake_data/demo_services.ts[m[36m:[m[32m46[m[36m:[m[1;31m=======[m
+[35mHEAD:src/fake_data/demo_services.ts[m[36m:[m[32m51[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/fake_data/provide_hass.ts[m[36m:[m[32m404[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/fake_data/provide_hass.ts[m[36m:[m[32m411[m[36m:[m[1;31m=======[m
+[35mHEAD:src/fake_data/provide_hass.ts[m[36m:[m[32m414[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m4[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m6[m[36m:[m[1;31m=======[m
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m9[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m29[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m41[m[36m:[m[1;31m=======[m
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m42[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m48[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m88[m[36m:[m[1;31m=======[m
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m89[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m102[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m107[m[36m:[m[1;31m=======[m
+[35mHEAD:src/html/index.html.template[m[36m:[m[32m111[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/layouts/ha-init-page.ts[m[36m:[m[32m22[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/layouts/ha-init-page.ts[m[36m:[m[32m26[m[36m:[m[1;31m=======[m
+[35mHEAD:src/layouts/ha-init-page.ts[m[36m:[m[32m32[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/layouts/ha-init-page.ts[m[36m:[m[32m46[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/layouts/ha-init-page.ts[m[36m:[m[32m76[m[36m:[m[1;31m=======[m
+[35mHEAD:src/layouts/ha-init-page.ts[m[36m:[m[32m114[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m20[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m22[m[36m:[m[1;31m=======[m
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m24[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m85[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m124[m[36m:[m[1;31m=======[m
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m153[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m314[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m317[m[36m:[m[1;31m=======[m
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m327[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m375[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m481[m[36m:[m[1;31m=======[m
+[35mHEAD:src/layouts/home-assistant-main.ts[m[36m:[m[32m494[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/onboarding/dialogs/community-dialog.ts[m[36m:[m[32m31[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/onboarding/dialogs/community-dialog.ts[m[36m:[m[32m44[m[36m:[m[1;31m=======[m
+[35mHEAD:src/onboarding/dialogs/community-dialog.ts[m[36m:[m[32m56[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/onboarding/onboarding-welcome.ts[m[36m:[m[32m91[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/onboarding/onboarding-welcome.ts[m[36m:[m[32m94[m[36m:[m[1;31m=======[m
+[35mHEAD:src/onboarding/onboarding-welcome.ts[m[36m:[m[32m102[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/config/backup/components/ha-backup-data-picker.ts[m[36m:[m[32m245[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/config/backup/components/ha-backup-data-picker.ts[m[36m:[m[32m261[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/config/backup/components/ha-backup-data-picker.ts[m[36m:[m[32m279[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/config/backup/ha-config-backup-settings.ts[m[36m:[m[32m248[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/config/backup/ha-config-backup-settings.ts[m[36m:[m[32m283[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/config/backup/ha-config-backup-settings.ts[m[36m:[m[32m313[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/config/cloud/account/cloud-account.ts[m[36m:[m[32m68[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/config/cloud/account/cloud-account.ts[m[36m:[m[32m70[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/config/cloud/account/cloud-account.ts[m[36m:[m[32m73[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/config/cloud/account/cloud-account.ts[m[36m:[m[32m96[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/config/cloud/account/cloud-account.ts[m[36m:[m[32m251[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/config/cloud/account/cloud-account.ts[m[36m:[m[32m272[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/config/cloud/login/cloud-login-panel.ts[m[36m:[m[32m37[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/config/cloud/login/cloud-login-panel.ts[m[36m:[m[32m39[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/config/cloud/login/cloud-login-panel.ts[m[36m:[m[32m42[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/config/cloud/login/cloud-login-panel.ts[m[36m:[m[32m45[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/config/cloud/login/cloud-login-panel.ts[m[36m:[m[32m87[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/config/cloud/login/cloud-login-panel.ts[m[36m:[m[32m90[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/config/core/ha-config-analytics.ts[m[36m:[m[32m60[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/config/core/ha-config-analytics.ts[m[36m:[m[32m63[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/config/core/ha-config-analytics.ts[m[36m:[m[32m68[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/config/tags/dialog-tag-detail.ts[m[36m:[m[32m159[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/config/tags/dialog-tag-detail.ts[m[36m:[m[32m202[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/config/tags/dialog-tag-detail.ts[m[36m:[m[32m252[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/lovelace/cards/hui-error-card.ts[m[36m:[m[32m58[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/lovelace/cards/hui-error-card.ts[m[36m:[m[32m65[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/lovelace/cards/hui-error-card.ts[m[36m:[m[32m72[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m598[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m645[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m696[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m708[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m733[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m766[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m1565[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m1574[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m1577[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m1583[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m1585[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m1592[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m1605[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m1607[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/lovelace/hui-root.ts[m[36m:[m[32m1610[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/panels/profile/ha-pick-theme-row.ts[m[36m:[m[32m69[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/panels/profile/ha-pick-theme-row.ts[m[36m:[m[32m174[m[36m:[m[1;31m=======[m
+[35mHEAD:src/panels/profile/ha-pick-theme-row.ts[m[36m:[m[32m226[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/state/disconnect-toast-mixin.ts[m[36m:[m[32m48[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/state/disconnect-toast-mixin.ts[m[36m:[m[32m77[m[36m:[m[1;31m=======[m
+[35mHEAD:src/state/disconnect-toast-mixin.ts[m[36m:[m[32m86[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/state/themes-mixin.ts[m[36m:[m[32m52[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/state/themes-mixin.ts[m[36m:[m[32m55[m[36m:[m[1;31m=======[m
+[35mHEAD:src/state/themes-mixin.ts[m[36m:[m[32m58[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m772[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m784[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m807[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m813[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m817[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m835[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m1860[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m1864[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m1868[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m1945[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m1949[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m1956[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2042[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2044[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2054[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2468[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2471[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2474[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2493[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2496[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2499[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2505[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2508[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2511[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2903[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2906[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2910[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2986[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2991[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m2995[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m3269[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m3271[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m3276[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m3397[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m3402[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m3406[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4000[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4003[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4006[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4136[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4146[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4156[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4508[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4510[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4512[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4565[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4567[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4571[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4582[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4585[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m4594[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5043[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5045[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5048[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5078[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5080[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5083[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5307[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5310[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5313[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5723[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5726[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5729[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5893[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5898[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m5900[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m6249[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m6251[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m6253[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m6805[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m6807[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m6809[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7356[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7362[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7380[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7396[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7400[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7402[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7414[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7426[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7430[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7585[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7587[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7589[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7662[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7665[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7669[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7691[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7694[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7697[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7711[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7714[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7717[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7948[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m7950[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m8008[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m8282[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m8284[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m8315[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m8749[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m8752[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m8768[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m8872[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m8876[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m8900[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m9396[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m9399[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m9403[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m9942[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m9944[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m9946[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m10267[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m10271[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m10275[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m10367[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m10369[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m10429[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/translations/en.json[m[36m:[m[32m13826[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/translations/en.json[m[36m:[m[32m13829[m[36m:[m[1;31m=======[m
+[35mHEAD:src/translations/en.json[m[36m:[m[32m13832[m[36m:[m[1;31m>>>>>>>[m dev
+[35mHEAD:src/types.ts[m[36m:[m[32m321[m[36m:[m[1;31m<<<<<<<[m HEAD
+[35mHEAD:src/types.ts[m[36m:[m[32m323[m[36m:[m[1;31m=======[m
+[35mHEAD:src/types.ts[m[36m:[m[32m331[m[36m:[m[1;31m>>>>>>>[m dev

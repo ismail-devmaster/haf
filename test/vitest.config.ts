@@ -10,12 +10,8 @@ export default defineConfig({
   },
   plugins: [tsconfigPaths()],
   test: {
-<<<<<<< HEAD
-    environment: "jsdom",
-=======
     exclude: [...configDefaults.exclude, "test/e2e/**"],
-    environment: "jsdom", // to run in browser-like environment
->>>>>>> dev
+    environment: "jsdom",
     env: {
       TZ: "Etc/UTC",
       IS_TEST: "true",

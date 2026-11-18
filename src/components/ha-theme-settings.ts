@@ -120,7 +120,7 @@ export class HaThemeSettings extends LitElement {
                     name="dark_mode"
                     .value=${
                       themeSettings?.dark === undefined
-                        ? "auto"
+                        ? "light"
                         : themeSettings.dark
                           ? "dark"
                           : "light"

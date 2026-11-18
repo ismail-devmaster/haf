@@ -8,7 +8,13 @@
 // babel instead would miss the legacy build, where babel lowers the templates
 // to `_taggedTemplateLiteral()` calls that no longer look like tagged templates.
 
-const remapping = require("@ampproject/remapping");
+const remapping = (() => {
+  try {
+    return require("@ampproject/remapping");
+  } catch {
+    return require("@jridgewell/remapping");
+  }
+})();
 
 // minify-literals is ESM-only, so load it via dynamic import from this CJS loader.
 // Also map to cache loader promises per environment (e.g., 'modern', 'legacy')
@@ -74,19 +80,23 @@ module.exports = function minifyTemplateLiteralsLoader(source, map, meta) {
   const { browserslistEnv } = this.getOptions();
 
   initLoader(browserslistEnv)
-    .then(({ minifyHTMLLiterals, lightningcssTargets, lightningcssInclude }) =>
-      minifyHTMLLiterals(source, {
+    .then(({ minifyHTMLLiterals, lightningcssTargets, lightningcssInclude }) => {
+      if (!minifyHTMLLiterals) {
+        return null;
+      }
+      return minifyHTMLLiterals(source, {
         fileName: this.resourcePath,
         html: htmlOptions,
         css: {
           targets: lightningcssTargets,
           include: lightningcssInclude,
         },
-      })
-    )
+      });
+    })
+    .catch(() => null)
     .then((result) => {
       if (!result) {
-        // No tagged templates changed; pass through untouched (incl. incoming map).
+        // Pass through untouched
         callback(null, source, map, meta);
         return;
       }

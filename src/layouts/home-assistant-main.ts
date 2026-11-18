@@ -17,11 +17,8 @@ import { storage } from "../common/decorators/storage";
 import { DEBUG_SAFE_AREA_TOOL_STORAGE_KEY } from "../common/util/debug-safe-area";
 import { computeRTLDirection } from "../common/util/compute_rtl";
 import "../components/ha-drawer";
-<<<<<<< HEAD
 import "../components/ha-logo-svg";
-=======
 import { narrowViewportContext } from "../data/context";
->>>>>>> dev
 import { showNotificationDrawer } from "../dialogs/notifications/show-notification-drawer";
 import type { HomeAssistant, Route } from "../types";
 import "./partial-panel-resolver";
@@ -82,13 +79,11 @@ export class HomeAssistantMain extends LitElement {
       this.hass.panels && this.hass.userData && this.hass.systemData;
 
     return html`
-<<<<<<< HEAD
-      <ha-snowflakes .hass=${this.hass} .narrow=${this.narrow}></ha-snowflakes>
+      <ha-snowflakes .narrow=${this.narrow}></ha-snowflakes>
       <div class="app-shell">
         ${this._isNonAdmin
           ? isPanelReady
             ? html`<partial-panel-resolver
-                .narrow=${this.narrow}
                 .hass=${this.hass}
                 .route=${this.route}
               ></partial-panel-resolver>`
@@ -109,7 +104,6 @@ export class HomeAssistantMain extends LitElement {
                 ></ha-sidebar>
                 ${isPanelReady
                   ? html`<partial-panel-resolver
-                      .narrow=${this.narrow}
                       .hass=${this.hass}
                       .route=${this.route}
                       slot="appContent"
@@ -121,36 +115,11 @@ export class HomeAssistantMain extends LitElement {
                 : nothing}
             `}
       </div>
-=======
-      <ha-snowflakes .narrow=${this.narrow}></ha-snowflakes>
-      <ha-drawer
-        .type=${sidebarNarrow ? "modal" : ""}
-        .open=${sidebarNarrow ? this._drawerOpen : false}
-        .direction=${computeRTLDirection(this.hass)}
-        @hass-drawer-closed=${this._drawerClosed}
-      >
-        <ha-sidebar
-          .hass=${this.hass}
-          .narrow=${sidebarNarrow}
-          .route=${this.route}
-          .alwaysExpand=${sidebarNarrow || this.hass.dockedSidebar === "docked"}
-        ></ha-sidebar>
-        ${
-          isPanelReady
-            ? html`<partial-panel-resolver
-                .hass=${this.hass}
-                .route=${this.route}
-                slot="appContent"
-              ></partial-panel-resolver>`
-            : nothing
-        }
-      </ha-drawer>
       ${
         this._debugSafeAreaTool
           ? html`<ha-debug-safe-area-tool></ha-debug-safe-area-tool>`
           : nothing
       }
->>>>>>> dev
     `;
   }
 
@@ -294,8 +263,8 @@ export class HomeAssistantMain extends LitElement {
       this._sidebarNarrow || this._externalSidebar || this.hass.kioskMode
     );
 
-    toggleAttribute(this, "no-sidebar", this._isNonAdmin);
-    toggleAttribute(this, "no-header", this._isNonAdmin);
+    this.toggleAttribute("no-sidebar", this._isNonAdmin);
+    this.toggleAttribute("no-header", this._isNonAdmin);
   }
 
   private get _sidebarNarrow() {
@@ -311,10 +280,6 @@ export class HomeAssistantMain extends LitElement {
     :host {
       color: var(--primary-text-color);
       -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
-<<<<<<< HEAD
-      --ha-sidebar-width: calc(80px + var(--safe-area-inset-left, 0px));
-      --mdc-top-app-bar-width: calc(100% - var(--ha-sidebar-width));
-=======
       /* Keep the negative z-index panel backgrounds (the resolver's ::before
          and the Lovelace view background) in this host's stacking context.
          Isolating the conditionally rendered partial-panel-resolver instead
@@ -322,9 +287,9 @@ export class HomeAssistantMain extends LitElement {
          accessibility tree with an empty panel subtree while the page paints
          normally, which breaks UI automation such as the companion app E2E. */
       isolation: isolate;
-      --ha-sidebar-width: calc(56px + var(--safe-area-inset-left, 0px));
+      --ha-sidebar-width: calc(80px + var(--safe-area-inset-left, 0px));
       --ha-top-app-bar-width: calc(100% - var(--ha-sidebar-width));
->>>>>>> dev
+      --mdc-top-app-bar-width: calc(100% - var(--ha-sidebar-width));
       --safe-area-content-inset-left: 0px;
       --safe-area-content-inset-right: var(--safe-area-inset-right);
     }
@@ -372,8 +337,6 @@ export class HomeAssistantMain extends LitElement {
     ha-sidebar {
       -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
     }
-<<<<<<< HEAD
-
     /* Hide the floating bottom navigation bar in portrait orientation. */
     @media (orientation: portrait) {
       .domolux-bottom-nav {
@@ -478,7 +441,8 @@ export class HomeAssistantMain extends LitElement {
       --logo-width: var(--logo-bottom-nav-width, 22px);
       --logo-height: var(--logo-bottom-nav-height, 22px);
       opacity: 0.8;
-=======
+    }
+
     partial-panel-resolver {
       display: block;
       height: 100%;
@@ -491,7 +455,7 @@ export class HomeAssistantMain extends LitElement {
       pointer-events: none;
       background: var(--ha-panel-background, var(--primary-background-color));
       background-attachment: scroll !important;
->>>>>>> dev
+    }
     }
   `;
 }

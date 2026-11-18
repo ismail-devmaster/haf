@@ -28,24 +28,10 @@ class DialogCommunity extends DialogMixin(LitElement) {
           rel="noreferrer noopener"
           href="https://community.home-assistant.io/"
         >
-<<<<<<< HEAD
-          <ha-list-item hasMeta graphic="icon">
-            <img
-              src="/static/images/domolux.png"
-              slot="graphic"
-              alt="Domolux Logo"
-              style="width:40px;height:auto;"
-            />
-            ${this.localize("ui.panel.page-onboarding.welcome.forums")}
-            <ha-svg-icon slot="meta" .path=${mdiOpenInNew}></ha-svg-icon>
-          </ha-list-item>
-        </a>
-        <a
-=======
           <img
             src="/static/icons/favicon-192x192.png"
             slot="start"
-            alt="Home Assistant Logo"
+            alt="Domolux Logo"
           />
           <span slot="headline">
             ${this._localize("ui.panel.page-onboarding.welcome.forums")}
@@ -53,7 +39,6 @@ class DialogCommunity extends DialogMixin(LitElement) {
           <ha-svg-icon slot="end" .path=${mdiOpenInNew}></ha-svg-icon>
         </ha-list-item-button>
         <ha-list-item-button
->>>>>>> dev
           target="_blank"
           rel="noreferrer noopener"
           href="https://newsletter.openhomefoundation.org/"

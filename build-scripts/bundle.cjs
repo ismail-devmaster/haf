@@ -267,11 +267,8 @@ module.exports.config = {
         onboarding: "./src/entrypoints/onboarding.ts",
         core: "./src/entrypoints/core.ts",
         "custom-panel": "./src/entrypoints/custom-panel.ts",
-<<<<<<< HEAD
         "domolux-roles": "./src/entrypoints/domolux-roles.ts",
-=======
         ...module.exports.mapWorkerEntry(),
->>>>>>> dev
       },
       outputPath: outputPath(paths.app_output_root, latestBuild),
       publicPath: publicPath(latestBuild),

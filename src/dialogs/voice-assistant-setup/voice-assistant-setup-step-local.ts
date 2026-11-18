@@ -59,37 +59,11 @@ export class HaVoiceAssistantSetupStepLocal extends LitElement {
 
   protected override render() {
     return html`<div class="content">
-<<<<<<< HEAD
-      ${this._state === "INSTALLING"
-        ? html`<img
-              src="/static/images/voice-assistant/update.png"
-              alt="Casita Domolux loading logo"
-            />
-            <h1>
-              ${this.hass.localize(
-                "ui.panel.config.voice_assistants.satellite_wizard.local.title"
-              )}
-            </h1>
-            <p>
-              ${this.hass.localize(
-                "ui.panel.config.voice_assistants.satellite_wizard.local.secondary"
-              )}
-            </p>
-            <ha-spinner></ha-spinner>
-            <p>
-              ${this._detailState || "Installation can take several minutes"}
-            </p>`
-        : this._state === "ERROR"
-          ? html`<img
-                src="/static/images/voice-assistant/error.png"
-                alt="Casita Domolux error logo"
-=======
       ${
         this._state === "INSTALLING"
           ? html`<img
                 src="/static/images/voice-assistant/update.png"
-                alt="Casita Home Assistant loading logo"
->>>>>>> dev
+                alt="Casita Domolux loading logo"
               />
               <h1>
                 ${this.hass.localize(

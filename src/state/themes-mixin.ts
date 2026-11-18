@@ -49,13 +49,8 @@ export default <T extends Constructor<HassBaseEl>>(superClass: T) =>
           }
         );
       });
-<<<<<<< HEAD
-      mql.addListener((ev) => this._applyTheme(ev.matches));
-      if (!this._themeApplied) {
-=======
       mql.addEventListener("change", (ev) => this._applyTheme(ev.matches));
       if (!this._themeApplied && mql.matches) {
->>>>>>> dev
         applyThemesOnElement(
           document.documentElement,
           {

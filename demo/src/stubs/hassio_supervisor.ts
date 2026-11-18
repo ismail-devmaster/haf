@@ -224,39 +224,8 @@ export const mockHassioSupervisor = (hass: MockHomeAssistant) => {
         debug_block: false,
         detect_blocking_io: false,
         diagnostics: true,
-<<<<<<< HEAD
-        addons: [
-          {
-            name: "Visual Studio Code",
-            slug: "a0d7b954_vscode",
-            description:
-              "Fully featured VSCode experience, to edit your HA config in the browser, including auto-completion!",
-            state: "started",
-            version: "3.6.2",
-            version_latest: "3.6.2",
-            update_available: false,
-            repository: "a0d7b954",
-            icon: false,
-            logo: true,
-          },
-          {
-            name: "Z-Wave JS",
-            slug: "core_zwave_js",
-            description:
-              "Control a ZWave network with Domolux Z-Wave JS",
-            state: "started",
-            version: "0.1.45",
-            version_latest: "0.1.45",
-            update_available: false,
-            repository: "core",
-            icon: true,
-            logo: true,
-          },
-        ] as any,
-=======
         feature_flags: {},
         addons: DEMO_ADDONS as any,
->>>>>>> dev
         addons_repositories: [
           "https://github.com/music-assistant/home-assistant-addon",
           "https://github.com/esphome/home-assistant-addon",
