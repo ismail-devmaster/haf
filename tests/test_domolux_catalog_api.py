@@ -361,3 +361,425 @@ async def test_catalog_standalone_entity_discovery_without_device_registry(mock_
         assert dev["name"] == "Hallway Fan"
         assert dev["capabilities"] == ["read", "control"]
         assert dev["channels"][0]["entity_id"] == "switch.hallway_fan"
+
+
+# ==============================================================================
+# Realistic Home Assistant Registry Test Doubles (No MagicMock Runtime Leakage)
+# ==============================================================================
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+
+
+@dataclass
+class RealLikeRegistryEntry:
+    entity_id: str
+    device_id: str | None = None
+    area_id: str | None = None
+    name: str | None = None
+    name_by_user: str | None = None
+    original_name: str | None = None
+    disabled_by: str | None = None
+    platform: str = "test_integration"
+
+    @property
+    def domain(self) -> str:
+        return self.entity_id.split(".")[0]
+
+
+@dataclass
+class RealLikeDeviceEntry:
+    id: str
+    name: str | None = None
+    name_by_user: str | None = None
+    model: str | None = None
+    manufacturer: str | None = None
+    area_id: str | None = None
+    entry_type: str | None = None
+    disabled_by: str | None = None
+
+
+@dataclass
+class RealLikeAreaEntry:
+    id: str
+    name: str
+
+
+@dataclass
+class RealLikeState:
+    entity_id: str
+    state: str
+    attributes: dict[str, Any] = field(default_factory=dict)
+
+
+class RealLikeEntityRegistryItems(Mapping):
+    """Accurately models Home Assistant Core's EntityRegistryItems Mapping."""
+
+    def __init__(self, entries: dict[str, RealLikeRegistryEntry]) -> None:
+        self._data = dict(entries)
+
+    def __getitem__(self, key: str) -> RealLikeRegistryEntry:
+        return self._data[key]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def values(self):
+        return self._data.values()
+
+    def get_entries_for_device_id(
+        self, device_id: str, include_disabled_entities: bool = False
+    ) -> list[RealLikeRegistryEntry]:
+        return [
+            entry
+            for entry in self._data.values()
+            if entry.device_id == device_id
+            and (include_disabled_entities or not entry.disabled_by)
+        ]
+
+
+class RealLikeDeviceRegistryItems(Mapping):
+    """Accurately models Home Assistant Core's DeviceRegistryItems Mapping."""
+
+    def __init__(self, devices: dict[str, RealLikeDeviceEntry]) -> None:
+        self._data = dict(devices)
+
+    def __getitem__(self, key: str) -> RealLikeDeviceEntry:
+        return self._data[key]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def values(self):
+        return self._data.values()
+
+    def get(self, device_id: str) -> RealLikeDeviceEntry | None:
+        return self._data.get(device_id)
+
+
+class RealLikeEntityRegistry:
+    def __init__(self, entries: dict[str, RealLikeRegistryEntry]) -> None:
+        self.entities = RealLikeEntityRegistryItems(entries)
+
+
+class RealLikeDeviceRegistry:
+    def __init__(self, devices: dict[str, RealLikeDeviceEntry]) -> None:
+        self.devices = RealLikeDeviceRegistryItems(devices)
+
+    def async_get(self, device_id: str) -> RealLikeDeviceEntry | None:
+        return self.devices.get(device_id)
+
+
+class RealLikeAreaRegistry:
+    def __init__(self, areas: dict[str, RealLikeAreaEntry]) -> None:
+        self._areas = dict(areas)
+
+    def async_get_area(self, area_id: str | None) -> RealLikeAreaEntry | None:
+        if not area_id:
+            return None
+        return self._areas.get(area_id)
+
+
+class RealLikeConnection:
+    """Minimal realistic active connection without MagicMock side-effects."""
+
+    def __init__(self, user_id: str | None = None) -> None:
+        self.user = type("User", (), {"id": user_id})() if user_id else None
+        self.results: list[dict[str, Any]] = []
+        self.errors: list[tuple[int, str, str]] = []
+
+    def send_result(self, msg_id: int, result: dict[str, Any]) -> None:
+        self.results.append({"id": msg_id, "result": result})
+
+    def send_error(self, msg_id: int, code: str, message: str) -> None:
+        self.errors.append((msg_id, code, message))
+
+
+class RealLikeHass:
+    """Minimal realistic Home Assistant instance."""
+
+    def __init__(
+        self,
+        states: dict[str, RealLikeState],
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        self._states = dict(states)
+        self.data = data or {}
+
+        class _States:
+            def __init__(outer):
+                outer._s = self._states
+
+            def get(outer, eid: str) -> RealLikeState | None:
+                return outer._s.get(eid)
+
+            def async_entity_ids(outer) -> list[str]:
+                return list(outer._s.keys())
+
+        self.states = _States()
+
+
+@pytest.mark.asyncio
+async def test_catalog_realistic_registry_objects_with_empty_device_no_magicmock_error():
+    """Exact reproduction of production failure condition with realistic HA 2026.8.3 objects.
+
+    Includes:
+    - Real-like EntityRegistryItems mapping and DeviceRegistryItems mapping.
+    - Device with multiple controllable entities.
+    - Device with NO entities (the exact trigger that threw NameError: MagicMock in prod).
+    - Service entry type device (properly excluded).
+    - Non-household keyword device (properly excluded).
+    - Standalone registry entity without a device.
+    - State-machine-only entity not in registry.
+    - Custom Lovelace dashboard with views and card dependencies.
+    - Verifies Father gets full catalog without any NameError or exceptions.
+    """
+    areas = {
+        "living_room": RealLikeAreaEntry(id="living_room", name="Living Room"),
+        "kitchen": RealLikeAreaEntry(id="kitchen", name="Kitchen"),
+    }
+    area_reg = RealLikeAreaRegistry(areas)
+
+    devices = {
+        # Normal controllable household device
+        "dev_living_light": RealLikeDeviceEntry(
+            id="dev_living_light",
+            name_by_user="Living Room Main Lights",
+            name="Hue Ceiling",
+            area_id="living_room",
+        ),
+        # Empty device with NO entities (triggers empty raw_entries fallback)
+        "dev_empty_hub": RealLikeDeviceEntry(
+            id="dev_empty_hub",
+            name="Zigbee Coordinator Hub",
+            area_id="living_room",
+        ),
+        # Service device (must be excluded)
+        "dev_backup_service": RealLikeDeviceEntry(
+            id="dev_backup_service",
+            name="Backup Manager Service",
+            entry_type="service",
+        ),
+        # Non-household name device (must be excluded)
+        "dev_tailscale": RealLikeDeviceEntry(
+            id="dev_tailscale",
+            name="Tailscale VPN Gateway",
+        ),
+    }
+    dev_reg = RealLikeDeviceRegistry(devices)
+
+    entities = {
+        "light.living_ceiling_1": RealLikeRegistryEntry(
+            entity_id="light.living_ceiling_1",
+            device_id="dev_living_light",
+            area_id="living_room",
+            name_by_user="Spot 1",
+            original_name="Spot 1",
+        ),
+        "light.living_ceiling_2": RealLikeRegistryEntry(
+            entity_id="light.living_ceiling_2",
+            device_id="dev_living_light",
+            area_id="living_room",
+            name_by_user="Spot 2",
+            original_name="Spot 2",
+        ),
+        # Standalone entity without device_id
+        "switch.kitchen_fan": RealLikeRegistryEntry(
+            entity_id="switch.kitchen_fan",
+            device_id=None,
+            area_id="kitchen",
+            name_by_user="Kitchen Exhaust",
+        ),
+    }
+    ent_reg = RealLikeEntityRegistry(entities)
+
+    states = {
+        "light.living_ceiling_1": RealLikeState(
+            entity_id="light.living_ceiling_1",
+            state="on",
+            attributes={"friendly_name": "Living Ceiling Spot 1"},
+        ),
+        "light.living_ceiling_2": RealLikeState(
+            entity_id="light.living_ceiling_2",
+            state="off",
+            attributes={"friendly_name": "Living Ceiling Spot 2"},
+        ),
+        "switch.kitchen_fan": RealLikeState(
+            entity_id="switch.kitchen_fan",
+            state="off",
+            attributes={"friendly_name": "Kitchen Exhaust Fan"},
+        ),
+        # Unregistered entity in state machine
+        "sensor.outdoor_temperature": RealLikeState(
+            entity_id="sensor.outdoor_temperature",
+            state="21.5",
+            attributes={"friendly_name": "Outdoor Temperature"},
+        ),
+        # Non-household entity in state machine
+        "sensor.samba_status": RealLikeState(
+            entity_id="sensor.samba_status",
+            state="connected",
+            attributes={"friendly_name": "Samba Share Status"},
+        ),
+    }
+
+    # Custom Lovelace dashboard
+    class RealLikeDashboard:
+        def __init__(self, config: dict[str, Any]) -> None:
+            self._config = config
+
+        async def async_load(self, force: bool = False) -> dict[str, Any]:
+            return self._config
+
+    dash_user = RealLikeDashboard({
+        "title": "Family User Dashboard",
+        "views": [
+            {
+                "path": "living",
+                "title": "Living Area",
+                "cards": [
+                    {"type": "entities", "entities": ["light.living_ceiling_1"]},
+                ],
+            },
+            {
+                "path": "climate",
+                "title": "Climate Controls",
+                "cards": [
+                    {"type": "button", "entity": "switch.kitchen_fan"},
+                ],
+            },
+        ],
+    })
+
+    lovelace_data = type("LovelaceData", (), {
+        "dashboards": {
+            None: RealLikeDashboard({"title": "Home", "views": []}),
+            "dashboard-user": dash_user,
+        }
+    })()
+
+    hass = RealLikeHass(states=states, data={"lovelace": lovelace_data})
+    conn = RealLikeConnection(user_id=FATHER_ID)
+    msg = {"id": 1, "type": "domolux/catalog"}
+
+    with patch("custom_components.domolux_roles.view_api._get_evaluator") as mock_eval, \
+         patch("homeassistant.helpers.device_registry.async_get", return_value=dev_reg), \
+         patch("homeassistant.helpers.entity_registry.async_get", return_value=ent_reg), \
+         patch("homeassistant.helpers.area_registry.async_get", return_value=area_reg):
+        evaluator = MagicMock()
+        evaluator._is_father.return_value = True
+        mock_eval.return_value = evaluator
+
+        # Execute ws_catalog — must NOT throw NameError: MagicMock is not defined
+        await ws_catalog(hass, conn, msg)
+
+    assert len(conn.errors) == 0, f"Unexpected error: {conn.errors}"
+    assert len(conn.results) == 1
+    catalog = conn.results[0]["result"]["catalog"]
+
+    # 1. Device discovery verification
+    devices_result = catalog["devices"]
+    device_ids = [d["device_id"] for d in devices_result]
+    device_names = [d["name"] for d in devices_result]
+
+    # Controllable household device with 2 channels
+    assert "dev_living_light" in device_ids
+    living_dev = next(d for d in devices_result if d["device_id"] == "dev_living_light")
+    assert living_dev["name"] == "Living Room Main Lights"
+    assert living_dev["area_name"] == "Living Room"
+    assert living_dev["is_multi_entity"] is True
+    assert len(living_dev["channels"]) == 2
+    assert living_dev["capabilities"] == ["read", "control"]
+    assert "light.living_ceiling_1" in living_dev["entities"]
+    assert "light.living_ceiling_2" in living_dev["entities"]
+
+    # Empty device (0 entities) handled gracefully without failure
+    assert "dev_empty_hub" in device_ids
+    empty_dev = next(d for d in devices_result if d["device_id"] == "dev_empty_hub")
+    assert empty_dev["entity_count"] == 0
+    assert empty_dev["channels"] == []
+
+    # Excluded devices
+    assert "dev_backup_service" not in device_ids
+    assert "dev_tailscale" not in device_ids
+    assert not any("tailscale" in name.lower() for name in device_names)
+    assert not any("backup manager" in name.lower() for name in device_names)
+
+    # Standalone entity discovery
+    assert "entity:switch.kitchen_fan" in device_ids
+    standalone_dev = next(d for d in devices_result if d["device_id"] == "entity:switch.kitchen_fan")
+    assert standalone_dev["target_type"] == "entity"
+    assert standalone_dev["target_id"] == "switch.kitchen_fan"
+    assert standalone_dev["name"] == "Kitchen Exhaust"
+    assert standalone_dev["area_name"] == "Kitchen"
+    assert standalone_dev["capabilities"] == ["read", "control"]
+
+    # State-only entity discovery
+    assert "entity:sensor.outdoor_temperature" in device_ids
+    outdoor_dev = next(d for d in devices_result if d["device_id"] == "entity:sensor.outdoor_temperature")
+    assert outdoor_dev["target_type"] == "entity"
+    assert outdoor_dev["capabilities"] == ["read"]
+
+    # Non-household state entity excluded
+    assert "entity:sensor.samba_status" not in device_ids
+
+    # 2. Dashboard and view discovery
+    dashboards = catalog["dashboards"]
+    dash_ids = [db["dashboard_id"] for db in dashboards]
+    assert "lovelace" in dash_ids
+    assert "dashboard-user" in dash_ids
+
+    user_dash = next(db for db in dashboards if db["dashboard_id"] == "dashboard-user")
+    assert len(user_dash["views"]) == 2
+    assert user_dash["views"][0]["view_path"] == "living"
+    assert user_dash["views"][0]["title"] == "Living Area"
+    assert "light.living_ceiling_1" in user_dash["views"][0]["entities"]
+    assert user_dash["views"][1]["view_path"] == "climate"
+    assert "switch.kitchen_fan" in user_dash["views"][1]["entities"]
+
+
+@pytest.mark.asyncio
+async def test_catalog_realistic_registry_child_access_denied():
+    """Child receives access denied with realistic registry and ActiveConnection."""
+    ent_reg = RealLikeEntityRegistry({})
+    dev_reg = RealLikeDeviceRegistry({})
+    area_reg = RealLikeAreaRegistry({})
+    hass = RealLikeHass(states={})
+    conn = RealLikeConnection(user_id=CHILD_ID)
+    msg = {"id": 10, "type": "domolux/catalog"}
+
+    with patch("custom_components.domolux_roles.view_api._get_evaluator") as mock_eval, \
+         patch("homeassistant.helpers.device_registry.async_get", return_value=dev_reg), \
+         patch("homeassistant.helpers.entity_registry.async_get", return_value=ent_reg), \
+         patch("homeassistant.helpers.area_registry.async_get", return_value=area_reg):
+        evaluator = MagicMock()
+        evaluator._is_father.return_value = False
+        mock_eval.return_value = evaluator
+
+        await ws_catalog(hass, conn, msg)
+
+    assert len(conn.results) == 0
+    assert len(conn.errors) == 1
+    assert conn.errors[0][1] == ERR_ACCESS_DENIED
+    assert conn.errors[0][2] == "Catalog access requires father role."
+
+
+@pytest.mark.asyncio
+async def test_catalog_realistic_registry_unauthorized_user():
+    """Unauthenticated connection receives unauthorized error with realistic objects."""
+    hass = RealLikeHass(states={})
+    conn = RealLikeConnection(user_id=None)
+    msg = {"id": 11, "type": "domolux/catalog"}
+
+    await ws_catalog(hass, conn, msg)
+
+    assert len(conn.results) == 0
+    assert len(conn.errors) == 1
+    assert conn.errors[0][1] == ERR_UNAUTHORIZED
+

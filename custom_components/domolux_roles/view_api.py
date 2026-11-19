@@ -740,11 +740,14 @@ async def ws_catalog(
     seen_device_ids: set[str] = set()
 
     # Pre-collect entity registry entries (handles real HA EntityRegistryItems Mapping, dict, or list)
-    entity_entries = (
-        list(entity_reg.entities.values())
-        if hasattr(entity_reg.entities, "values")
-        else list(entity_reg.entities)
-    )
+    if hasattr(entity_reg, "entities"):
+        entity_entries = (
+            list(entity_reg.entities.values())
+            if hasattr(entity_reg.entities, "values") and callable(entity_reg.entities.values)
+            else (list(entity_reg.entities) if isinstance(entity_reg.entities, (list, tuple, set)) else [])
+        )
+    else:
+        entity_entries = []
 
     device_entities_map: dict[str, list[Any]] = {}
     for e in entity_entries:
@@ -755,8 +758,8 @@ async def ws_catalog(
     # Devices from registry
     dev_items = (
         list(device_reg.devices.values())
-        if hasattr(device_reg.devices, "values")
-        else (list(device_reg.devices) if isinstance(device_reg.devices, (list, tuple)) else [])
+        if hasattr(device_reg.devices, "values") and callable(device_reg.devices.values)
+        else (list(device_reg.devices) if isinstance(device_reg.devices, (list, tuple, set)) else [])
     )
     for dev in dev_items:
         device_id = getattr(dev, "id", None)
@@ -764,19 +767,39 @@ async def ws_catalog(
             continue
         name = _extract_device_name(dev)
         area_id = getattr(dev, "area_id", None)
-        area_name = area_reg.async_get_area(area_id).name if area_id and hasattr(area_reg, "async_get_area") and area_reg.async_get_area(area_id) else None
+        area_obj = area_reg.async_get_area(area_id) if (area_id and hasattr(area_reg, "async_get_area")) else None
+        area_name = getattr(area_obj, "name", None) if area_obj else None
         
         # Check service entry type and non-household names
-        is_service = getattr(dev, "entry_type", None) == "service"
+        dev_entry_type = getattr(dev, "entry_type", None)
+        is_service = (
+            dev_entry_type == "service"
+            or str(dev_entry_type).lower().endswith("service")
+            or (hasattr(dr, "DeviceEntryType") and dev_entry_type == getattr(dr.DeviceEntryType, "SERVICE", None))
+        )
         if is_service or _is_non_household_name(name):
             continue
 
-        raw_entries = device_entities_map.get(device_id, [])
-        if not raw_entries and hasattr(er, "async_entries_for_device") and not isinstance(er.async_entries_for_device, MagicMock):
+        raw_entries = list(device_entities_map.get(device_id, []))
+        if not raw_entries and callable(getattr(er, "async_entries_for_device", None)):
             try:
-                raw_entries = er.async_entries_for_device(entity_reg, device_id, include_disabled_entities=True)
-            except Exception:
-                raw_entries = []
+                found_entries = er.async_entries_for_device(
+                    entity_reg, device_id, include_disabled_entities=True
+                )
+                if isinstance(found_entries, (list, tuple, set)):
+                    raw_entries = [e for e in found_entries if getattr(e, "entity_id", None)]
+            except Exception as err:
+                _LOGGER.debug("Error fetching entries for device %s: %s", device_id, err)
+
+        if not raw_entries and hasattr(entity_reg, "entities") and callable(getattr(entity_reg.entities, "get_entries_for_device_id", None)):
+            try:
+                found_entries = entity_reg.entities.get_entries_for_device_id(
+                    device_id, include_disabled_entities=True
+                )
+                if isinstance(found_entries, (list, tuple, set)):
+                    raw_entries = [e for e in found_entries if getattr(e, "entity_id", None)]
+            except Exception as err:
+                _LOGGER.debug("Error getting entries for device id %s: %s", device_id, err)
         
         # Filter to household / controllable entities
         hh_entries = [
@@ -869,11 +892,8 @@ async def ws_catalog(
                 if d_name != "Unnamed device":
                     device_name = d_name
         area_id = getattr(entry, "area_id", None)
-        area_name = (
-            area_reg.async_get_area(area_id).name
-            if area_id and hasattr(area_reg, "async_get_area") and area_reg.async_get_area(area_id)
-            else None
-        )
+        area_obj = area_reg.async_get_area(area_id) if (area_id and hasattr(area_reg, "async_get_area")) else None
+        area_name = getattr(area_obj, "name", None) if area_obj else None
         disabled = getattr(entry, "disabled_by", None) is not None
         # State presence indicator (safe: only available/unavailable, never value)
         state_available = state_obj.state if state_obj else None
