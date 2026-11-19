@@ -329,6 +329,10 @@ async def test_async_register_frontend_embed_iframe(patch_panel_custom=None):
         assert calls[0].kwargs.get("webcomponent_name") == "ha-domolux-family-manager"
         assert calls[0].kwargs.get("require_admin") is False
         assert calls[0].kwargs.get("sidebar_title") == "Domolux Roles"
+        assert calls[0].kwargs.get("module_url") == "/api/domolux_roles/frontend/entrypoint.js"
+        assert calls[0].kwargs.get("js_url") == "/api/domolux_roles/frontend/entrypoint.js"
         assert calls[1].kwargs.get("frontend_url_path") == "domolux-dashboard"
         assert calls[1].kwargs.get("require_admin") is False
+        assert calls[1].kwargs.get("module_url") == "/api/domolux_roles/frontend/entrypoint.js"
+        assert calls[1].kwargs.get("js_url") == "/api/domolux_roles/frontend/entrypoint.js"
 

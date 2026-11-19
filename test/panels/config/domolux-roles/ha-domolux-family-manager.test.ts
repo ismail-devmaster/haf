@@ -1218,5 +1218,262 @@ describe("ha-domolux-family-manager component", () => {
         })
       );
     });
+
+    it("filters household devices by category (domain) and permission status", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      // Initial state: 2 devices
+      expect((element as any)._getFilteredDevices().length).toBe(2);
+
+      // Filter by domain "cover"
+      (element as any)._deviceDomainFilter = "cover";
+      const coverDevices = (element as any)._getFilteredDevices();
+      expect(coverDevices.length).toBe(1);
+      expect(coverDevices[0].domain).toBe("cover");
+
+      // Filter by domain "switch"
+      (element as any)._deviceDomainFilter = "switch";
+      const switchDevices = (element as any)._getFilteredDevices();
+      expect(switchDevices.length).toBe(1);
+      expect(switchDevices[0].domain).toBe("switch");
+
+      // Reset domain, test permission filter (default is none)
+      (element as any)._deviceDomainFilter = "all";
+      (element as any)._devicePermissionFilter = "none";
+      expect((element as any)._getFilteredDevices().length).toBe(2);
+
+      // Change one device rule to control
+      (element as any)._userPermissionSet = {
+        user_id: CHILD_USER_ID,
+        default_access_level: "none",
+        entity_rules: {
+          r1: {
+            rule_id: "r1",
+            target_type: "device",
+            target_id: "dev_shade",
+            access_level: "control",
+          },
+        },
+        view_rules: {},
+      };
+
+      // Filter for control only
+      (element as any)._devicePermissionFilter = "control";
+      const controlDevs = (element as any)._getFilteredDevices();
+      expect(controlDevs.length).toBe(1);
+      expect(controlDevs[0].device_id).toBe("dev_shade");
+    });
+
+    it("searches devices by name, area, target ID, and channel name", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      // Search by name
+      (element as any)._deviceSearchQuery = "Roller";
+      expect((element as any)._getFilteredDevices().length).toBe(1);
+      expect((element as any)._getFilteredDevices()[0].name).toBe("Hallway Roller Shade");
+
+      // Search by room
+      (element as any)._deviceSearchQuery = "Utility";
+      expect((element as any)._getFilteredDevices().length).toBe(1);
+      expect((element as any)._getFilteredDevices()[0].name).toBe("SONOFF PN16");
+
+      // Search by channel name
+      (element as any)._deviceSearchQuery = "Channel 3";
+      expect((element as any)._getFilteredDevices().length).toBe(1);
+      expect((element as any)._getFilteredDevices()[0].name).toBe("SONOFF PN16");
+
+      // Clear filters
+      (element as any)._clearDeviceFilters();
+      expect((element as any)._deviceSearchQuery).toBe("");
+      expect((element as any)._deviceDomainFilter).toBe("all");
+      expect((element as any)._devicePermissionFilter).toBe("all");
+      expect((element as any)._deviceRoomFilter).toBe("all");
+      expect((element as any)._hasActiveDeviceFilters).toBe(false);
+    });
+
+    it("groups devices by room/area and supports area collapse/expand", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      const allDevs = (element as any)._getFilteredDevices();
+      const groups = (element as any)._getGroupedDevices(allDevs);
+      expect(groups.length).toBe(2);
+      expect(groups.map((g: any) => g.area).sort()).toEqual(["Hallway", "Utility Room"]);
+
+      // Test area collapse toggle
+      expect((element as any)._collapsedAreaNames.has("Hallway")).toBe(false);
+      (element as any)._toggleCollapseArea("Hallway");
+      expect((element as any)._collapsedAreaNames.has("Hallway")).toBe(true);
+      (element as any)._toggleCollapseArea("Hallway");
+      expect((element as any)._collapsedAreaNames.has("Hallway")).toBe(false);
+    });
+
+    it("performs bulk permission updates for visible devices and area devices", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      const allDevs = (element as any)._getFilteredDevices();
+      await (element as any)._handleBulkSetVisibleDevices(allDevs, "control");
+
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_entity_rule",
+          target_id: "dev_shade",
+          access_level: "control",
+        })
+      );
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_entity_rule",
+          target_id: "dev_pn16",
+          access_level: "control",
+        })
+      );
+
+      // Bulk area update
+      const utilityGroup = (element as any)._getGroupedDevices(allDevs).find((g: any) => g.area === "Utility Room");
+      await (element as any)._handleBulkSetAreaDevices(utilityGroup.devices, "none");
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_entity_rule",
+          target_id: "dev_pn16",
+          access_level: "none",
+        })
+      );
+    });
+
+    it("supports bulk dashboard view permission updates and summary computation", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      const dash = (element as any)._catalogDashboards[0];
+      expect(dash).toBeDefined();
+
+      // Check summary when no view rules are set (default none)
+      const summaryInitial = (element as any)._getDashboardPermissionSummary(dash);
+      expect(summaryInitial.level).toBe("deny");
+      expect(summaryInitial.label).toBe("All Denied");
+
+      // Bulk set views to control
+      await (element as any)._handleBulkSetDashboardViews(dash, "control");
+      expect(hass.callWS).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "domolux/permission/set_view_rule",
+          view_path: "main",
+          access_level: "control",
+        })
+      );
+
+      // Test dashboard group expand toggle
+      expect((element as any)._expandedDashboardGroupIds.has(dash.dashboard_id)).toBe(false);
+      (element as any)._toggleExpandDashboardGroup(dash.dashboard_id);
+      expect((element as any)._expandedDashboardGroupIds.has(dash.dashboard_id)).toBe(true);
+    });
+
+    it("renders professional dialog container layout with sticky toolbar and scrollable body", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      const shadowRoot = element.shadowRoot!;
+      const dialogBackdrop = shadowRoot.querySelector(".dialog-backdrop");
+      const dialogBox = shadowRoot.querySelector(".dialog-box.dialog-full");
+      const dialogHeader = shadowRoot.querySelector(".dialog-header");
+      const dialogBody = shadowRoot.querySelector(".dialog-body");
+      const dialogFooter = shadowRoot.querySelector(".dialog-footer");
+      const stickyToolbar = shadowRoot.querySelector(".sticky-toolbar");
+
+      expect(dialogBackdrop).not.toBeNull();
+      expect(dialogBox).not.toBeNull();
+      expect(dialogHeader).not.toBeNull();
+      expect(dialogBody).not.toBeNull();
+      expect(dialogFooter).not.toBeNull();
+      expect(stickyToolbar).not.toBeNull();
+
+      // Verify area groups and device cards rendered
+      const areaGroups = shadowRoot.querySelectorAll(".area-group");
+      expect(areaGroups.length).toBeGreaterThanOrEqual(1);
+
+      const deviceCards = shadowRoot.querySelectorAll(".device-card");
+      expect(deviceCards.length).toBe(2);
+
+      // Verify segmented control and buttons exist
+      const segControls = shadowRoot.querySelectorAll(".segmented-control");
+      expect(segControls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("enforces critical dialog layout architecture and viewport containment styles", () => {
+      const styles = (element.constructor as any).styles;
+      const css = (Array.isArray(styles) ? styles.map((s: any) => s.cssText).join("\n") : styles.cssText) || "";
+
+      // 1. Viewport containment for dialog box
+      expect(css).toContain(".dialog-box.dialog-full");
+      expect(css).toContain("max-height: calc(100vh - 48px)");
+      expect(css).toContain("min(1080px, calc(100vw - 32px))");
+
+      // 2. Controlled scroll container for dialog body
+      expect(css).toContain(".dialog-body");
+      expect(css).toContain("overflow-y: auto");
+      expect(css).toContain("min-height: 0");
+      expect(css).toContain("flex: 1 1 auto");
+
+      // 3. Sticky toolbar that stays visible while scrolling
+      expect(css).toContain(".filter-toolbar.sticky-toolbar");
+      expect(css).toContain("position: sticky");
+
+      // 4. Compact segmented controls
+      expect(css).toContain(".segmented-control");
+      expect(css).toContain(".seg-btn.active-deny");
+      expect(css).toContain(".seg-btn.active-read");
+      expect(css).toContain(".seg-btn.active-control");
+
+      // 5. Mobile responsive rules and minimum 44px touch targets
+      expect(css).toContain("@media (max-width: 768px)");
+      expect(css).toContain("min-height: 44px");
+      expect(css).toContain("100dvh");
+    });
   });
 });

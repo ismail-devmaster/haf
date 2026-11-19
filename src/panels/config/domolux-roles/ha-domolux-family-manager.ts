@@ -26,6 +26,9 @@ import {
   mdiLock,
   mdiCast,
   mdiRobotVacuum,
+  mdiFilterRemoveOutline,
+  mdiCheckAll,
+  mdiMinusCircleOutline,
 } from "@mdi/js";
 
 import "../../../components/ha-card";
@@ -119,7 +122,15 @@ export class HaDomoluxFamilyManager extends LitElement {
 
   @state() private _deviceRoomFilter = "all";
 
+  @state() private _deviceDomainFilter = "all";
+
+  @state() private _devicePermissionFilter = "all";
+
   @state() private _expandedDeviceIds: Set<string> = new Set();
+
+  @state() private _collapsedAreaNames: Set<string> = new Set();
+
+  @state() private _expandedDashboardGroupIds: Set<string> = new Set();
 
   @state() private _expandedDashboardIds: Set<string> = new Set();
 
@@ -171,7 +182,11 @@ export class HaDomoluxFamilyManager extends LitElement {
         type: "domolux/family/list",
       })) as DomoluxFamilyMember[];
 
-      this._familyMembers = members || [];
+      this._familyMembers = Array.isArray(members)
+        ? members
+        : Array.isArray((members as any)?.members)
+          ? (members as any).members
+          : [];
     } catch (err: any) {
       this._error = this._parseErrorMessage(
         err,
@@ -412,7 +427,11 @@ export class HaDomoluxFamilyManager extends LitElement {
     this._activePermissionTab = "devices";
     this._deviceSearchQuery = "";
     this._deviceRoomFilter = "all";
+    this._deviceDomainFilter = "all";
+    this._devicePermissionFilter = "all";
     this._expandedDeviceIds = new Set();
+    this._collapsedAreaNames = new Set();
+    this._expandedDashboardGroupIds = new Set();
     this._expandedDashboardIds = new Set();
     this._selectedDashboardId = "all";
     this._dashboardSearchQuery = "";
@@ -434,14 +453,24 @@ export class HaDomoluxFamilyManager extends LitElement {
     this._catalogDashboards = [];
     this._selectedDashboardId = "all";
     this._dashboardSearchQuery = "";
+    this._deviceSearchQuery = "";
+    this._deviceRoomFilter = "all";
+    this._deviceDomainFilter = "all";
+    this._devicePermissionFilter = "all";
+    this._expandedDeviceIds = new Set();
+    this._collapsedAreaNames = new Set();
+    this._expandedDashboardGroupIds = new Set();
+    this._expandedDashboardIds = new Set();
   }
 
   private async _loadCatalog(): Promise<void> {
     this._catalogLoading = true;
     try {
       const res = await fetchHouseholdCatalog(this.hass);
-      this._catalogDevices = res?.devices || res?.household_devices || [];
-      this._catalogDashboards = res?.dashboards || [];
+      const devices = res?.devices || res?.household_devices || [];
+      const dashboards = res?.dashboards || [];
+      this._catalogDevices = Array.isArray(devices) ? devices : [];
+      this._catalogDashboards = Array.isArray(dashboards) ? dashboards : [];
     } catch (_err) {
       this._catalogDevices = [];
       this._catalogDashboards = [];
@@ -483,10 +512,64 @@ export class HaDomoluxFamilyManager extends LitElement {
     return Array.from(rooms).sort();
   }
 
+  private _getAvailableDomains(): { domain: string; label: string; count: number }[] {
+    const domainCounts = new Map<string, number>();
+    for (const dev of this._catalogDevices) {
+      const d = dev.domain || "other";
+      domainCounts.set(d, (domainCounts.get(d) || 0) + 1);
+    }
+    const labelMap: Record<string, string> = {
+      light: "Lights",
+      switch: "Switches",
+      cover: "Covers",
+      climate: "Climate",
+      fan: "Fans",
+      lock: "Locks",
+      media_player: "Media Players",
+      sensor: "Sensors",
+      binary_sensor: "Binary Sensors",
+      vacuum: "Vacuums",
+      camera: "Cameras",
+      other: "Other",
+    };
+    return Array.from(domainCounts.entries())
+      .map(([domain, count]) => ({
+        domain,
+        label: labelMap[domain] || domain.charAt(0).toUpperCase() + domain.slice(1),
+        count,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  private _clearDeviceFilters(): void {
+    this._deviceSearchQuery = "";
+    this._deviceRoomFilter = "all";
+    this._deviceDomainFilter = "all";
+    this._devicePermissionFilter = "all";
+  }
+
+  private get _hasActiveDeviceFilters(): boolean {
+    return (
+      Boolean(this._deviceSearchQuery.trim()) ||
+      this._deviceRoomFilter !== "all" ||
+      this._deviceDomainFilter !== "all" ||
+      this._devicePermissionFilter !== "all"
+    );
+  }
+
   private _getFilteredDevices(): HouseholdDevice[] {
     return this._catalogDevices.filter((dev) => {
       if (this._deviceRoomFilter !== "all" && dev.area_name !== this._deviceRoomFilter) {
         return false;
+      }
+      if (this._deviceDomainFilter !== "all" && dev.domain !== this._deviceDomainFilter) {
+        return false;
+      }
+      if (this._devicePermissionFilter !== "all") {
+        const level = this._getEffectiveDeviceLevel(dev);
+        if (level !== this._devicePermissionFilter) {
+          return false;
+        }
       }
       if (this._deviceSearchQuery.trim()) {
         const query = this._deviceSearchQuery.toLowerCase();
@@ -499,6 +582,161 @@ export class HaDomoluxFamilyManager extends LitElement {
       }
       return true;
     });
+  }
+
+  private _getGroupedDevices(filteredDevices: HouseholdDevice[]): { area: string; devices: HouseholdDevice[] }[] {
+    const groups = new Map<string, HouseholdDevice[]>();
+    for (const dev of filteredDevices) {
+      const area = dev.area_name || "Unassigned";
+      if (!groups.has(area)) {
+        groups.set(area, []);
+      }
+      groups.get(area)!.push(dev);
+    }
+    const sortedAreas = Array.from(groups.keys()).sort((a, b) => {
+      if (a === "Unassigned") return 1;
+      if (b === "Unassigned") return -1;
+      return a.localeCompare(b);
+    });
+    return sortedAreas.map((area) => ({
+      area,
+      devices: groups.get(area)!,
+    }));
+  }
+
+  private _toggleCollapseArea(area: string): void {
+    const next = new Set(this._collapsedAreaNames);
+    if (next.has(area)) {
+      next.delete(area);
+    } else {
+      next.add(area);
+    }
+    this._collapsedAreaNames = next;
+  }
+
+  private _toggleExpandDashboardGroup(dashboardId: string): void {
+    const next = new Set(this._expandedDashboardGroupIds);
+    if (next.has(dashboardId)) {
+      next.delete(dashboardId);
+    } else {
+      next.add(dashboardId);
+    }
+    this._expandedDashboardGroupIds = next;
+  }
+
+  private _getDashboardPermissionSummary(dash: DashboardSummary): {
+    label: string;
+    level: "control" | "read" | "deny" | "mixed";
+  } {
+    if (!dash.views || dash.views.length === 0) {
+      return { label: "No views", level: "mixed" };
+    }
+    const levels = dash.views.map((v) => {
+      const vRule = this._userPermissionSet?.view_rules?.[v.view_path];
+      return (
+        vRule?.access_level ||
+        (vRule?.effect === "allow" ? "control" : "none")
+      );
+    });
+    if (levels.every((l) => l === "control")) {
+      return { label: "All Control", level: "control" };
+    }
+    if (levels.every((l) => l === "read")) {
+      return { label: "All Read", level: "read" };
+    }
+    if (levels.every((l) => l === "none")) {
+      return { label: "All Denied", level: "deny" };
+    }
+    const active = levels.filter((l) => l === "control" || l === "read").length;
+    return {
+      label: `${active}/${levels.length} Allowed`,
+      level: "mixed",
+    };
+  }
+
+  private async _handleBulkSetAreaDevices(
+    devices: HouseholdDevice[],
+    accessLevel: "none" | "read" | "control"
+  ): Promise<void> {
+    if (!this._selectedUserForPermissions || !devices.length) return;
+    this._submitting = true;
+    this._error = null;
+    try {
+      for (const dev of devices) {
+        const res = (await this.hass.callWS({
+          type: "domolux/permission/set_entity_rule",
+          user_id: this._selectedUserForPermissions.user_id,
+          target_type: dev.target_type,
+          target_id: dev.target_id,
+          access_level: accessLevel,
+        })) as any;
+        if (res?.permissions) {
+          this._userPermissionSet = res.permissions;
+        }
+      }
+      this._success = `Updated ${devices.length} devices in area to ${accessLevel}.`;
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(err, "Failed to update area devices.");
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private async _handleBulkSetVisibleDevices(
+    devices: HouseholdDevice[],
+    accessLevel: "none" | "read" | "control"
+  ): Promise<void> {
+    if (!this._selectedUserForPermissions || !devices.length) return;
+    this._submitting = true;
+    this._error = null;
+    try {
+      for (const dev of devices) {
+        const res = (await this.hass.callWS({
+          type: "domolux/permission/set_entity_rule",
+          user_id: this._selectedUserForPermissions.user_id,
+          target_type: dev.target_type,
+          target_id: dev.target_id,
+          access_level: accessLevel,
+        })) as any;
+        if (res?.permissions) {
+          this._userPermissionSet = res.permissions;
+        }
+      }
+      this._success = `Updated ${devices.length} visible devices to ${accessLevel}.`;
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(err, "Failed to update devices.");
+    } finally {
+      this._submitting = false;
+    }
+  }
+
+  private async _handleBulkSetDashboardViews(
+    dash: DashboardSummary,
+    accessLevel: "none" | "read" | "control"
+  ): Promise<void> {
+    if (!this._selectedUserForPermissions || !dash.views.length) return;
+    this._submitting = true;
+    this._error = null;
+    try {
+      const effect = accessLevel === "none" ? "deny" : "allow";
+      for (const v of dash.views) {
+        const res = (await this.hass.callWS({
+          type: "domolux/permission/set_view_rule",
+          user_id: this._selectedUserForPermissions.user_id,
+          view_path: v.view_path,
+          effect,
+          access_level: accessLevel,
+        })) as any;
+        if (res?.permissions) {
+          this._userPermissionSet = res.permissions;
+        }
+      }
+      this._success = `All views in '${dash.title}' updated to ${accessLevel}.`;
+    } catch (err: any) {
+      this._error = this._parseErrorMessage(err, "Failed to update dashboard views.");
+    } finally {
+      this._submitting = false;
+    }
   }
 
   private _getFilteredDashboards(): DashboardSummary[] {
@@ -1182,7 +1420,7 @@ export class HaDomoluxFamilyManager extends LitElement {
                               </td>
                               <td class="actions-cell">
                                 <ha-button
-                                  size="small"
+                                  size="s"
                                   .disabled=${this._submitting}
                                   @click=${() =>
                                     this._handleToggleStatus(member)}
@@ -1198,7 +1436,7 @@ export class HaDomoluxFamilyManager extends LitElement {
                                     : "Enable / تفعيل"}
                                 </ha-button>
                                 <ha-button
-                                  size="small"
+                                  size="s"
                                   .disabled=${this._submitting}
                                   @click=${() =>
                                     this._openPasswordDialog(member)}
@@ -1210,7 +1448,7 @@ export class HaDomoluxFamilyManager extends LitElement {
                                   Password / كلمة السر
                                 </ha-button>
                                 <ha-button
-                                  size="small"
+                                  size="s"
                                   .disabled=${this._submitting}
                                   @click=${() =>
                                     this._openPermissionDialog(member)}
@@ -1222,7 +1460,7 @@ export class HaDomoluxFamilyManager extends LitElement {
                                   Permissions / الصلاحيات
                                 </ha-button>
                                 <ha-button
-                                  size="small"
+                                  size="s"
                                   class="destructive"
                                   .disabled=${this._submitting}
                                   @click=${() =>
@@ -1426,10 +1664,10 @@ export class HaDomoluxFamilyManager extends LitElement {
         <!-- Permission Management Dialog -->
         ${this._showPermissionDialog && this._selectedUserForPermissions
           ? html`
-              <div class="dialog-backdrop">
+              <div class="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="perm-dialog-title">
                 <div class="dialog-box dialog-full">
                   <div class="dialog-header">
-                    <h2>
+                    <h2 id="perm-dialog-title">
                       Permissions / الصلاحيات —
                       ${this._selectedUserForPermissions.display_name}
                       (@${this._selectedUserForPermissions.username})
@@ -1437,42 +1675,57 @@ export class HaDomoluxFamilyManager extends LitElement {
                     <button
                       class="icon-button"
                       @click=${this._closePermissionDialog}
+                      title="Close dialog"
+                      aria-label="Close dialog"
                     >
                       <ha-svg-icon .path=${mdiClose}></ha-svg-icon>
                     </button>
                   </div>
-                  <div class="dialog-body">
-                    <!-- Navigation Tabs -->
-                    <div class="permission-tabs">
-                      <button
-                        class="tab-btn ${this._activePermissionTab === 'devices' ? 'active' : ''}"
-                        @click=${() => {
-                          this._activePermissionTab = "devices";
-                        }}
-                      >
-                        <ha-svg-icon .path=${mdiDevices}></ha-svg-icon>
-                        <span>Household devices</span>
-                      </button>
-                      <button
-                        class="tab-btn ${this._activePermissionTab === 'dashboards' ? 'active' : ''}"
-                        @click=${() => {
-                          this._activePermissionTab = "dashboards";
-                        }}
-                      >
-                        <ha-svg-icon .path=${mdiViewDashboard}></ha-svg-icon>
-                        <span>Dashboards and views</span>
-                      </button>
-                      <button
-                        class="tab-btn ${this._activePermissionTab === 'diagnostics' ? 'active' : ''}"
-                        @click=${() => {
-                          this._activePermissionTab = "diagnostics";
-                        }}
-                      >
-                        <ha-svg-icon .path=${mdiTune}></ha-svg-icon>
-                        <span>Advanced diagnostics</span>
-                      </button>
-                    </div>
 
+                  <!-- Navigation Tabs: Pinned under header, always visible and accessible -->
+                  <div class="permission-tabs" role="tablist" aria-label="Permission categories">
+                    <button
+                      role="tab"
+                      id="tab-devices"
+                      aria-selected=${this._activePermissionTab === "devices"}
+                      class="tab-btn ${this._activePermissionTab === 'devices' ? 'active' : ''}"
+                      @click=${() => {
+                        this._activePermissionTab = "devices";
+                      }}
+                    >
+                      <ha-svg-icon .path=${mdiDevices}></ha-svg-icon>
+                      <span>Household devices</span>
+                      <span class="tab-count-badge">${this._catalogDevices.length}</span>
+                    </button>
+                    <button
+                      role="tab"
+                      id="tab-dashboards"
+                      aria-selected=${this._activePermissionTab === "dashboards"}
+                      class="tab-btn ${this._activePermissionTab === 'dashboards' ? 'active' : ''}"
+                      @click=${() => {
+                        this._activePermissionTab = "dashboards";
+                      }}
+                    >
+                      <ha-svg-icon .path=${mdiViewDashboard}></ha-svg-icon>
+                      <span>Dashboards and views</span>
+                      <span class="tab-count-badge">${this._catalogDashboards.length}</span>
+                    </button>
+                    <button
+                      role="tab"
+                      id="tab-diagnostics"
+                      aria-selected=${this._activePermissionTab === "diagnostics"}
+                      class="tab-btn ${this._activePermissionTab === 'diagnostics' ? 'active' : ''}"
+                      @click=${() => {
+                        this._activePermissionTab = "diagnostics";
+                      }}
+                    >
+                      <ha-svg-icon .path=${mdiTune}></ha-svg-icon>
+                      <span>Advanced diagnostics</span>
+                    </button>
+                  </div>
+
+                  <!-- Controlled scroll container for tab contents -->
+                  <div class="dialog-body" role="tabpanel" tabindex="0">
                     ${this._activePermissionTab === "devices"
                       ? this._renderHouseholdDevicesTab()
                       : this._activePermissionTab === "dashboards"
@@ -1502,6 +1755,152 @@ export class HaDomoluxFamilyManager extends LitElement {
     `;
   }
 
+  private _renderDeviceCard(dev: HouseholdDevice) {
+    const effectiveLevel = this._getEffectiveDeviceLevel(dev);
+    const isExpanded = this._expandedDeviceIds.has(dev.device_id);
+
+    return html`
+      <div class="device-card" data-device-id=${dev.device_id}>
+        <div class="device-main-row">
+          <div class="device-icon-container">
+            <ha-svg-icon
+              .path=${this._getDomainIconPath(dev.domain)}
+            ></ha-svg-icon>
+          </div>
+          <div class="device-info">
+            <div class="device-name-row">
+              <span class="device-name" title=${dev.name}>${dev.name}</span>
+              ${dev.area_name
+                ? html`<span class="area-badge">${dev.area_name}</span>`
+                : nothing}
+              ${dev.target_type === "entity"
+                ? html`<span class="standalone-badge">Standalone</span>`
+                : nothing}
+              ${dev.is_multi_entity
+                ? html`<span class="multi-badge">${dev.channels.length} channels</span>`
+                : nothing}
+            </div>
+            <div class="device-meta">
+              ${dev.primary_entity_id
+                ? html`<span class="entity-id-meta">${dev.primary_entity_id}</span> • `
+                : nothing}
+              Capabilities: ${dev.capabilities.join(", ")}
+            </div>
+          </div>
+          <div class="device-permission-controls">
+            <div class="segmented-control" role="group" aria-label="Device permission for ${dev.name}">
+              <button
+                class="seg-btn ${effectiveLevel === 'none' ? 'active-deny' : ''}"
+                @click=${() => this._handleSetDevicePermission(dev, 'none')}
+                .disabled=${this._submitting}
+                aria-pressed=${effectiveLevel === 'none'}
+              >
+                Deny
+              </button>
+              <button
+                class="seg-btn ${effectiveLevel === 'read' ? 'active-read' : ''}"
+                @click=${() => this._handleSetDevicePermission(dev, 'read')}
+                .disabled=${this._submitting}
+                aria-pressed=${effectiveLevel === 'read'}
+              >
+                Read
+              </button>
+              <button
+                class="seg-btn ${effectiveLevel === 'control' ? 'active-control' : ''}"
+                @click=${() => this._handleSetDevicePermission(dev, 'control')}
+                .disabled=${this._submitting}
+                aria-pressed=${effectiveLevel === 'control'}
+              >
+                Control
+              </button>
+            </div>
+            ${dev.is_multi_entity
+              ? html`
+                  <button
+                    class="icon-button expand-btn"
+                    @click=${() => this._toggleExpandDevice(dev.device_id)}
+                    title="${isExpanded ? 'Collapse' : 'Expand'} ${dev.channels.length} channels"
+                    aria-expanded=${isExpanded}
+                  >
+                    <ha-svg-icon
+                      .path=${isExpanded ? mdiChevronUp : mdiChevronDown}
+                    ></ha-svg-icon>
+                  </button>
+                `
+              : nothing}
+          </div>
+        </div>
+        ${dev.is_multi_entity && isExpanded
+          ? html`
+              <div class="channels-expansion">
+                <div class="channels-header">
+                  <span>Individual channels (${dev.channels.length})</span>
+                  <div class="channels-actions">
+                    <ha-button
+                      size="s"
+                      @click=${() => this._handleSelectAllChannels(dev, 'control')}
+                      .disabled=${this._submitting}
+                    >
+                      Select all control
+                    </ha-button>
+                    <ha-button
+                      size="s"
+                      @click=${() => this._handleSelectAllChannels(dev, 'none')}
+                      .disabled=${this._submitting}
+                    >
+                      Select all deny
+                    </ha-button>
+                  </div>
+                </div>
+                <div class="channels-list">
+                  ${dev.channels.map((ch) => {
+                    const chLevel = this._getEffectiveChannelLevel(ch.entity_id);
+                    return html`
+                      <div class="channel-row">
+                        <div class="channel-info">
+                          <ha-svg-icon
+                            .path=${this._getDomainIconPath(ch.domain)}
+                          ></ha-svg-icon>
+                          <span class="channel-name">${ch.name}</span>
+                          <span class="channel-entity-id">(${ch.entity_id})</span>
+                        </div>
+                        <div class="segmented-control small" role="group" aria-label="Channel permission for ${ch.name}">
+                          <button
+                            class="seg-btn ${chLevel === 'none' ? 'active-deny' : ''}"
+                            @click=${() => this._handleSetChannelPermission(ch, 'none')}
+                            .disabled=${this._submitting}
+                            aria-pressed=${chLevel === 'none'}
+                          >
+                            Deny
+                          </button>
+                          <button
+                            class="seg-btn ${chLevel === 'read' ? 'active-read' : ''}"
+                            @click=${() => this._handleSetChannelPermission(ch, 'read')}
+                            .disabled=${this._submitting}
+                            aria-pressed=${chLevel === 'read'}
+                          >
+                            Read
+                          </button>
+                          <button
+                            class="seg-btn ${chLevel === 'control' ? 'active-control' : ''}"
+                            @click=${() => this._handleSetChannelPermission(ch, 'control')}
+                            .disabled=${this._submitting}
+                            aria-pressed=${chLevel === 'control'}
+                          >
+                            Control
+                          </button>
+                        </div>
+                      </div>
+                    `;
+                  })}
+                </div>
+              </div>
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
   private _renderHouseholdDevicesTab() {
     if (this._catalogLoading) {
       return html`
@@ -1513,33 +1912,126 @@ export class HaDomoluxFamilyManager extends LitElement {
     }
 
     const availableRooms = this._getAvailableRooms();
+    const availableDomains = this._getAvailableDomains();
     const filteredDevices = this._getFilteredDevices();
+    const grouped = this._getGroupedDevices(filteredDevices);
 
     return html`
-      <div class="filter-toolbar">
-        <div class="search-box">
-          <ha-svg-icon .path=${mdiMagnify}></ha-svg-icon>
-          <input
-            type="text"
-            placeholder="Search devices by name..."
-            .value=${this._deviceSearchQuery}
-            @input=${(e: Event) => {
-              this._deviceSearchQuery = (e.target as HTMLInputElement).value;
-            }}
-          />
+      <div class="filter-toolbar sticky-toolbar">
+        <div class="toolbar-top-row">
+          <div class="search-box">
+            <ha-svg-icon .path=${mdiMagnify}></ha-svg-icon>
+            <input
+              type="text"
+              placeholder="Search devices by name, area, ID..."
+              .value=${this._deviceSearchQuery}
+              @input=${(e: Event) => {
+                this._deviceSearchQuery = (e.target as HTMLInputElement).value;
+              }}
+            />
+            ${this._deviceSearchQuery
+              ? html`
+                  <button
+                    class="clear-input-btn"
+                    @click=${() => {
+                      this._deviceSearchQuery = "";
+                    }}
+                    title="Clear search"
+                  >
+                    <ha-svg-icon .path=${mdiClose}></ha-svg-icon>
+                  </button>
+                `
+              : nothing}
+          </div>
+          <div class="toolbar-counts">
+            <span class="count-pill">
+              ${filteredDevices.length} / ${this._catalogDevices.length} devices
+            </span>
+            ${filteredDevices.length > 0
+              ? html`
+                  <div class="bulk-visible-actions">
+                    <button
+                      class="bulk-action-btn bulk-control"
+                      @click=${() => this._handleBulkSetVisibleDevices(filteredDevices, 'control')}
+                      .disabled=${this._submitting}
+                      title="Set all ${filteredDevices.length} visible devices to Control"
+                    >
+                      <ha-svg-icon .path=${mdiCheckAll}></ha-svg-icon>
+                      <span>All Control</span>
+                    </button>
+                    <button
+                      class="bulk-action-btn bulk-deny"
+                      @click=${() => this._handleBulkSetVisibleDevices(filteredDevices, 'none')}
+                      .disabled=${this._submitting}
+                      title="Set all ${filteredDevices.length} visible devices to Deny"
+                    >
+                      <ha-svg-icon .path=${mdiMinusCircleOutline}></ha-svg-icon>
+                      <span>All Deny</span>
+                    </button>
+                  </div>
+                `
+              : nothing}
+          </div>
         </div>
-        <div class="room-filter">
-          <select
-            .value=${this._deviceRoomFilter}
-            @change=${(e: Event) => {
-              this._deviceRoomFilter = (e.target as HTMLSelectElement).value;
-            }}
-          >
-            <option value="all">All rooms</option>
-            ${availableRooms.map(
-              (room) => html`<option value=${room}>${room}</option>`
-            )}
-          </select>
+
+        <div class="toolbar-filter-row">
+          <div class="filter-dropdown room-filter">
+            <label>Room:</label>
+            <select
+              .value=${this._deviceRoomFilter}
+              @change=${(e: Event) => {
+                this._deviceRoomFilter = (e.target as HTMLSelectElement).value;
+              }}
+            >
+              <option value="all">All rooms (${availableRooms.length})</option>
+              ${availableRooms.map(
+                (room) => html`<option value=${room}>${room}</option>`
+              )}
+            </select>
+          </div>
+
+          <div class="filter-dropdown category-filter">
+            <label>Category:</label>
+            <select
+              .value=${this._deviceDomainFilter}
+              @change=${(e: Event) => {
+                this._deviceDomainFilter = (e.target as HTMLSelectElement).value;
+              }}
+            >
+              <option value="all">All categories</option>
+              ${availableDomains.map(
+                (d) => html`<option value=${d.domain}>${d.label} (${d.count})</option>`
+              )}
+            </select>
+          </div>
+
+          <div class="filter-dropdown permission-filter">
+            <label>Permission:</label>
+            <select
+              .value=${this._devicePermissionFilter}
+              @change=${(e: Event) => {
+                this._devicePermissionFilter = (e.target as HTMLSelectElement).value;
+              }}
+            >
+              <option value="all">All permissions</option>
+              <option value="control">Control only</option>
+              <option value="read">Read only</option>
+              <option value="none">Denied only</option>
+            </select>
+          </div>
+
+          ${this._hasActiveDeviceFilters
+            ? html`
+                <button
+                  class="clear-filters-btn"
+                  @click=${this._clearDeviceFilters}
+                  title="Reset all filters"
+                >
+                  <ha-svg-icon .path=${mdiFilterRemoveOutline}></ha-svg-icon>
+                  <span>Clear filters</span>
+                </button>
+              `
+            : nothing}
         </div>
       </div>
 
@@ -1549,194 +2041,70 @@ export class HaDomoluxFamilyManager extends LitElement {
               <p>
                 ${this._catalogDevices.length === 0
                   ? "No household devices found."
-                  : "No household devices match the search or room filter."}
+                  : "No household devices match the selected filters."}
               </p>
+              ${this._hasActiveDeviceFilters
+                ? html`
+                    <button class="link-btn" @click=${this._clearDeviceFilters}>
+                      Reset filters
+                    </button>
+                  `
+                : nothing}
             </div>
           `
         : html`
             <div class="device-list">
-              ${filteredDevices.map((dev) => {
-                const effectiveLevel = this._getEffectiveDeviceLevel(dev);
-                const isExpanded = this._expandedDeviceIds.has(dev.device_id);
+              ${grouped.map((group) => {
+                const isAreaCollapsed = this._collapsedAreaNames.has(group.area);
                 return html`
-                  <div class="device-card">
-                    <div class="device-main-row">
-                      <div class="device-icon-container">
-                        <ha-svg-icon
-                          .path=${this._getDomainIconPath(dev.domain)}
-                        ></ha-svg-icon>
-                      </div>
-                      <div class="device-info">
-                        <div class="device-name-row">
-                          <span class="device-name">${dev.name}</span>
-                          ${dev.area_name
-                            ? html`<span class="area-badge"
-                                >${dev.area_name}</span
-                              >`
-                            : nothing}
-                          ${dev.target_type === "entity"
-                            ? html`<span class="standalone-badge"
-                                >Standalone</span
-                              >`
-                            : nothing}
-                          ${dev.is_multi_entity
-                            ? html`<span class="multi-badge"
-                                >${dev.channels.length} channels</span
-                              >`
-                            : nothing}
-                        </div>
-                        <div class="device-meta">
-                          ${dev.primary_entity_id
-                            ? html`<span class="entity-id-meta"
-                                >${dev.primary_entity_id}</span
-                              > • `
-                            : nothing}
-                          Capabilities: ${dev.capabilities.join(", ")}
-                        </div>
-                      </div>
-                      <div class="device-permission-controls">
-                        <div class="segmented-control">
-                          <button
-                            class="seg-btn ${effectiveLevel === 'none'
-                              ? 'active-deny'
-                              : ''}"
-                            @click=${() =>
-                              this._handleSetDevicePermission(dev, 'none')}
-                            .disabled=${this._submitting}
-                          >
-                            Deny
-                          </button>
-                          <button
-                            class="seg-btn ${effectiveLevel === 'read'
-                              ? 'active-read'
-                              : ''}"
-                            @click=${() =>
-                              this._handleSetDevicePermission(dev, 'read')}
-                            .disabled=${this._submitting}
-                          >
-                            Read
-                          </button>
-                          <button
-                            class="seg-btn ${effectiveLevel === 'control'
-                              ? 'active-control'
-                              : ''}"
-                            @click=${() =>
-                              this._handleSetDevicePermission(dev, 'control')}
-                            .disabled=${this._submitting}
-                          >
-                            Control
-                          </button>
-                        </div>
-                        ${dev.is_multi_entity
-                          ? html`
-                              <button
-                                class="icon-button expand-btn"
-                                @click=${() =>
-                                  this._toggleExpandDevice(dev.device_id)}
-                                title="Expand channels"
-                              >
-                                <ha-svg-icon
-                                  .path=${isExpanded
-                                    ? mdiChevronUp
-                                    : mdiChevronDown}
-                                ></ha-svg-icon>
-                              </button>
-                            `
-                          : nothing}
+                  <div class="area-group">
+                    <div
+                      class="area-group-header"
+                      @click=${() => this._toggleCollapseArea(group.area)}
+                      role="button"
+                      tabindex="0"
+                      aria-expanded=${!isAreaCollapsed}
+                      @keydown=${(e: KeyboardEvent) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          this._toggleCollapseArea(group.area);
+                        }
+                      }}
+                    >
+                      <ha-svg-icon
+                        .path=${isAreaCollapsed ? mdiChevronDown : mdiChevronUp}
+                        class="area-chevron"
+                      ></ha-svg-icon>
+                      <span class="area-group-title">${group.area}</span>
+                      <span class="area-group-count">
+                        ${group.devices.length} ${group.devices.length === 1 ? 'device' : 'devices'}
+                      </span>
+                      <div
+                        class="area-group-actions"
+                        @click=${(e: Event) => e.stopPropagation()}
+                      >
+                        <button
+                          class="mini-action-btn"
+                          @click=${() => this._handleBulkSetAreaDevices(group.devices, 'control')}
+                          .disabled=${this._submitting}
+                          title="Set all devices in ${group.area} to Control"
+                        >
+                          All Control
+                        </button>
+                        <button
+                          class="mini-action-btn"
+                          @click=${() => this._handleBulkSetAreaDevices(group.devices, 'none')}
+                          .disabled=${this._submitting}
+                          title="Set all devices in ${group.area} to Deny"
+                        >
+                          All Deny
+                        </button>
                       </div>
                     </div>
-                    ${dev.is_multi_entity && isExpanded
+                    ${!isAreaCollapsed
                       ? html`
-                          <div class="channels-expansion">
-                            <div class="channels-header">
-                              <span>Individual channels</span>
-                              <div class="channels-actions">
-                                <ha-button
-                                  size="small"
-                                  @click=${() =>
-                                    this._handleSelectAllChannels(
-                                      dev,
-                                      'control'
-                                    )}
-                                  .disabled=${this._submitting}
-                                >
-                                  Select all control
-                                </ha-button>
-                                <ha-button
-                                  size="small"
-                                  @click=${() =>
-                                    this._handleSelectAllChannels(dev, 'none')}
-                                  .disabled=${this._submitting}
-                                >
-                                  Select all deny
-                                </ha-button>
-                              </div>
-                            </div>
-                            <div class="channels-list">
-                              ${dev.channels.map((ch) => {
-                                const chLevel = this._getEffectiveChannelLevel(
-                                  ch.entity_id
-                                );
-                                return html`
-                                  <div class="channel-row">
-                                    <div class="channel-info">
-                                      <ha-svg-icon
-                                        .path=${this._getDomainIconPath(
-                                          ch.domain
-                                        )}
-                                      ></ha-svg-icon>
-                                      <span class="channel-name"
-                                        >${ch.name}</span
-                                      >
-                                      <span class="channel-entity-id"
-                                        >(${ch.entity_id})</span
-                                      >
-                                    </div>
-                                    <div class="segmented-control small">
-                                      <button
-                                        class="seg-btn ${chLevel === 'none'
-                                          ? 'active-deny'
-                                          : ''}"
-                                        @click=${() =>
-                                          this._handleSetChannelPermission(
-                                            ch,
-                                            'none'
-                                          )}
-                                        .disabled=${this._submitting}
-                                      >
-                                        Deny
-                                      </button>
-                                      <button
-                                        class="seg-btn ${chLevel === 'read'
-                                          ? 'active-read'
-                                          : ''}"
-                                        @click=${() =>
-                                          this._handleSetChannelPermission(
-                                            ch,
-                                            'read'
-                                          )}
-                                        .disabled=${this._submitting}
-                                      >
-                                        Read
-                                      </button>
-                                      <button
-                                        class="seg-btn ${chLevel === 'control'
-                                          ? 'active-control'
-                                          : ''}"
-                                        @click=${() =>
-                                          this._handleSetChannelPermission(
-                                            ch,
-                                            'control'
-                                          )}
-                                        .disabled=${this._submitting}
-                                      >
-                                        Control
-                                      </button>
-                                    </div>
-                                  </div>
-                                `;
-                              })}
-                            </div>
+                          <div class="area-device-items">
+                            ${group.devices.map((dev) => this._renderDeviceCard(dev))}
                           </div>
                         `
                       : nothing}
@@ -1769,225 +2137,286 @@ export class HaDomoluxFamilyManager extends LitElement {
     const filteredDashboards = this._getFilteredDashboards();
 
     return html`
-      <div class="filter-toolbar">
-        <div class="search-box">
-          <ha-svg-icon .path=${mdiMagnify}></ha-svg-icon>
-          <input
-            type="text"
-            placeholder="Search dashboards and views..."
-            .value=${this._dashboardSearchQuery}
-            @input=${(e: Event) => {
-              this._dashboardSearchQuery = (e.target as HTMLInputElement).value;
-            }}
-          />
-        </div>
-        <div class="room-filter dashboard-select-container">
-          <select
-            class="dashboard-select"
-            .value=${this._selectedDashboardId}
-            @change=${(e: Event) => {
-              this._selectedDashboardId = (e.target as HTMLSelectElement).value;
-            }}
-          >
-            <option value="all">
-              All dashboards (${this._catalogDashboards.length})
-            </option>
-            ${this._catalogDashboards.map(
-              (dash) =>
-                html`<option value=${dash.dashboard_id}>
-                  ${dash.title}
-                </option>`
-            )}
-          </select>
-        </div>
-      </div>
-
-      <div class="dashboard-selector-chips">
-        <button
-          class="dash-chip ${this._selectedDashboardId === 'all'
-            ? 'active'
-            : ''}"
-          @click=${() => {
-            this._selectedDashboardId = "all";
-          }}
-        >
-          <ha-svg-icon .path=${mdiLayersOutline}></ha-svg-icon>
-          <span>All dashboards</span>
-        </button>
-        ${this._catalogDashboards.map(
-          (dash) => html`
-            <button
-              class="dash-chip ${this._selectedDashboardId === dash.dashboard_id
-                ? 'active'
-                : ''}"
-              @click=${() => {
-                this._selectedDashboardId = dash.dashboard_id;
+      <div class="filter-toolbar sticky-toolbar">
+        <div class="toolbar-top-row">
+          <div class="search-box">
+            <ha-svg-icon .path=${mdiMagnify}></ha-svg-icon>
+            <input
+              type="text"
+              placeholder="Search dashboards and views..."
+              .value=${this._dashboardSearchQuery}
+              @input=${(e: Event) => {
+                this._dashboardSearchQuery = (e.target as HTMLInputElement).value;
+              }}
+            />
+            ${this._dashboardSearchQuery
+              ? html`
+                  <button
+                    class="clear-input-btn"
+                    @click=${() => {
+                      this._dashboardSearchQuery = "";
+                    }}
+                    title="Clear search"
+                  >
+                    <ha-svg-icon .path=${mdiClose}></ha-svg-icon>
+                  </button>
+                `
+              : nothing}
+          </div>
+          <div class="room-filter dashboard-select-container">
+            <select
+              class="dashboard-select"
+              .value=${this._selectedDashboardId}
+              @change=${(e: Event) => {
+                this._selectedDashboardId = (e.target as HTMLSelectElement).value;
               }}
             >
-              <ha-svg-icon .path=${mdiViewDashboard}></ha-svg-icon>
-              <span>${dash.title}</span>
-              <span class="chip-count">${dash.views.length}</span>
-            </button>
-          `
-        )}
+              <option value="all">
+                All dashboards (${this._catalogDashboards.length})
+              </option>
+              ${this._catalogDashboards.map(
+                (dash) =>
+                  html`<option value=${dash.dashboard_id}>
+                    ${dash.title} (${dash.views.length})
+                  </option>`
+              )}
+            </select>
+          </div>
+        </div>
+
+        <div class="dashboard-selector-chips">
+          <button
+            class="dash-chip ${this._selectedDashboardId === 'all' ? 'active' : ''}"
+            @click=${() => {
+              this._selectedDashboardId = "all";
+            }}
+          >
+            <ha-svg-icon .path=${mdiLayersOutline}></ha-svg-icon>
+            <span>All dashboards</span>
+            <span class="chip-count">${this._catalogDashboards.length}</span>
+          </button>
+          ${this._catalogDashboards.map(
+            (dash) => html`
+              <button
+                class="dash-chip ${this._selectedDashboardId === dash.dashboard_id ? 'active' : ''}"
+                @click=${() => {
+                  this._selectedDashboardId = dash.dashboard_id;
+                  const next = new Set(this._expandedDashboardGroupIds);
+                  next.add(dash.dashboard_id);
+                  this._expandedDashboardGroupIds = next;
+                }}
+              >
+                <ha-svg-icon .path=${mdiViewDashboard}></ha-svg-icon>
+                <span>${dash.title}</span>
+                <span class="chip-count">${dash.views.length}</span>
+              </button>
+            `
+          )}
+        </div>
       </div>
 
       ${filteredDashboards.length === 0
         ? html`
             <div class="empty-state">
-              <p>No dashboards match the selected filter.</p>
+              <p>No dashboards match the selected search or filter.</p>
+              ${this._dashboardSearchQuery || this._selectedDashboardId !== 'all'
+                ? html`
+                    <button
+                      class="link-btn"
+                      @click=${() => {
+                        this._dashboardSearchQuery = "";
+                        this._selectedDashboardId = "all";
+                      }}
+                    >
+                      Show all dashboards
+                    </button>
+                  `
+                : nothing}
             </div>
           `
         : html`
             <div class="dashboards-list">
-              ${filteredDashboards.map(
-                (dash) => html`
+              ${filteredDashboards.map((dash) => {
+                const isGroupExpanded =
+                  this._selectedDashboardId === dash.dashboard_id ||
+                  this._dashboardSearchQuery.trim() !== "" ||
+                  this._expandedDashboardGroupIds.has(dash.dashboard_id);
+                const summary = this._getDashboardPermissionSummary(dash);
+
+                return html`
                   <div
-                    class="dashboard-block"
+                    class="dashboard-block ${isGroupExpanded ? 'expanded' : 'collapsed'}"
                     data-dashboard-id=${dash.dashboard_id}
                   >
                     <div
-                      class="dashboard-title ${this._selectedDashboardId ===
-                      dash.dashboard_id
-                        ? 'selected-focus'
-                        : ''}"
+                      class="dashboard-header-row ${this._selectedDashboardId === dash.dashboard_id ? 'selected-focus' : ''}"
+                      @click=${() => this._toggleExpandDashboardGroup(dash.dashboard_id)}
+                      role="button"
+                      tabindex="0"
+                      aria-expanded=${isGroupExpanded}
+                      @keydown=${(e: KeyboardEvent) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          this._toggleExpandDashboardGroup(dash.dashboard_id);
+                        }
+                      }}
                     >
-                      <ha-svg-icon .path=${mdiLayersOutline}></ha-svg-icon>
-                      <h3>${dash.title}</h3>
-                      <span class="views-count-badge"
-                        >${dash.views.length} views</span
-                      >
-                      ${this._selectedDashboardId === dash.dashboard_id
-                        ? html`
-                            <button
-                              class="show-all-btn"
-                              @click=${(e: Event) => {
-                                e.stopPropagation();
-                                this._selectedDashboardId = "all";
-                              }}
-                            >
-                              Show all
-                            </button>
-                          `
-                        : nothing}
-                    </div>
-                    <div class="views-grid">
-                ${dash.views.map((v) => {
-                  const vRule = this._userPermissionSet?.view_rules[v.view_path];
-                  const vEffect =
-                    vRule?.access_level ||
-                    (vRule?.effect === "allow" ? "control" : "none");
-                  const isExpanded = this._expandedDashboardIds.has(v.view_path);
-                  return html`
-                    <div class="view-card">
-                      <div class="view-card-header">
-                        <div class="view-title-row">
-                          <ha-svg-icon .path=${mdiViewDashboard}></ha-svg-icon>
-                          <span class="view-title">${v.title}</span>
-                        </div>
-                        <div class="segmented-control">
-                          <button
-                            class="seg-btn ${vEffect === 'none'
-                              ? 'active-deny'
-                              : ''}"
-                            @click=${() =>
-                              this._handleSetViewRuleDirect(v.view_path, 'none')}
-                            .disabled=${this._submitting}
-                          >
-                            Deny
-                          </button>
-                          <button
-                            class="seg-btn ${vEffect === 'read'
-                              ? 'active-read'
-                              : ''}"
-                            @click=${() =>
-                              this._handleSetViewRuleDirect(v.view_path, 'read')}
-                            .disabled=${this._submitting}
-                          >
-                            Read
-                          </button>
-                          <button
-                            class="seg-btn ${vEffect === 'control'
-                              ? 'active-control'
-                              : ''}"
-                            @click=${() =>
-                              this._handleSetViewRuleDirect(v.view_path, 'control')}
-                            .disabled=${this._submitting}
-                          >
-                            Control
-                          </button>
-                        </div>
+                      <ha-svg-icon
+                        .path=${isGroupExpanded ? mdiChevronUp : mdiChevronDown}
+                        class="dash-chevron"
+                      ></ha-svg-icon>
+                      <div class="dashboard-title-info">
+                        <ha-svg-icon .path=${mdiLayersOutline}></ha-svg-icon>
+                        <h3>${dash.title}</h3>
+                        <span class="views-count-badge">
+                          ${dash.views.length} ${dash.views.length === 1 ? 'view' : 'views'}
+                        </span>
+                        <span class="permission-summary-badge summary-${summary.level}">
+                          ${summary.label}
+                        </span>
                       </div>
-                      ${v.entities.length > 0
-                        ? html`
-                            <div class="view-entities-section">
-                              <button
-                                class="expand-entities-toggle"
-                                @click=${() =>
-                                  this._toggleExpandDashboard(v.view_path)}
-                              >
-                                <span>${v.entities.length} referenced devices/entities</span>
-                                <ha-svg-icon
-                                  .path=${isExpanded
-                                    ? mdiChevronUp
-                                    : mdiChevronDown}
-                                ></ha-svg-icon>
-                              </button>
-                              ${isExpanded
-                                ? html`
-                                    <div class="view-entities-list">
-                                      ${v.entities.map((eid) => {
-                                        const overrideLevel = this._getExplicitEntityOverrideLevel(
-                                          eid
-                                        );
-                                        return html`
-                                          <div class="view-entity-item">
-                                            <span class="view-entity-name"
-                                              >${this._lookupDeviceOrEntityName(
-                                                eid
-                                              )}</span
-                                            >
-                                            <div class="override-selector">
-                                              <select
-                                                .value=${overrideLevel || 'inherited'}
-                                                @change=${(e: Event) =>
-                                                  this._handleSetEntityOverride(
-                                                    eid,
-                                                    (e.target as HTMLSelectElement)
-                                                      .value
-                                                  )}
-                                                .disabled=${this._submitting}
-                                              >
-                                                <option value="inherited">
-                                                  Inherited (${vEffect})
-                                                </option>
-                                                <option value="none">
-                                                  Explicit deny
-                                                </option>
-                                                <option value="read">
-                                                  Explicit read
-                                                </option>
-                                                <option value="control">
-                                                  Explicit control
-                                                </option>
-                                              </select>
-                                            </div>
-                                          </div>
-                                        `;
-                                      })}
-                                    </div>
-                                  `
-                                : nothing}
-                            </div>
-                          `
-                        : nothing}
+                      <div
+                        class="dashboard-bulk-actions"
+                        @click=${(e: Event) => e.stopPropagation()}
+                      >
+                        <button
+                          class="mini-action-btn action-control"
+                          @click=${() => this._handleBulkSetDashboardViews(dash, 'control')}
+                          .disabled=${this._submitting}
+                          title="Set all views in '${dash.title}' to Control"
+                        >
+                          All Control
+                        </button>
+                        <button
+                          class="mini-action-btn action-read"
+                          @click=${() => this._handleBulkSetDashboardViews(dash, 'read')}
+                          .disabled=${this._submitting}
+                          title="Set all views in '${dash.title}' to Read"
+                        >
+                          All Read
+                        </button>
+                        <button
+                          class="mini-action-btn action-deny"
+                          @click=${() => this._handleBulkSetDashboardViews(dash, 'none')}
+                          .disabled=${this._submitting}
+                          title="Set all views in '${dash.title}' to Deny"
+                        >
+                          All Deny
+                        </button>
+                      </div>
                     </div>
-                  `;
-                })}
+
+                    <div class="views-grid" ?hidden=${!isGroupExpanded}>
+                      ${dash.views.map((v) => {
+                        const vRule = this._userPermissionSet?.view_rules?.[v.view_path];
+                        const vEffect =
+                          vRule?.access_level ||
+                          (vRule?.effect === "allow" ? "control" : "none");
+                        const isEntitiesExpanded = this._expandedDashboardIds.has(v.view_path);
+
+                        return html`
+                          <div class="view-card" data-view-path=${v.view_path}>
+                            <div class="view-card-header">
+                              <div class="view-title-row">
+                                <ha-svg-icon .path=${mdiViewDashboard}></ha-svg-icon>
+                                <div class="view-title-wrap">
+                                  <span class="view-title">${v.title}</span>
+                                  <span class="view-path-meta">${v.view_path}</span>
+                                </div>
+                              </div>
+                              <div class="segmented-control" role="group" aria-label="View permission for ${v.title}">
+                                <button
+                                  class="seg-btn ${vEffect === 'none' ? 'active-deny' : ''}"
+                                  @click=${() => this._handleSetViewRuleDirect(v.view_path, 'none')}
+                                  .disabled=${this._submitting}
+                                  aria-pressed=${vEffect === 'none'}
+                                >
+                                  Deny
+                                </button>
+                                <button
+                                  class="seg-btn ${vEffect === 'read' ? 'active-read' : ''}"
+                                  @click=${() => this._handleSetViewRuleDirect(v.view_path, 'read')}
+                                  .disabled=${this._submitting}
+                                  aria-pressed=${vEffect === 'read'}
+                                >
+                                  Read
+                                </button>
+                                <button
+                                  class="seg-btn ${vEffect === 'control' ? 'active-control' : ''}"
+                                  @click=${() => this._handleSetViewRuleDirect(v.view_path, 'control')}
+                                  .disabled=${this._submitting}
+                                  aria-pressed=${vEffect === 'control'}
+                                >
+                                  Control
+                                </button>
+                              </div>
+                            </div>
+
+                            ${v.entities.length > 0
+                              ? html`
+                                  <div class="view-entities-section">
+                                    <button
+                                      class="expand-entities-toggle"
+                                      @click=${() => this._toggleExpandDashboard(v.view_path)}
+                                      aria-expanded=${isEntitiesExpanded}
+                                    >
+                                      <ha-svg-icon
+                                        .path=${isEntitiesExpanded ? mdiChevronUp : mdiChevronDown}
+                                      ></ha-svg-icon>
+                                      <span>
+                                        ${v.entities.length} referenced ${v.entities.length === 1 ? 'device / entity' : 'devices / entities'}
+                                      </span>
+                                    </button>
+                                    ${isEntitiesExpanded
+                                      ? html`
+                                          <div class="view-entities-list">
+                                            ${v.entities.map((eid) => {
+                                              const overrideLevel = this._getExplicitEntityOverrideLevel(eid);
+                                              return html`
+                                                <div class="view-entity-item">
+                                                  <span class="view-entity-name" title=${eid}>
+                                                    ${this._lookupDeviceOrEntityName(eid)}
+                                                  </span>
+                                                  <div class="override-selector">
+                                                    <select
+                                                      .value=${overrideLevel || 'inherited'}
+                                                      @change=${(e: Event) =>
+                                                        this._handleSetEntityOverride(
+                                                          eid,
+                                                          (e.target as HTMLSelectElement).value
+                                                        )}
+                                                      .disabled=${this._submitting}
+                                                    >
+                                                      <option value="inherited">
+                                                        Inherited (${vEffect})
+                                                      </option>
+                                                      <option value="none">
+                                                        Explicit deny
+                                                      </option>
+                                                      <option value="read">
+                                                        Explicit read
+                                                      </option>
+                                                      <option value="control">
+                                                        Explicit control
+                                                      </option>
+                                                    </select>
+                                                  </div>
+                                                </div>
+                                              `;
+                                            })}
+                                          </div>
+                                        `
+                                      : nothing}
+                                  </div>
+                                `
+                              : nothing}
+                          </div>
+                        `;
+                      })}
                     </div>
                   </div>
-                `
-              )}
+                `;
+              })}
             </div>
           `}
     `;
@@ -2063,14 +2492,14 @@ export class HaDomoluxFamilyManager extends LitElement {
             </ha-button>
           </div>
           ${this._userPermissionSet &&
-          Object.keys(this._userPermissionSet.entity_rules).length === 0
+          Object.keys(this._userPermissionSet.entity_rules || {}).length === 0
             ? html`<p class="empty-state-text"
                 >No entity rules / لا توجد قواعد</p
               >`
             : nothing}
           <div class="rules-list">
             ${this._userPermissionSet
-              ? Object.values(this._userPermissionSet.entity_rules).map(
+              ? Object.values(this._userPermissionSet.entity_rules || {}).map(
                   (rule) => html`
                     <div class="rule-row">
                       <span>
@@ -2078,7 +2507,7 @@ export class HaDomoluxFamilyManager extends LitElement {
                         ${rule.access_level}
                       </span>
                       <ha-button
-                        size="small"
+                        size="s"
                         class="destructive"
                         @click=${() =>
                           this._handleRemoveEntityRule(rule.rule_id)}
@@ -2127,7 +2556,7 @@ export class HaDomoluxFamilyManager extends LitElement {
           </div>
           <div class="rules-list">
             ${this._userPermissionSet
-              ? Object.values(this._userPermissionSet.view_rules).map(
+              ? Object.values(this._userPermissionSet.view_rules || {}).map(
                   (rule) => html`
                     <div class="rule-row">
                       <span>
@@ -2135,7 +2564,7 @@ export class HaDomoluxFamilyManager extends LitElement {
                         → ${rule.effect}
                       </span>
                       <ha-button
-                        size="small"
+                        size="s"
                         class="destructive"
                         @click=${() =>
                           this._handleRemoveViewRule(rule.view_path)}
@@ -2368,11 +2797,14 @@ export class HaDomoluxFamilyManager extends LitElement {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(0, 0, 0, 0.6);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 100;
+      padding: 16px;
+      box-sizing: border-box;
+      backdrop-filter: blur(2px);
     }
 
     .dialog-box {
@@ -2381,24 +2813,46 @@ export class HaDomoluxFamilyManager extends LitElement {
       border-radius: 12px;
       width: 100%;
       max-width: 480px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+      max-height: calc(100vh - 48px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
       display: flex;
       flex-direction: column;
       overflow: hidden;
+    }
+
+    .dialog-box.dialog-full {
+      max-width: 1080px;
+      width: min(1080px, calc(100vw - 32px));
+      height: min(880px, calc(100vh - 48px));
+      max-height: calc(100vh - 48px);
+      border-radius: 14px;
+    }
+
+    @supports (height: 100dvh) {
+      .dialog-box.dialog-full {
+        height: min(880px, calc(100dvh - 48px));
+        max-height: calc(100dvh - 48px);
+      }
     }
 
     .dialog-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px;
+      padding: 14px 20px;
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
+      flex-shrink: 0;
+      background: var(--card-background-color, #fff);
     }
 
     .dialog-header h2 {
       margin: 0;
-      font-size: 1.2rem;
-      font-weight: 500;
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--primary-text-color);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .icon-button {
@@ -2406,14 +2860,45 @@ export class HaDomoluxFamilyManager extends LitElement {
       border: none;
       cursor: pointer;
       color: var(--secondary-text-color);
-      padding: 4px;
+      padding: 6px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s, color 0.15s;
+    }
+
+    .icon-button:hover {
+      background-color: var(--secondary-background-color, #f0f0f0);
+      color: var(--primary-text-color);
     }
 
     .dialog-body {
-      padding: 20px;
+      padding: 0 20px 20px 20px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: var(--divider-color, #ccc) transparent;
+    }
+
+    .dialog-body::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .dialog-body::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .dialog-body::-webkit-scrollbar-thumb {
+      background-color: var(--divider-color, #ccc);
+      border-radius: 3px;
     }
 
     .target-summary {
@@ -2456,42 +2941,202 @@ export class HaDomoluxFamilyManager extends LitElement {
       display: flex;
       gap: var(--ha-space-2, 8px);
       border-bottom: 1px solid var(--divider-color, #e0e0e0);
-      padding-bottom: var(--ha-space-2, 8px);
-      margin-bottom: var(--ha-space-3, 12px);
+      padding: 8px 20px;
+      background: var(--secondary-background-color, #fafafa);
+      flex-shrink: 0;
       flex-wrap: wrap;
+      align-items: center;
     }
 
     .tab-btn {
       display: inline-flex;
       align-items: center;
       gap: var(--ha-space-2, 8px);
-      padding: var(--ha-space-2, 8px) var(--ha-space-4, 16px);
-      background: none;
-      border: 1px solid transparent;
+      padding: 7px 14px;
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #e0e0e0);
       border-radius: 8px;
       cursor: pointer;
-      font-size: 0.95rem;
+      font-size: 0.88rem;
       font-weight: 500;
       color: var(--secondary-text-color);
-      transition: all 0.2s ease;
+      transition: all 0.15s ease;
     }
 
     .tab-btn:hover {
-      background-color: var(--secondary-background-color, #f5f5f5);
+      background-color: var(--secondary-background-color, #f0f0f0);
+      color: var(--primary-text-color);
     }
 
     .tab-btn.active {
       color: var(--primary-color);
       background-color: var(--primary-color-subtle, rgba(3, 169, 244, 0.12));
       border-color: var(--primary-color);
+      font-weight: 600;
     }
 
-    /* Filter Toolbar */
-    .filter-toolbar {
+    .tab-count-badge {
+      font-size: 0.72rem;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: var(--secondary-background-color, #e0e0e0);
+      color: var(--secondary-text-color);
+      font-weight: 600;
+    }
+
+    .tab-btn.active .tab-count-badge {
+      background: var(--primary-color);
+      color: #fff;
+    }
+
+    /* Sticky Toolbar */
+    .filter-toolbar.sticky-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--card-background-color, #fff);
+      margin: 0 -20px;
+      padding: 14px 20px 12px 20px;
+      border-bottom: 1px solid var(--divider-color, #e0e0e0);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
       display: flex;
-      gap: var(--ha-space-2, 8px);
-      margin-bottom: var(--ha-space-4, 16px);
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .toolbar-top-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       flex-wrap: wrap;
+    }
+
+    .toolbar-filter-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-counts {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .count-pill {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--secondary-text-color);
+      background: var(--secondary-background-color, #f0f0f0);
+      padding: 4px 10px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+
+    .bulk-visible-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .bulk-action-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--divider-color, #ccc);
+      background: var(--card-background-color, #fff);
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--primary-text-color);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .bulk-action-btn ha-svg-icon {
+      --mdc-icon-size: 16px;
+    }
+
+    .bulk-control:hover:not(:disabled) {
+      background: var(--success-color, #4caf50);
+      border-color: var(--success-color, #4caf50);
+      color: #fff;
+    }
+
+    .bulk-deny:hover:not(:disabled) {
+      background: var(--error-color, #db4437);
+      border-color: var(--error-color, #db4437);
+      color: #fff;
+    }
+
+    .clear-filters-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px dashed var(--divider-color, #ccc);
+      background: transparent;
+      color: var(--secondary-text-color);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .clear-filters-btn:hover {
+      color: var(--error-color, #db4437);
+      border-color: var(--error-color, #db4437);
+      background: rgba(219, 68, 55, 0.05);
+    }
+
+    .filter-dropdown {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-dropdown label {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--secondary-text-color);
+      white-space: nowrap;
+    }
+
+    .filter-dropdown select {
+      padding: 6px 10px;
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 6px;
+      background: var(--card-background-color, #fff);
+      color: var(--primary-text-color);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .clear-input-btn {
+      background: none;
+      border: none;
+      padding: 2px;
+      cursor: pointer;
+      color: var(--secondary-text-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .clear-input-btn:hover {
+      color: var(--primary-text-color);
+    }
+
+    .link-btn {
+      background: none;
+      border: none;
+      color: var(--primary-color);
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 4px;
     }
 
     .search-box {
@@ -2500,7 +3145,7 @@ export class HaDomoluxFamilyManager extends LitElement {
       display: flex;
       align-items: center;
       gap: var(--ha-space-2, 8px);
-      padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px);
+      padding: 6px 10px;
       border: 1px solid var(--divider-color, #ccc);
       border-radius: 8px;
       background: var(--card-background-color, #fff);
@@ -2512,24 +3157,100 @@ export class HaDomoluxFamilyManager extends LitElement {
       background: transparent;
       width: 100%;
       color: var(--primary-text-color);
-      font-size: 0.95rem;
+      font-size: 0.92rem;
     }
 
-    .room-filter select {
-      padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px);
-      border: 1px solid var(--divider-color, #ccc);
-      border-radius: 8px;
-      background: var(--card-background-color, #fff);
-      color: var(--primary-text-color);
-      font-size: 0.95rem;
-      height: 100%;
-    }
-
-    /* Device List & Card */
+    /* Device List & Area Groups */
     .device-list {
       display: flex;
       flex-direction: column;
-      gap: var(--ha-space-3, 12px);
+      gap: 12px;
+    }
+
+    .area-group {
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 10px;
+      background: var(--card-background-color, #fff);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .area-group-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: var(--secondary-background-color, #f7f7f7);
+      border-bottom: 1px solid var(--divider-color, #e0e0e0);
+      user-select: none;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+    }
+
+    .area-group-header:hover {
+      background: var(--secondary-background-color, #efefef);
+    }
+
+    .area-chevron {
+      color: var(--secondary-text-color);
+      --mdc-icon-size: 20px;
+    }
+
+    .area-group-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--primary-text-color);
+    }
+
+    .area-group-count {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--secondary-text-color);
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 12px;
+      padding: 1px 8px;
+    }
+
+    .area-group-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .mini-action-btn {
+      background: var(--card-background-color, #fff);
+      border: 1px solid var(--divider-color, #ccc);
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--primary-text-color);
+      padding: 3px 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .mini-action-btn:hover:not(:disabled) {
+      background: var(--primary-color-subtle, rgba(3, 169, 244, 0.12));
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+
+    .area-device-items {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .area-device-items .device-card {
+      border: none;
+      border-radius: 0;
+    }
+
+    .area-device-items .device-card:not(:last-child) {
+      border-bottom: 1px solid var(--divider-color, #f0f0f0);
     }
 
     .device-card {
@@ -2545,13 +3266,12 @@ export class HaDomoluxFamilyManager extends LitElement {
       display: flex;
       align-items: center;
       gap: var(--ha-space-3, 12px);
-      padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px);
-      flex-wrap: wrap;
+      padding: 10px 16px;
     }
 
     .device-icon-container {
-      width: 40px;
-      height: 40px;
+      width: 36px;
+      height: 36px;
       border-radius: 8px;
       background-color: var(--secondary-background-color, #f0f0f0);
       display: flex;
@@ -2562,8 +3282,8 @@ export class HaDomoluxFamilyManager extends LitElement {
     }
 
     .device-info {
-      flex: 1;
-      min-width: 180px;
+      flex: 1 1 0%;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       gap: 2px;
@@ -2578,51 +3298,59 @@ export class HaDomoluxFamilyManager extends LitElement {
 
     .device-name {
       font-weight: 600;
-      font-size: 1rem;
+      font-size: 0.95rem;
+      color: var(--primary-text-color);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .area-badge {
       background: var(--primary-color-subtle, rgba(3, 169, 244, 0.12));
       color: var(--primary-color);
-      padding: 2px 8px;
-      border-radius: 6px;
-      font-size: 0.75rem;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.72rem;
       font-weight: 500;
     }
 
     .multi-badge {
       background: var(--secondary-background-color, #e0e0e0);
       color: var(--secondary-text-color);
-      padding: 2px 8px;
-      border-radius: 6px;
-      font-size: 0.75rem;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.72rem;
       font-weight: 500;
     }
 
     .standalone-badge {
       background: var(--warning-color-subtle, rgba(255, 152, 0, 0.14));
       color: var(--warning-color, #ff9800);
-      padding: 2px 8px;
-      border-radius: 6px;
-      font-size: 0.75rem;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.72rem;
       font-weight: 500;
     }
 
     .entity-id-meta {
       font-family: var(--code-font-family, monospace);
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--secondary-text-color);
     }
 
     .device-meta {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: var(--secondary-text-color);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .device-permission-controls {
       display: flex;
       align-items: center;
       gap: var(--ha-space-2, 8px);
+      flex-shrink: 0;
     }
 
     /* Segmented Control */
@@ -2632,6 +3360,7 @@ export class HaDomoluxFamilyManager extends LitElement {
       border-radius: 8px;
       overflow: hidden;
       background: var(--secondary-background-color, #f9f9f9);
+      flex-shrink: 0;
     }
 
     .segmented-control.small {
@@ -2646,7 +3375,8 @@ export class HaDomoluxFamilyManager extends LitElement {
       font-weight: 500;
       cursor: pointer;
       color: var(--primary-text-color);
-      transition: background-color 0.2s, color 0.2s;
+      transition: background-color 0.15s, color 0.15s;
+      user-select: none;
     }
 
     .segmented-control.small .seg-btn {
@@ -2658,29 +3388,41 @@ export class HaDomoluxFamilyManager extends LitElement {
       border-right: 1px solid var(--divider-color, #ccc);
     }
 
+    .seg-btn:hover:not(:disabled) {
+      background-color: rgba(0, 0, 0, 0.05);
+    }
+
+    .seg-btn:focus-visible {
+      outline: 2px solid var(--primary-color);
+      outline-offset: -2px;
+    }
+
     .seg-btn.active-deny {
       background-color: var(--error-color, #db4437);
       color: #fff;
+      font-weight: 600;
     }
 
     .seg-btn.active-read {
       background-color: var(--primary-color, #03a9f4);
       color: #fff;
+      font-weight: 600;
     }
 
     .seg-btn.active-control {
       background-color: var(--success-color, #4caf50);
       color: #fff;
+      font-weight: 600;
     }
 
     /* Channels Expansion */
     .channels-expansion {
       background-color: var(--secondary-background-color, #fbfbfb);
       border-top: 1px solid var(--divider-color, #e0e0e0);
-      padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px);
+      padding: 10px 16px;
       display: flex;
       flex-direction: column;
-      gap: var(--ha-space-2, 8px);
+      gap: 8px;
     }
 
     .channels-header {
@@ -2688,7 +3430,7 @@ export class HaDomoluxFamilyManager extends LitElement {
       justify-content: space-between;
       align-items: center;
       font-weight: 600;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       color: var(--secondary-text-color);
     }
 
@@ -2700,14 +3442,14 @@ export class HaDomoluxFamilyManager extends LitElement {
     .channels-list {
       display: flex;
       flex-direction: column;
-      gap: var(--ha-space-2, 8px);
+      gap: 6px;
     }
 
     .channel-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 6px 10px;
+      padding: 5px 10px;
       border-radius: 6px;
       background: var(--card-background-color, #fff);
       border: 1px solid var(--divider-color, #eee);
@@ -2720,47 +3462,45 @@ export class HaDomoluxFamilyManager extends LitElement {
     }
 
     .channel-name {
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       font-weight: 500;
     }
 
     .channel-entity-id {
       font-family: var(--code-font-family, monospace);
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--secondary-text-color);
     }
 
     /* Dashboards Tab */
     .dashboard-select-container select {
-      padding: var(--ha-space-2, 8px) var(--ha-space-3, 12px);
+      padding: 6px 10px;
       border: 1px solid var(--divider-color, #ccc);
-      border-radius: 8px;
+      border-radius: 6px;
       background: var(--card-background-color, #fff);
       color: var(--primary-text-color);
-      font-size: 0.95rem;
-      height: 100%;
+      font-size: 0.85rem;
     }
 
     .dashboard-selector-chips {
       display: flex;
       flex-wrap: wrap;
       gap: var(--ha-space-2, 8px);
-      margin-bottom: var(--ha-space-3, 12px);
     }
 
     .dash-chip {
       display: inline-flex;
       align-items: center;
-      gap: var(--ha-space-2, 8px);
-      padding: 6px 14px;
+      gap: 6px;
+      padding: 4px 12px;
       border-radius: 20px;
       border: 1px solid var(--divider-color, #ccc);
       background: var(--card-background-color, #fff);
       color: var(--primary-text-color);
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 500;
       cursor: pointer;
-      transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+      transition: background-color 0.15s, border-color 0.15s, color 0.15s;
     }
 
     .dash-chip:hover {
@@ -2783,133 +3523,206 @@ export class HaDomoluxFamilyManager extends LitElement {
       color: var(--secondary-text-color);
       padding: 1px 6px;
       border-radius: 10px;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 600;
-    }
-
-    .views-count-badge {
-      font-size: 0.75rem;
-      font-weight: 500;
-      background: var(--primary-color-subtle, rgba(3, 169, 244, 0.12));
-      color: var(--primary-color);
-      padding: 2px 8px;
-      border-radius: 6px;
-      margin-left: 6px;
-    }
-
-    .show-all-btn {
-      background: none;
-      border: 1px solid var(--primary-color);
-      border-radius: 6px;
-      color: var(--primary-color);
-      font-size: 0.75rem;
-      padding: 2px 8px;
-      cursor: pointer;
-      margin-left: auto;
-    }
-
-    .show-all-btn:hover {
-      background: var(--primary-color);
-      color: #fff;
     }
 
     .dashboards-list {
       display: flex;
       flex-direction: column;
-      gap: var(--ha-space-4, 16px);
+      gap: 12px;
     }
 
     .dashboard-block {
+      border: 1px solid var(--divider-color, #e0e0e0);
+      border-radius: 10px;
+      background: var(--card-background-color, #fff);
+      overflow: hidden;
       display: flex;
       flex-direction: column;
-      gap: var(--ha-space-3, 12px);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
-    .dashboard-title {
+    .dashboard-block.expanded {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      border-color: var(--primary-color-subtle, #b3e5fc);
+    }
+
+    .dashboard-header-row {
       display: flex;
       align-items: center;
-      gap: var(--ha-space-2, 8px);
-      color: var(--primary-color);
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--secondary-background-color, #f7f7f7);
+      user-select: none;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
     }
 
-    .dashboard-title h3 {
+    .dashboard-header-row:hover {
+      background: var(--secondary-background-color, #efefef);
+    }
+
+    .dash-chevron {
+      color: var(--secondary-text-color);
+      --mdc-icon-size: 20px;
+    }
+
+    .dashboard-title-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      flex-wrap: wrap;
+      color: var(--primary-text-color);
+    }
+
+    .dashboard-title-info h3 {
       margin: 0;
-      font-size: 1.15rem;
+      font-size: 0.98rem;
       font-weight: 600;
+    }
+
+    .views-count-badge {
+      font-size: 0.72rem;
+      font-weight: 500;
+      background: var(--primary-color-subtle, rgba(3, 169, 244, 0.12));
+      color: var(--primary-color);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    .permission-summary-badge {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .summary-control {
+      background: rgba(76, 175, 80, 0.15);
+      color: var(--success-color, #4caf50);
+    }
+
+    .summary-read {
+      background: rgba(3, 169, 244, 0.15);
+      color: var(--primary-color, #03a9f4);
+    }
+
+    .summary-deny {
+      background: rgba(219, 68, 55, 0.15);
+      color: var(--error-color, #db4437);
+    }
+
+    .summary-mixed {
+      background: rgba(255, 152, 0, 0.15);
+      color: var(--warning-color, #ff9800);
+    }
+
+    .dashboard-bulk-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
     }
 
     .views-grid {
       display: flex;
       flex-direction: column;
-      gap: var(--ha-space-3, 12px);
+      gap: 10px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--divider-color, #e0e0e0);
+      background: var(--card-background-color, #fff);
+    }
+
+    .views-grid[hidden] {
+      display: none !important;
     }
 
     .view-card {
-      border: 1px solid var(--divider-color, #e0e0e0);
-      border-radius: 10px;
+      border: 1px solid var(--divider-color, #e8e8e8);
+      border-radius: 8px;
       background: var(--card-background-color, #fff);
-      padding: var(--ha-space-3, 12px) var(--ha-space-4, 16px);
+      padding: 10px 14px;
       display: flex;
       flex-direction: column;
-      gap: var(--ha-space-2, 8px);
+      gap: 8px;
     }
 
     .view-card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 10px;
       flex-wrap: wrap;
-      gap: var(--ha-space-2, 8px);
     }
 
     .view-title-row {
       display: flex;
       align-items: center;
-      gap: var(--ha-space-2, 8px);
+      gap: 8px;
+      flex: 1;
+    }
+
+    .view-title-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
     }
 
     .view-title {
       font-weight: 600;
-      font-size: 1rem;
+      font-size: 0.95rem;
+    }
+
+    .view-path-meta {
+      font-family: var(--code-font-family, monospace);
+      font-size: 0.72rem;
+      color: var(--secondary-text-color);
     }
 
     .view-entities-section {
       border-top: 1px dashed var(--divider-color, #e0e0e0);
-      padding-top: var(--ha-space-2, 8px);
-      margin-top: 4px;
+      padding-top: 8px;
+      margin-top: 2px;
     }
 
     .expand-entities-toggle {
       display: flex;
       align-items: center;
-      gap: var(--ha-space-1, 4px);
+      gap: 4px;
       background: none;
       border: none;
       cursor: pointer;
       color: var(--secondary-text-color);
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       padding: 0;
+    }
+
+    .expand-entities-toggle:hover {
+      color: var(--primary-color);
     }
 
     .view-entities-list {
       display: flex;
       flex-direction: column;
-      gap: var(--ha-space-2, 8px);
-      margin-top: var(--ha-space-2, 8px);
-      padding-left: var(--ha-space-2, 8px);
+      gap: 6px;
+      margin-top: 8px;
+      padding-left: 8px;
     }
 
     .view-entity-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 6px 10px;
+      padding: 5px 10px;
       border-radius: 6px;
       background: var(--secondary-background-color, #fbfbfb);
     }
 
     .view-entity-name {
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 500;
     }
 
@@ -2924,10 +3737,142 @@ export class HaDomoluxFamilyManager extends LitElement {
     .dialog-footer {
       display: flex;
       justify-content: flex-end;
-      gap: 8px;
+      gap: 10px;
       padding: 12px 20px;
       background: var(--secondary-background-color, #f9f9f9);
       border-top: 1px solid var(--divider-color, #e0e0e0);
+      flex-shrink: 0;
+    }
+
+    /* Responsive Rules */
+    @media (max-width: 768px) {
+      .dialog-backdrop {
+        padding: 0;
+      }
+
+      .dialog-box.dialog-full {
+        width: 100vw;
+        height: 100dvh;
+        max-height: 100dvh;
+        border-radius: 0;
+      }
+
+      .dialog-header {
+        padding: 12px 16px;
+      }
+
+      .permission-tabs {
+        padding: 8px 14px;
+        gap: 6px;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+
+      .permission-tabs::-webkit-scrollbar {
+        display: none;
+      }
+
+      .tab-btn {
+        padding: 8px 12px;
+        white-space: nowrap;
+        min-height: 44px;
+      }
+
+      .dialog-body {
+        padding: 0 14px 14px 14px;
+      }
+
+      .filter-toolbar.sticky-toolbar {
+        top: 0;
+        margin: 0 -14px;
+        padding: 10px 14px;
+      }
+
+      .toolbar-top-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .toolbar-counts {
+        margin-left: 0;
+        justify-content: space-between;
+      }
+
+      .toolbar-filter-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .filter-dropdown {
+        justify-content: space-between;
+      }
+
+      .filter-dropdown select {
+        flex: 1;
+        max-width: 65%;
+      }
+
+      .device-main-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+
+      .device-permission-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .segmented-control {
+        flex: 1;
+        display: flex;
+      }
+
+      .segmented-control .seg-btn {
+        flex: 1;
+        text-align: center;
+        padding: 10px 4px;
+        min-height: 44px; /* Hit target >= 44px */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .icon-button.expand-btn {
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .dashboard-header-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+
+      .dashboard-bulk-actions {
+        justify-content: flex-end;
+      }
+
+      .view-card-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .view-card-header .segmented-control {
+        width: 100%;
+      }
+
+      .view-card-header .segmented-control .seg-btn {
+        flex: 1;
+        min-height: 44px;
+      }
     }
   `;
 }
