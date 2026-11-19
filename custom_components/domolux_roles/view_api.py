@@ -614,6 +614,33 @@ HOUSEHOLD_DOMAINS = {
     "alarm_control_panel",
     "remote",
     "siren",
+    "weather",
+    "device_tracker",
+    "person",
+    "sun",
+    "update",
+    "todo",
+    "event",
+    "calendar",
+    "date",
+    "datetime",
+    "time",
+    "text",
+    "image",
+    "air_quality",
+    "geo_location",
+    "stt",
+    "tts",
+    "button",
+    "input_boolean",
+    "input_button",
+    "input_number",
+    "input_select",
+    "input_text",
+    "input_datetime",
+    "number",
+    "select",
+    "scene",
 }
 
 CONTROLLABLE_DOMAINS = {
@@ -656,6 +683,21 @@ DOMAIN_ICONS = {
     "alarm_control_panel": "mdi:shield-home",
     "remote": "mdi:remote",
     "siren": "mdi:bullhorn",
+    "weather": "mdi:weather-partly-cloudy",
+    "device_tracker": "mdi:account-badge",
+    "person": "mdi:account",
+    "sun": "mdi:white-balance-sunny",
+    "update": "mdi:package-up",
+    "todo": "mdi:checkbox-marked-outline",
+    "event": "mdi:calendar-star",
+    "calendar": "mdi:calendar",
+    "date": "mdi:calendar-today",
+    "datetime": "mdi:calendar-clock",
+    "time": "mdi:clock-outline",
+    "button": "mdi:gesture-tap-button",
+    "number": "mdi:ray-vertex",
+    "select": "mdi:format-list-bulleted",
+    "scene": "mdi:palette",
 }
 
 
@@ -811,11 +853,11 @@ async def ws_catalog(
             continue
 
         ctrl_entries = [e for e in hh_entries if _get_entry_domain(e) in CONTROLLABLE_DOMAINS]
-        is_multi_entity = len(ctrl_entries) > 1
+        is_multi_entity = len(hh_entries) > 1
         primary_domain = _get_entry_domain(ctrl_entries[0]) if ctrl_entries else (_get_entry_domain(hh_entries[0]) if hh_entries else None)
 
         channels = []
-        target_entries = ctrl_entries if ctrl_entries else hh_entries
+        target_entries = hh_entries
         for e in target_entries:
             state_obj = hass.states.get(e.entity_id)
             friendly_name = (

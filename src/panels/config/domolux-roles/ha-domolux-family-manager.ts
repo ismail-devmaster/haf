@@ -29,6 +29,7 @@ import {
   mdiFilterRemoveOutline,
   mdiCheckAll,
   mdiMinusCircleOutline,
+  mdiEyeOutline,
 } from "@mdi/js";
 
 import "../../../components/ha-card";
@@ -795,7 +796,7 @@ export class HaDomoluxFamilyManager extends LitElement {
 
     if (dev.is_multi_entity && dev.channels && dev.channels.length > 0) {
       const channelLevels = dev.channels.map((ch) =>
-        this._getEffectiveChannelLevel(ch.entity_id)
+        this._getEffectiveChannelLevel(ch.entity_id, dev)
       );
       if (channelLevels.every((lvl) => lvl === "control")) {
         return "control";
@@ -805,20 +806,53 @@ export class HaDomoluxFamilyManager extends LitElement {
       }
     }
 
+    if (dev.area_id) {
+      const areaRule = rules.find(
+        (r) => r.target_type === "area" && r.target_id === dev.area_id
+      );
+      if (areaRule) {
+        return areaRule.access_level;
+      }
+    }
+
     return this._userPermissionSet.default_access_level || "none";
   }
 
   private _getEffectiveChannelLevel(
-    entityId: string
+    entityId: string,
+    dev?: HouseholdDevice
   ): "none" | "read" | "control" {
     if (!this._userPermissionSet) return "none";
     const rules = Object.values(this._userPermissionSet.entity_rules || {});
+    // 1. Explicit entity rule
     const rule = rules.find(
       (r) => r.target_type === "entity" && r.target_id === entityId
     );
     if (rule) {
       return rule.access_level;
     }
+
+    // 2. Parent device rule (if dev provided)
+    if (dev) {
+      const devRule = rules.find(
+        (r) =>
+          (r.target_type === dev.target_type && r.target_id === dev.target_id) ||
+          (r.target_type === "device" && r.target_id === dev.device_id)
+      );
+      if (devRule) {
+        return devRule.access_level;
+      }
+      // 3. Parent area rule
+      if (dev.area_id) {
+        const areaRule = rules.find(
+          (r) => r.target_type === "area" && r.target_id === dev.area_id
+        );
+        if (areaRule) {
+          return areaRule.access_level;
+        }
+      }
+    }
+
     return this._userPermissionSet.default_access_level || "none";
   }
 
@@ -1845,6 +1879,13 @@ export class HaDomoluxFamilyManager extends LitElement {
                     </ha-button>
                     <ha-button
                       size="s"
+                      @click=${() => this._handleSelectAllChannels(dev, 'read')}
+                      .disabled=${this._submitting}
+                    >
+                      Select all read
+                    </ha-button>
+                    <ha-button
+                      size="s"
                       @click=${() => this._handleSelectAllChannels(dev, 'none')}
                       .disabled=${this._submitting}
                     >
@@ -1854,7 +1895,7 @@ export class HaDomoluxFamilyManager extends LitElement {
                 </div>
                 <div class="channels-list">
                   ${dev.channels.map((ch) => {
-                    const chLevel = this._getEffectiveChannelLevel(ch.entity_id);
+                    const chLevel = this._getEffectiveChannelLevel(ch.entity_id, dev);
                     return html`
                       <div class="channel-row">
                         <div class="channel-info">
@@ -1958,6 +1999,15 @@ export class HaDomoluxFamilyManager extends LitElement {
                     >
                       <ha-svg-icon .path=${mdiCheckAll}></ha-svg-icon>
                       <span>All Control</span>
+                    </button>
+                    <button
+                      class="bulk-action-btn bulk-read"
+                      @click=${() => this._handleBulkSetVisibleDevices(filteredDevices, 'read')}
+                      .disabled=${this._submitting}
+                      title="Set all ${filteredDevices.length} visible devices to Read"
+                    >
+                      <ha-svg-icon .path=${mdiEyeOutline}></ha-svg-icon>
+                      <span>All Read</span>
                     </button>
                     <button
                       class="bulk-action-btn bulk-deny"
@@ -2090,6 +2140,14 @@ export class HaDomoluxFamilyManager extends LitElement {
                           title="Set all devices in ${group.area} to Control"
                         >
                           All Control
+                        </button>
+                        <button
+                          class="mini-action-btn action-read"
+                          @click=${() => this._handleBulkSetAreaDevices(group.devices, 'read')}
+                          .disabled=${this._submitting}
+                          title="Set all devices in ${group.area} to Read"
+                        >
+                          All Read
                         </button>
                         <button
                           class="mini-action-btn"
@@ -3062,6 +3120,12 @@ export class HaDomoluxFamilyManager extends LitElement {
     .bulk-control:hover:not(:disabled) {
       background: var(--success-color, #4caf50);
       border-color: var(--success-color, #4caf50);
+      color: #fff;
+    }
+
+    .bulk-read:hover:not(:disabled) {
+      background: var(--info-color, #2196f3);
+      border-color: var(--info-color, #2196f3);
       color: #fff;
     }
 

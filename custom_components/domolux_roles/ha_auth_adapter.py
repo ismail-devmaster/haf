@@ -597,7 +597,15 @@ class DomoluxHAAuthAdapter:
         Translates explicit entity rules, explicit device rules, and inherited
         view permissions into native {"entities": {"entity_ids": {...}}}.
         """
-        from .const import ACCESS_LEVEL_CONTROL, ACCESS_LEVEL_NONE, ACCESS_LEVEL_READ, EFFECT_ALLOW
+        from .const import (
+            ACCESS_LEVEL_CONTROL,
+            ACCESS_LEVEL_NONE,
+            ACCESS_LEVEL_READ,
+            EFFECT_ALLOW,
+            TARGET_AREA,
+            TARGET_DEVICE,
+            TARGET_ENTITY,
+        )
 
         base = self._build_native_policy(permission_set)
         entity_ids: dict[str, dict[str, bool]] = dict(base.get("entities", {}).get("entity_ids", {}))
@@ -609,22 +617,46 @@ class DomoluxHAAuthAdapter:
             except Exception:
                 ent_reg = None
 
+            try:
+                from homeassistant.helpers import device_registry as dr
+                dev_reg = dr.async_get(self.hass)
+            except Exception:
+                dev_reg = None
+
             # 1. Resolve explicit device rules to underlying entities
             device_rules: dict[str, str] = {}
+            area_rules: dict[str, str] = {}
             for rule in (permission_set.get("entity_rules") or {}).values():
-                if isinstance(rule, dict) and str(rule.get("target_type") or "") == TARGET_DEVICE:
-                    d_id = str(rule.get("target_id") or "")
-                    if d_id:
-                        device_rules[d_id] = str(rule.get("access_level") or "")
+                if isinstance(rule, dict):
+                    t_type = str(rule.get("target_type") or "")
+                    t_id = str(rule.get("target_id") or "")
+                    lvl = str(rule.get("access_level") or "")
+                    if t_type == TARGET_DEVICE and t_id:
+                        device_rules[t_id] = lvl
+                    elif t_type == TARGET_AREA and t_id:
+                        area_rules[t_id] = lvl
 
             if ent_reg is not None and device_rules:
                 for d_id, access_level in device_rules.items():
+                    dev_entries = []
                     try:
-                        dev_entries = ent_reg.entities.get_entries_for_device_id(d_id)
+                        from homeassistant.helpers import entity_registry as er_module
+                        res = er_module.async_entries_for_device(ent_reg, d_id)
+                        if isinstance(res, (list, tuple, set)):
+                            dev_entries = list(res)
                     except Exception:
-                        dev_entries = []
+                        pass
+                    if not dev_entries:
+                        try:
+                            res = ent_reg.entities.get_entries_for_device_id(d_id)
+                            if isinstance(res, (list, tuple, set)):
+                                dev_entries = list(res)
+                        except Exception:
+                            dev_entries = []
                     for entry in dev_entries:
-                        eid = entry.entity_id
+                        eid = getattr(entry, "entity_id", None)
+                        if not eid:
+                            continue
                         # Explicit entity rule takes precedence
                         explicit_rule = None
                         for r in (permission_set.get("entity_rules") or {}).values():
@@ -640,11 +672,76 @@ class DomoluxHAAuthAdapter:
                         if access_level == ACCESS_LEVEL_CONTROL:
                             entity_ids[eid] = {"read": True, "control": True}
                         elif access_level == ACCESS_LEVEL_READ:
-                            entity_ids[eid] = {"read": True, "control": False}
+                            entity_ids[eid] = {"read": True}
                         elif access_level == ACCESS_LEVEL_NONE:
                             entity_ids.pop(eid, None)
 
-            # 2. Resolve view-inherited permissions
+            # 2. Resolve explicit area rules to underlying entities
+            if ent_reg is not None and area_rules:
+                for a_id, access_level in area_rules.items():
+                    area_entries = []
+                    try:
+                        from homeassistant.helpers import entity_registry as er_module
+                        res = er_module.async_entries_for_area(ent_reg, a_id)
+                        if isinstance(res, (list, tuple, set)):
+                            area_entries = list(res)
+                    except Exception:
+                        area_entries = []
+                    if dev_reg is not None:
+                        try:
+                            from homeassistant.helpers import device_registry as dr_module
+                            from homeassistant.helpers import entity_registry as er_module
+                            devs_res = dr_module.async_entries_for_area(dev_reg, a_id)
+                            devs_in_area = list(devs_res) if isinstance(devs_res, (list, tuple, set)) else []
+                            for d in devs_in_area:
+                                d_entries = []
+                                try:
+                                    res_d = er_module.async_entries_for_device(ent_reg, d.id)
+                                    if isinstance(res_d, (list, tuple, set)):
+                                        d_entries = list(res_d)
+                                except Exception:
+                                    pass
+                                if not d_entries:
+                                    try:
+                                        res_d = ent_reg.entities.get_entries_for_device_id(d.id)
+                                        if isinstance(res_d, (list, tuple, set)):
+                                            d_entries = list(res_d)
+                                    except Exception:
+                                        d_entries = []
+                                area_entries.extend(d_entries)
+                        except Exception:
+                            pass
+
+                    for entry in area_entries:
+                        eid = getattr(entry, "entity_id", None)
+                        if not eid:
+                            continue
+                        # Explicit entity rule takes precedence
+                        explicit_rule = None
+                        for r in (permission_set.get("entity_rules") or {}).values():
+                            if (
+                                isinstance(r, dict)
+                                and str(r.get("target_type") or "") == TARGET_ENTITY
+                                and str(r.get("target_id") or "") == eid
+                            ):
+                                explicit_rule = str(r.get("access_level") or "")
+                                break
+                        if explicit_rule is not None:
+                            continue
+
+                        # Explicit device rule takes precedence
+                        e_dev_id = getattr(entry, "device_id", None)
+                        if e_dev_id and e_dev_id in device_rules:
+                            continue
+
+                        if access_level == ACCESS_LEVEL_CONTROL:
+                            entity_ids[eid] = {"read": True, "control": True}
+                        elif access_level == ACCESS_LEVEL_READ:
+                            entity_ids[eid] = {"read": True}
+                        elif access_level == ACCESS_LEVEL_NONE:
+                            entity_ids.pop(eid, None)
+
+            # 3. Resolve view-inherited permissions
             view_rules = permission_set.get("view_rules") or {}
             if view_rules:
                 domain_data = getattr(self.hass, "data", {}).get("domolux_roles", {})
@@ -652,7 +749,16 @@ class DomoluxHAAuthAdapter:
                     domain_data.get("dashboard_view_entities", {}) if isinstance(domain_data, dict) else {}
                 )
 
-                view_store = domain_data.get("view_store") if isinstance(domain_data, dict) else None
+                view_store = None
+                if isinstance(domain_data, dict):
+                    if "view_store" in domain_data:
+                        view_store = domain_data["view_store"]
+                    else:
+                        for val in domain_data.values():
+                            if isinstance(val, dict) and "view_store" in val:
+                                view_store = val["view_store"]
+                                break
+
                 if view_store is not None:
                     try:
                         for v in view_store.list_views():
@@ -705,11 +811,52 @@ class DomoluxHAAuthAdapter:
                         elif v_level == ACCESS_LEVEL_READ and (
                             eid not in entity_ids or not entity_ids[eid].get("control")
                         ):
-                            entity_ids[eid] = {"read": True, "control": False}
+                            entity_ids[eid] = {"read": True}
 
-        entities_dict = dict(base.get("entities", {}))
-        entities_dict["entity_ids"] = entity_ids
-        return {"entities": entities_dict}
+            # 4. Resolve default access level if read
+            default_access = str(permission_set.get("default_access_level") or "")
+            if default_access == ACCESS_LEVEL_READ:
+                all_known_entities: set[str] = set()
+                if ent_reg is not None:
+                    ent_collection = getattr(ent_reg, "entities", {})
+                    ent_list = ent_collection.values() if hasattr(ent_collection, "values") else ent_collection
+                    for entry in ent_list:
+                        eid = getattr(entry, "entity_id", None)
+                        if eid:
+                            all_known_entities.add(eid)
+                if self.hass is not None and hasattr(self.hass, "states"):
+                    try:
+                        for eid in self.hass.states.async_entity_ids():
+                            all_known_entities.add(eid)
+                    except Exception:
+                        pass
+
+                for eid in all_known_entities:
+                    if eid in entity_ids:
+                        continue
+                    explicit_rule = None
+                    for r in (permission_set.get("entity_rules") or {}).values():
+                        if (
+                            isinstance(r, dict)
+                            and str(r.get("target_type") or "") == TARGET_ENTITY
+                            and str(r.get("target_id") or "") == eid
+                        ):
+                            explicit_rule = str(r.get("access_level") or "")
+                            break
+                    if explicit_rule == ACCESS_LEVEL_NONE:
+                        continue
+
+                    if ent_reg is not None:
+                        e_entry = ent_reg.async_get(eid) if hasattr(ent_reg, "async_get") else None
+                        if e_entry and getattr(e_entry, "device_id", None) in device_rules:
+                            if device_rules[e_entry.device_id] == ACCESS_LEVEL_NONE:
+                                continue
+
+                    entity_ids[eid] = {"read": True}
+
+        # Flatten strictly into entity_ids so Home Assistant's compile_entities
+        # never falls through to broader device/area rules that could grant unintended control.
+        return {"entities": {"entity_ids": entity_ids}}
 
     async def async_sync_managed_user_permissions(
         self, user_id: str, permission_set: dict[str, Any]
