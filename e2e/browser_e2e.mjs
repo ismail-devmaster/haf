@@ -288,6 +288,187 @@ try {
   );
   await shot(father, "father-household-devices-catalog");
 
+  // -------------------------------------------------------------------------
+  // 1a-3. Real UI Segmented Control Transitions on Devices (P0 bug verification)
+  // -------------------------------------------------------------------------
+  const devInfo = await father.evaluate(`(() => {
+    ${findMgrFunc}
+    const mgr = findDomoluxMgr();
+    if (!mgr) return null;
+    const dev = (mgr._catalogDevices || []).find((d) => d.primary_entity_id === "${PERMITTED}") || (mgr._catalogDevices || [])[0];
+    if (!dev) return null;
+    return { device_id: dev.device_id, name: dev.name, primary_entity_id: dev.primary_entity_id, is_multi_entity: dev.is_multi_entity };
+  })()`);
+
+  if (devInfo) {
+    const transitions = [
+      { from: "initial", to: "read", btnText: "Read", expectedClass: "active-read", check: "browser.transitions.device.deny_to_read" },
+      { from: "read", to: "control", btnText: "Control", expectedClass: "active-control", check: "browser.transitions.device.read_to_control" },
+      { from: "control", to: "read", btnText: "Read", expectedClass: "active-read", check: "browser.transitions.device.control_to_read" },
+      { from: "read", to: "none", btnText: "Deny", expectedClass: "active-deny", check: "browser.transitions.device.read_to_deny" },
+      { from: "none", to: "control", btnText: "Control", expectedClass: "active-control", check: "browser.transitions.device.deny_to_control" },
+      { from: "control", to: "none", btnText: "Deny", expectedClass: "active-deny", check: "browser.transitions.device.control_to_deny" },
+    ];
+
+    for (const t of transitions) {
+      await father.evaluate(`(async () => {
+        ${findMgrFunc}
+        const mgr = findDomoluxMgr();
+        if (!mgr) return;
+        const card = mgr.shadowRoot?.querySelector('.device-card[data-device-id="${devInfo.device_id}"]');
+        if (!card) return;
+        const btns = Array.from(card.querySelectorAll('.segmented-control button.seg-btn') || []);
+        const btn = btns.find((b) => b.textContent.trim().toLowerCase() === "${t.btnText.toLowerCase()}");
+        if (btn) {
+          btn.click();
+          await mgr.updateComplete;
+        }
+      })()`);
+      await sleep(1500);
+
+      const uiCheck = await father.evaluate(`(() => {
+        ${findMgrFunc}
+        const mgr = findDomoluxMgr();
+        if (!mgr) return null;
+        const card = mgr.shadowRoot?.querySelector('.device-card[data-device-id="${devInfo.device_id}"]');
+        if (!card) return null;
+        const btns = Array.from(card.querySelectorAll('.segmented-control button.seg-btn') || []);
+        const activeBtn = btns.find((b) => b.classList.contains("active-deny") || b.classList.contains("active-read") || b.classList.contains("active-control"));
+        return {
+          activeText: activeBtn?.textContent?.trim()?.toLowerCase(),
+          hasClass: activeBtn?.classList.contains("${t.expectedClass}"),
+          disabled: activeBtn?.disabled,
+          ariaPressed: activeBtn?.getAttribute("aria-pressed"),
+        };
+      })()`);
+
+      const wsPerms = await father.callWS({
+        type: "domolux/permission/get",
+        user_id: state.child_a_id,
+      });
+      const rules = Object.values(wsPerms?.result?.entity_rules || {});
+      const matchingDev = rules.filter((r) => r.target_id === devInfo.device_id);
+      const matchingEnt = devInfo.primary_entity_id
+        ? rules.filter((r) => r.target_id === devInfo.primary_entity_id)
+        : [];
+      const noDuplicates = matchingDev.length <= 1 && matchingEnt.length <= 1;
+      const backendLevel = matchingEnt[0]?.access_level || matchingDev[0]?.access_level || "none";
+
+      record(
+        t.check,
+        uiCheck?.hasClass === true && backendLevel === t.to && noDuplicates === true,
+        {
+          transition: `${t.from} -> ${t.to}`,
+          uiCheck,
+          backendLevel,
+          matchingDevCount: matchingDev.length,
+          matchingEntCount: matchingEnt.length,
+        }
+      );
+    }
+
+    // Re-click already active button (Deny)
+    await father.evaluate(`(async () => {
+      ${findMgrFunc}
+      const mgr = findDomoluxMgr();
+      const card = mgr?.shadowRoot?.querySelector('.device-card[data-device-id="${devInfo.device_id}"]');
+      const denyBtn = Array.from(card?.querySelectorAll('.segmented-control button.seg-btn') || []).find((b) => b.textContent.trim().toLowerCase() === "deny");
+      denyBtn?.click();
+      await mgr?.updateComplete;
+    })()`);
+    await sleep(1000);
+    const reclickWs = await father.callWS({
+      type: "domolux/permission/get",
+      user_id: state.child_a_id,
+    });
+    const reclickRules = Object.values(reclickWs?.result?.entity_rules || {});
+    const reclickMatchingDev = reclickRules.filter((r) => r.target_id === devInfo.device_id);
+    const reclickMatchingEnt = devInfo.primary_entity_id
+      ? reclickRules.filter((r) => r.target_id === devInfo.primary_entity_id)
+      : [];
+    const reclickLevel = reclickMatchingEnt[0]?.access_level || reclickMatchingDev[0]?.access_level || "none";
+    record(
+      "browser.transitions.device.active_reclick_preserved",
+      reclickMatchingDev.length <= 1 && reclickMatchingEnt.length <= 1 && reclickLevel === "none",
+      { matchingDevCount: reclickMatchingDev.length, matchingEntCount: reclickMatchingEnt.length, reclickLevel }
+    );
+
+    // Tab-switch persistence test
+    await father.evaluate(`(async () => {
+      ${findMgrFunc}
+      const mgr = findDomoluxMgr();
+      const card = mgr?.shadowRoot?.querySelector('.device-card[data-device-id="${devInfo.device_id}"]');
+      const readBtn = Array.from(card?.querySelectorAll('.segmented-control button.seg-btn') || []).find((b) => b.textContent.trim().toLowerCase() === "read");
+      readBtn?.click();
+      await mgr?.updateComplete;
+    })()`);
+    await sleep(1500);
+
+    await father.evaluate(`(() => {
+      ${findMgrFunc}
+      const mgr = findDomoluxMgr();
+      if (mgr) { mgr._activePermissionTab = "dashboards"; mgr.requestUpdate(); }
+    })()`);
+    await sleep(1000);
+    await father.evaluate(`(() => {
+      ${findMgrFunc}
+      const mgr = findDomoluxMgr();
+      if (mgr) { mgr._activePermissionTab = "devices"; mgr.requestUpdate(); }
+    })()`);
+    await sleep(1000);
+
+    const tabSwitchUi = await father.evaluate(`(() => {
+      ${findMgrFunc}
+      const mgr = findDomoluxMgr();
+      const card = mgr?.shadowRoot?.querySelector('.device-card[data-device-id="${devInfo.device_id}"]');
+      const activeBtn = card?.querySelector('.segmented-control button.seg-btn.active-read');
+      return { hasActiveRead: Boolean(activeBtn), text: activeBtn?.textContent?.trim() };
+    })()`);
+    record(
+      "browser.transitions.tab_switch_preserves_state",
+      tabSwitchUi?.hasActiveRead === true,
+      { tabSwitchUi }
+    );
+
+    // Page reload persistence test
+    await father.evaluate("location.reload()");
+    await sleep(4000);
+    await father.evaluate(`(async () => {
+      ${findMgrFunc}
+      const mgr = findDomoluxMgr();
+      if (mgr) {
+        const member = (mgr._familyMembers || []).find((m) => m.user_id === "${state.child_a_id}");
+        if (member) await mgr._openPermissionDialog(member);
+        mgr.requestUpdate();
+      }
+    })()`);
+    await sleep(2500);
+
+    const reloadUi = await father.evaluate(`(() => {
+      ${findMgrFunc}
+      const mgr = findDomoluxMgr();
+      const card = mgr?.shadowRoot?.querySelector('.device-card[data-device-id="${devInfo.device_id}"]');
+      const activeBtn = card?.querySelector('.segmented-control button.seg-btn.active-read');
+      return { hasActiveRead: Boolean(activeBtn), text: activeBtn?.textContent?.trim() };
+    })()`);
+    record(
+      "browser.transitions.reload_preserves_state",
+      reloadUi?.hasActiveRead === true,
+      { reloadUi }
+    );
+
+    // Restore Child A's baseline control permission on devInfo / PERMITTED
+    await father.evaluate(`(async () => {
+      ${findMgrFunc}
+      const mgr = findDomoluxMgr();
+      const card = mgr?.shadowRoot?.querySelector('.device-card[data-device-id="${devInfo.device_id}"]');
+      const ctrlBtn = Array.from(card?.querySelectorAll('.segmented-control button.seg-btn') || []).find((b) => b.textContent.trim().toLowerCase() === "control");
+      ctrlBtn?.click();
+      await mgr?.updateComplete;
+    })()`);
+    await sleep(2000);
+  }
+
   // Switch to "Dashboards and views" tab
   await father.evaluate(`(() => {
     ${findMgrFunc}
@@ -366,31 +547,85 @@ try {
     }
   })()`);
 
-  // Father assigns view permission to Child A directly through UI method
-  await father.evaluate(`(async () => {
-    ${findMgrFunc}
-    const mgr = findDomoluxMgr();
-    if (mgr) {
-      await mgr._handleSetViewRuleDirect("kids-room", "read");
-      mgr.requestUpdate();
-    }
-  })()`);
-  await sleep(3000);
+  // -------------------------------------------------------------------------
+  // 1a-4. View Permission Transitions on Dashboards Tab
+  // -------------------------------------------------------------------------
+  const viewTransitions = [
+    { from: "initial", to: "read", btnText: "Read", expectedClass: "active-read", check: "browser.transitions.view.deny_to_read" },
+    { from: "read", to: "control", btnText: "Control", expectedClass: "active-control", check: "browser.transitions.view.read_to_control" },
+    { from: "control", to: "read", btnText: "Read", expectedClass: "active-read", check: "browser.transitions.view.control_to_read" },
+    { from: "read", to: "none", btnText: "Deny", expectedClass: "active-deny", check: "browser.transitions.view.read_to_deny" },
+    { from: "none", to: "control", btnText: "Control", expectedClass: "active-control", check: "browser.transitions.view.deny_to_control" },
+    { from: "control", to: "none", btnText: "Deny", expectedClass: "active-deny", check: "browser.transitions.view.control_to_deny" },
+  ];
 
-  const updatedPermSet = await father.callWS({
-    type: "domolux/permission/get",
-    user_id: state.child_a_id,
-  });
-  const childAViewRule = (
-    updatedPermSet?.result?.view_rules ||
-    updatedPermSet?.result?.permissions?.view_rules ||
-    {}
-  )["kids-room"];
-  record(
-    "browser.father_sets_view_permission_via_catalog",
-    Boolean(childAViewRule && (childAViewRule.effect === "allow" || childAViewRule.access_level === "read")),
-    { view_rule: childAViewRule }
-  );
+  for (const vt of viewTransitions) {
+    await father.evaluate(`(async () => {
+      ${findMgrFunc}
+      const mgr = findDomoluxMgr();
+      if (!mgr) return;
+      const vcard = mgr.shadowRoot?.querySelector('.view-card[data-view-path="kids-room"]');
+      const btns = Array.from(vcard?.querySelectorAll('.segmented-control button.seg-btn') || []);
+      const btn = btns.find((b) => b.textContent.trim().toLowerCase() === "${vt.btnText.toLowerCase()}");
+      if (btn) {
+        btn.click();
+        await mgr.updateComplete;
+      }
+    })()`);
+    await sleep(1500);
+
+    const vUiCheck = await father.evaluate(`(() => {
+      ${findMgrFunc}
+      const mgr = findDomoluxMgr();
+      const vcard = mgr?.shadowRoot?.querySelector('.view-card[data-view-path="kids-room"]');
+      const activeBtn = vcard?.querySelector('.segmented-control button.seg-btn.${vt.expectedClass}');
+      return { hasExpectedClass: Boolean(activeBtn), text: activeBtn?.textContent?.trim() };
+    })()`);
+
+    const vWs = await father.callWS({
+      type: "domolux/permission/get",
+      user_id: state.child_a_id,
+    });
+    const vrule = (vWs?.result?.view_rules || {})["kids-room"];
+    const vactual = vrule?.access_level || "none";
+
+    record(
+      vt.check,
+      vUiCheck?.hasExpectedClass === true && vactual === vt.to,
+      { transition: `${vt.from} -> ${vt.to}`, vUiCheck, vactual }
+    );
+  }
+
+  // View Entity Overrides test (using FORBIDDEN entity on view so PERMITTED baseline is preserved)
+  const overrideSteps = [
+    { level: "read", check: "browser.transitions.entity_override.set_read" },
+    { level: "control", check: "browser.transitions.entity_override.set_control" },
+    { level: "none", check: "browser.transitions.entity_override.set_deny" },
+    { level: "inherited", check: "browser.transitions.entity_override.set_inherited" },
+  ];
+  for (const os of overrideSteps) {
+    await father.evaluate(`(async () => {
+      ${findMgrFunc}
+      const mgr = findDomoluxMgr();
+      if (mgr) {
+        await mgr._handleSetEntityOverride("${FORBIDDEN}", "${os.level}");
+        mgr.requestUpdate();
+      }
+    })()`);
+    await sleep(1500);
+
+    const ovWs = await father.callWS({
+      type: "domolux/permission/get",
+      user_id: state.child_a_id,
+    });
+    const ovRules = Object.values(ovWs?.result?.entity_rules || {}).filter((r) => r.target_id === FORBIDDEN);
+    const ovMatch = os.level === "inherited" ? ovRules.length === 0 : (ovRules.length === 1 && ovRules[0].access_level === os.level);
+    record(
+      os.check,
+      ovMatch,
+      { level: os.level, ovRulesCount: ovRules.length, actualLevel: ovRules[0]?.access_level }
+    );
+  }
 
   // Restore Child A's baseline by removing the temporary view rule
   await father.callWS({
@@ -595,6 +830,65 @@ try {
     { status: directRead.status }
   );
 
+  // -------------------------------------------------------------------------
+  // 3a. Live Child Session Reactivity to Father Permission Changes
+  // -------------------------------------------------------------------------
+  // Father changes Child A's permission on PERMITTED from control to read
+  await father.callWS({
+    type: "domolux/permission/set_entity_rule",
+    user_id: state.child_a_id,
+    target_type: "entity",
+    target_id: PERMITTED,
+    access_level: "read",
+  });
+  await sleep(1500);
+
+  // Child A tries to turn on light -> strictly DENIED (Read never grants control!)
+  const childReadDeniesControl = await childA.callWS({
+    type: "call_service",
+    domain: "light",
+    service: "turn_off",
+    service_data: { entity_id: PERMITTED },
+  });
+  record(
+    "browser.child_a_read_permission_strictly_denies_control",
+    childReadDeniesControl.ok === false,
+    { response: childReadDeniesControl }
+  );
+
+  // But Child A can still read the entity state
+  const childReadVisibility = await childA.evaluate(
+    `Boolean(window.__dlHass().states[${JSON.stringify(PERMITTED)}])`
+  );
+  record(
+    "browser.child_a_read_permission_allows_state_read",
+    childReadVisibility === true,
+    { visible: childReadVisibility }
+  );
+
+  // Father changes Child A's permission back to "control"
+  await father.callWS({
+    type: "domolux/permission/set_entity_rule",
+    user_id: state.child_a_id,
+    target_type: "entity",
+    target_id: PERMITTED,
+    access_level: "control",
+  });
+  await sleep(1500);
+
+  // Child A tries to control light again -> SUCCEEDS
+  const childControlRegranted = await childA.callWS({
+    type: "call_service",
+    domain: "light",
+    service: "turn_off",
+    service_data: { entity_id: PERMITTED },
+  });
+  record(
+    "browser.child_a_control_permission_regranted_successfully",
+    childControlRegranted.ok === true,
+    { response: childControlRegranted }
+  );
+
   const childPreviewAttempt = await childA.callWS({
     type: "domolux/preview/start",
     child_user_id: state.child_b_id,
@@ -723,10 +1017,30 @@ try {
     state: watcherState,
   });
 
+  // Look up the active rule for PERMITTED (and any devInfo device rule if present)
+  const currentChildAPerms = await father.callWS({
+    type: "domolux/permission/get",
+    user_id: state.child_a_id,
+  });
+  const currentRules = Object.values(currentChildAPerms?.result?.entity_rules || {});
+  const ruleToRemove = currentRules.find((r) => r.target_id === PERMITTED);
+  const revokeRuleId = ruleToRemove?.rule_id || state.child_a_rule_id;
+
+  if (devInfo?.device_id) {
+    const devRuleToRemove = currentRules.find((r) => r.target_id === devInfo.device_id);
+    if (devRuleToRemove) {
+      await father.callWS({
+        type: "domolux/permission/remove_entity_rule",
+        user_id: state.child_a_id,
+        rule_id: devRuleToRemove.rule_id,
+      });
+    }
+  }
+
   const revoke = await father.callWS({
     type: "domolux/permission/remove_entity_rule",
     user_id: state.child_a_id,
-    rule_id: state.child_a_rule_id,
+    rule_id: revokeRuleId,
   });
   record("browser.father_revokes_child_a_rule", revoke.ok === true, {
     response: revoke,

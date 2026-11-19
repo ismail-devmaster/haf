@@ -418,7 +418,14 @@ async def ws_permission_set_entity_rule(
         connection.send_error(msg["id"], err_code, err_msg)
         return
 
-    rule_id = msg.get("rule_id") or f"rule_{target_type}_{uuid.uuid4().hex[:8]}"
+    perm_set = store.get_user_permissions(target_user_id)
+    existing_rule_id = None
+    for r_id, r in perm_set.entity_rules.items():
+        if r.target_type == target_type and r.target_id == target_id:
+            existing_rule_id = r_id
+            break
+
+    rule_id = msg.get("rule_id") or existing_rule_id or f"rule_{target_type}_{uuid.uuid4().hex[:8]}"
 
     rule = EntityPermissionRule(
         rule_id=rule_id,
@@ -428,6 +435,14 @@ async def ws_permission_set_entity_rule(
     )
 
     def mutate(ps: UserPermissionSet) -> None:
+        # Purge any existing rule for this target or with this rule_id to guarantee no duplicate targets
+        to_delete = [
+            r_id
+            for r_id, r in ps.entity_rules.items()
+            if (r.target_type == target_type and r.target_id == target_id) or r_id == rule_id
+        ]
+        for r_id in to_delete:
+            del ps.entity_rules[r_id]
         ps.entity_rules[rule_id] = rule
 
     try:
@@ -495,8 +510,19 @@ async def ws_permission_remove_entity_rule(
         return
 
     def mutate(ps: UserPermissionSet) -> None:
+        target = None
         if rule_id in ps.entity_rules:
+            r = ps.entity_rules[rule_id]
+            target = (r.target_type, r.target_id)
             del ps.entity_rules[rule_id]
+        if target:
+            to_delete = [
+                r_id
+                for r_id, r in ps.entity_rules.items()
+                if (r.target_type, r.target_id) == target
+            ]
+            for r_id in to_delete:
+                del ps.entity_rules[r_id]
 
     try:
         new_perm_set = await _execute_atomic_permission_mutation(

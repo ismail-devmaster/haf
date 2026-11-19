@@ -315,3 +315,176 @@ async def test_18_19_20_21_22_security_and_eval_invariants(mock_hass_store_adapt
 
     res = connection.send_result.call_args[0][1]
     assert res["user_id"] == "real-user-id"
+
+
+@pytest.mark.asyncio
+async def test_all_six_permission_transitions_and_repeated_updates(mock_hass_store_adapter):
+    """Verify all 6 permission transitions (Deny<->Read<->Control) without stuck state.
+
+    Transitions:
+      1. Deny -> Read
+      2. Read -> Control
+      3. Control -> Read
+      4. Read -> Deny
+      5. Deny -> Control
+      6. Control -> Deny
+    Also verifies:
+      - Selecting already active permission does not duplicate or corrupt rules.
+      - Exactly one rule exists per target at every step.
+      - Resolver and native HA policy evaluate the latest permission accurately.
+    """
+    from custom_components.domolux_roles.resolver import resolve_entity_access
+    from custom_components.domolux_roles.const import (
+        TARGET_DEVICE,
+        TARGET_ENTITY,
+        TARGET_AREA,
+    )
+
+    hass, store, adapter, perm_set = mock_hass_store_adapter
+    current_ps = {"val": perm_set}
+    store.get_user_permissions.side_effect = lambda uid: current_ps["val"]
+    store.set_user_permissions.side_effect = lambda ps: current_ps.update({"val": ps})
+
+    user_id = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+    target_device = "dev_climate_main"
+    entity_id = "climate.living_room"
+    snapshot = {entity_id: (target_device, "area_living")}
+
+    transitions = [
+        (ACCESS_LEVEL_READ, True, False),     # 1. Deny -> Read (granted read, denied control)
+        (ACCESS_LEVEL_CONTROL, True, True),   # 2. Read -> Control (granted read and control)
+        (ACCESS_LEVEL_CONTROL, True, True),   # (re-select active: no corruption)
+        (ACCESS_LEVEL_READ, True, False),     # 3. Control -> Read (granted read, revoked control)
+        (ACCESS_LEVEL_NONE, False, False),    # 4. Read -> Deny (denied read and control)
+        (ACCESS_LEVEL_CONTROL, True, True),   # 5. Deny -> Control (granted read and control)
+        (ACCESS_LEVEL_NONE, False, False),    # 6. Control -> Deny (denied read and control)
+    ]
+
+    from custom_components.domolux_roles.ha_auth_adapter import DomoluxHAAuthAdapter
+    real_adapter = DomoluxHAAuthAdapter(hass)
+
+    msg_id = 100
+    for level, expect_read, expect_control in transitions:
+        msg_id += 1
+        connection = MagicMock()
+        msg = {
+            "id": msg_id,
+            "type": "domolux/permission/set_entity_rule",
+            "user_id": user_id,
+            "target_type": TARGET_DEVICE,
+            "target_id": target_device,
+            "access_level": level,
+        }
+        with patch("custom_components.domolux_roles.permission_api._require_father", return_value="father-1"), \
+             patch("custom_components.domolux_roles.permission_api._verify_target_family_member", return_value=None):
+            await ws_permission_set_entity_rule(hass, connection, msg)
+
+        connection.send_result.assert_called_once()
+        res = connection.send_result.call_args[0][1]
+        assert res["success"] is True
+
+        updated_ps = store.get_user_permissions(user_id)
+        matching_rules = [
+            r for r in updated_ps.entity_rules.values()
+            if r.target_type == TARGET_DEVICE and r.target_id == target_device
+        ]
+        # Crucial invariant: exactly one rule for target_device, never stuck with duplicates
+        assert len(matching_rules) == 1
+        assert matching_rules[0].access_level == level
+
+        # Verify resolver evaluates the latest permission
+        read_eval = resolve_entity_access(updated_ps, snapshot, user_id, entity_id, required_level=ACCESS_LEVEL_READ)
+        assert read_eval.granted == expect_read
+        assert read_eval.access_level == level
+
+        ctrl_eval = resolve_entity_access(updated_ps, snapshot, user_id, entity_id, required_level=ACCESS_LEVEL_CONTROL)
+        assert ctrl_eval.granted == expect_control
+
+        # Verify native HA policy matches
+        policy = real_adapter._build_native_policy(updated_ps.to_dict())
+        dev_entry = policy.get("entities", {}).get("device_ids", {}).get(target_device)
+        if expect_control:
+            assert dev_entry == {"read": True, "control": True}
+        elif expect_read:
+            assert dev_entry == {"read": True}
+        else:
+            assert dev_entry is None
+
+
+@pytest.mark.asyncio
+async def test_all_transitions_for_views_and_explicit_entity_overrides(mock_hass_store_adapter):
+    """Verify view transitions and explicit entity overrides with repeated updates."""
+    from custom_components.domolux_roles.permission_api import ws_permission_set_view_rule
+    from custom_components.domolux_roles.resolver import resolve_view_access, resolve_entity_access
+    from custom_components.domolux_roles.const import TARGET_ENTITY
+
+    hass, store, adapter, perm_set = mock_hass_store_adapter
+    current_ps = {"val": perm_set}
+    store.get_user_permissions.side_effect = lambda uid: current_ps["val"]
+    store.set_user_permissions.side_effect = lambda ps: current_ps.update({"val": ps})
+
+    user_id = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+    view_path = "kids-dashboard"
+
+    # View transitions: Deny -> Read -> Control -> Deny
+    view_transitions = [
+        (ACCESS_LEVEL_READ, "allow", True),
+        (ACCESS_LEVEL_CONTROL, "allow", True),
+        (ACCESS_LEVEL_NONE, "deny", False),
+        (ACCESS_LEVEL_CONTROL, "allow", True),
+        (ACCESS_LEVEL_READ, "allow", True),
+    ]
+
+    msg_id = 200
+    for level, effect, expect_allowed in view_transitions:
+        msg_id += 1
+        connection = MagicMock()
+        msg = {
+            "id": msg_id,
+            "type": "domolux/permission/set_view_rule",
+            "user_id": user_id,
+            "view_path": view_path,
+            "effect": effect,
+            "access_level": level,
+        }
+        with patch("custom_components.domolux_roles.permission_api._require_father", return_value="father-1"), \
+             patch("custom_components.domolux_roles.permission_api._verify_target_family_member", return_value=None):
+            await ws_permission_set_view_rule(hass, connection, msg)
+
+        connection.send_result.assert_called_once()
+        updated_ps = store.get_user_permissions(user_id)
+        assert view_path in updated_ps.view_rules
+        assert updated_ps.view_rules[view_path].access_level == level
+
+        v_eval = resolve_view_access(updated_ps, user_id, view_path)
+        assert v_eval.allowed == expect_allowed
+
+    # Explicit entity override on single entity
+    entity_id = "light.desk_lamp"
+    override_transitions = [
+        ACCESS_LEVEL_READ,
+        ACCESS_LEVEL_CONTROL,
+        ACCESS_LEVEL_READ,
+        ACCESS_LEVEL_NONE,
+        ACCESS_LEVEL_CONTROL,
+        ACCESS_LEVEL_NONE,
+    ]
+    for o_level in override_transitions:
+        msg_id += 1
+        conn = MagicMock()
+        msg = {
+            "id": msg_id,
+            "type": "domolux/permission/set_entity_rule",
+            "user_id": user_id,
+            "target_type": TARGET_ENTITY,
+            "target_id": entity_id,
+            "access_level": o_level,
+        }
+        with patch("custom_components.domolux_roles.permission_api._require_father", return_value="father-1"), \
+             patch("custom_components.domolux_roles.permission_api._verify_target_family_member", return_value=None):
+            await ws_permission_set_entity_rule(hass, conn, msg)
+
+        updated_ps = store.get_user_permissions(user_id)
+        rules = [r for r in updated_ps.entity_rules.values() if r.target_type == TARGET_ENTITY and r.target_id == entity_id]
+        assert len(rules) == 1
+        assert rules[0].access_level == o_level

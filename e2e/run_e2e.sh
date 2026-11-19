@@ -105,6 +105,8 @@ run_phase setup   || STATUS=1
 copy_auth "after-setup"
 run_phase enforce || STATUS=1
 copy_auth "after-enforce"
+run_phase transitions || STATUS=1
+copy_auth "after-transitions"
 run_phase revoke  || STATUS=1
 
 echo "-- restarting Home Assistant --"

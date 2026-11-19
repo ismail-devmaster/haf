@@ -92,6 +92,26 @@ function createMockHass(options: {
     wsError = null,
   } = options;
 
+  const currentPermissions: any = {
+    user_id: CHILD_USER_ID,
+    default_access_level: "none",
+    entity_rules: {
+      rule_1: {
+        rule_id: "rule_1",
+        target_type: "entity",
+        target_id: "light.living_room",
+        access_level: "read",
+      },
+    },
+    view_rules: {
+      "/lovelace/kitchen": {
+        view_path: "/lovelace/kitchen",
+        effect: "deny",
+        access_level: "none",
+      },
+    },
+  };
+
   const mockCallWS = vi.fn().mockImplementation((msg: any) => {
     if (wsError) {
       return Promise.reject(wsError);
@@ -205,99 +225,71 @@ function createMockHass(options: {
       return Promise.resolve({ success: true, user_id: msg.user_id });
     }
     if (msg.type === "domolux/permission/get") {
-      return Promise.resolve({
-        user_id: msg.user_id,
-        default_access_level: "none",
-        entity_rules: {
-          rule_1: {
-            rule_id: "rule_1",
-            target_type: "entity",
-            target_id: "light.living_room",
-            access_level: "read",
-          },
-        },
-        view_rules: {
-          "/lovelace/kitchen": {
-            view_path: "/lovelace/kitchen",
-            effect: "deny",
-          },
-        },
-      });
+      return Promise.resolve(JSON.parse(JSON.stringify(currentPermissions)));
     }
     if (msg.type === "domolux/permission/set_default_level") {
+      currentPermissions.default_access_level = msg.default_access_level;
       return Promise.resolve({
         success: true,
-        permissions: {
-          user_id: msg.user_id,
-          default_access_level: msg.default_access_level,
-          entity_rules: {},
-          view_rules: {},
-        },
+        permissions: JSON.parse(JSON.stringify(currentPermissions)),
       });
     }
     if (msg.type === "domolux/permission/set_entity_rule") {
+      const existing = Object.values(currentPermissions.entity_rules).find(
+        (r: any) => r.target_type === msg.target_type && r.target_id === msg.target_id
+      ) as any;
+      const ruleId = msg.rule_id || existing?.rule_id || `rule_${msg.target_type}_${Date.now()}`;
+      for (const k of Object.keys(currentPermissions.entity_rules)) {
+        const r = currentPermissions.entity_rules[k];
+        if ((r.target_type === msg.target_type && r.target_id === msg.target_id) || k === ruleId) {
+          delete currentPermissions.entity_rules[k];
+        }
+      }
+      currentPermissions.entity_rules[ruleId] = {
+        rule_id: ruleId,
+        target_type: msg.target_type,
+        target_id: msg.target_id,
+        access_level: msg.access_level,
+      };
       return Promise.resolve({
         success: true,
-        rule: {
-          rule_id: msg.rule_id || "rule_test",
-          target_type: msg.target_type,
-          target_id: msg.target_id,
-          access_level: msg.access_level,
-        },
-        permissions: {
-          user_id: msg.user_id,
-          default_access_level: "none",
-          entity_rules: {},
-          view_rules: {},
-        },
+        rule: currentPermissions.entity_rules[ruleId],
+        permissions: JSON.parse(JSON.stringify(currentPermissions)),
       });
     }
     if (msg.type === "domolux/permission/remove_entity_rule") {
+      delete currentPermissions.entity_rules[msg.rule_id];
       return Promise.resolve({
         success: true,
-        permissions: {
-          user_id: msg.user_id,
-          default_access_level: "none",
-          entity_rules: {},
-          view_rules: {},
-        },
+        permissions: JSON.parse(JSON.stringify(currentPermissions)),
       });
     }
     if (msg.type === "domolux/permission/set_view_rule") {
+      currentPermissions.view_rules[msg.view_path] = {
+        view_path: msg.view_path,
+        effect: msg.effect,
+        access_level: msg.access_level || (msg.effect === "allow" ? "control" : "none"),
+      };
       return Promise.resolve({
         success: true,
-        rule: {
-          view_path: msg.view_path,
-          effect: msg.effect,
-        },
-        permissions: {
-          user_id: msg.user_id,
-          default_access_level: "none",
-          entity_rules: {},
-          view_rules: {},
-        },
+        rule: currentPermissions.view_rules[msg.view_path],
+        permissions: JSON.parse(JSON.stringify(currentPermissions)),
       });
     }
     if (msg.type === "domolux/permission/remove_view_rule") {
+      delete currentPermissions.view_rules[msg.view_path];
       return Promise.resolve({
         success: true,
-        permissions: {
-          user_id: msg.user_id,
-          default_access_level: "none",
-          entity_rules: {},
-          view_rules: {},
-        },
+        permissions: JSON.parse(JSON.stringify(currentPermissions)),
       });
     }
     if (msg.type === "domolux/permission/reset") {
+      currentPermissions.default_access_level = "none";
+      currentPermissions.entity_rules = {};
+      currentPermissions.view_rules = {};
       return Promise.resolve({
         success: true,
-        permissions: {
-          user_id: msg.user_id,
-          default_access_level: "none",
-          entity_rules: {},
-          view_rules: {},
-        },
+        permissions: JSON.parse(JSON.stringify(currentPermissions)),
       });
     }
     if (msg.type === "domolux/permission/evaluate") {
@@ -1474,6 +1466,175 @@ describe("ha-domolux-family-manager component", () => {
       expect(css).toContain("@media (max-width: 768px)");
       expect(css).toContain("min-height: 44px");
       expect(css).toContain("100dvh");
+    });
+
+    it("seamlessly executes all 6 permission transitions on devices without getting stuck", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      const shadeDev = (element as any)._catalogDevices[0];
+
+      // Initial state is none (Deny)
+      expect((element as any)._getEffectiveDeviceLevel(shadeDev)).toBe("none");
+
+      // 1. Deny -> Read
+      await (element as any)._handleSetDevicePermission(shadeDev, "read");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveDeviceLevel(shadeDev)).toBe("read");
+
+      // 2. Read -> Control
+      await (element as any)._handleSetDevicePermission(shadeDev, "control");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveDeviceLevel(shadeDev)).toBe("control");
+
+      // Selecting already active control: no corruption
+      await (element as any)._handleSetDevicePermission(shadeDev, "control");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveDeviceLevel(shadeDev)).toBe("control");
+
+      // 3. Control -> Read
+      await (element as any)._handleSetDevicePermission(shadeDev, "read");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveDeviceLevel(shadeDev)).toBe("read");
+
+      // 4. Read -> Deny
+      await (element as any)._handleSetDevicePermission(shadeDev, "none");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveDeviceLevel(shadeDev)).toBe("none");
+
+      // 5. Deny -> Control
+      await (element as any)._handleSetDevicePermission(shadeDev, "control");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveDeviceLevel(shadeDev)).toBe("control");
+
+      // 6. Control -> Deny
+      await (element as any)._handleSetDevicePermission(shadeDev, "none");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveDeviceLevel(shadeDev)).toBe("none");
+    });
+
+    it("seamlessly executes all 6 permission transitions on multi-entity channels", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      const pn16Dev = (element as any)._catalogDevices[1];
+      const ch1 = pn16Dev.channels[0];
+
+      // 1. Deny -> Read
+      await (element as any)._handleSetChannelPermission(ch1, "read");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveChannelLevel(ch1.entity_id, pn16Dev)).toBe("read");
+
+      // 2. Read -> Control
+      await (element as any)._handleSetChannelPermission(ch1, "control");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveChannelLevel(ch1.entity_id, pn16Dev)).toBe("control");
+
+      // Selecting already active control: no corruption
+      await (element as any)._handleSetChannelPermission(ch1, "control");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveChannelLevel(ch1.entity_id, pn16Dev)).toBe("control");
+
+      // 3. Control -> Read
+      await (element as any)._handleSetChannelPermission(ch1, "read");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveChannelLevel(ch1.entity_id, pn16Dev)).toBe("read");
+
+      // 4. Read -> Deny
+      await (element as any)._handleSetChannelPermission(ch1, "none");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveChannelLevel(ch1.entity_id, pn16Dev)).toBe("none");
+
+      // 5. Deny -> Control
+      await (element as any)._handleSetChannelPermission(ch1, "control");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveChannelLevel(ch1.entity_id, pn16Dev)).toBe("control");
+
+      // 6. Control -> Deny
+      await (element as any)._handleSetChannelPermission(ch1, "none");
+      await element.updateComplete;
+      expect((element as any)._getEffectiveChannelLevel(ch1.entity_id, pn16Dev)).toBe("none");
+    });
+
+    it("seamlessly handles all 6 transitions on dashboard views and explicit entity overrides", async () => {
+      const hass = createMockHass({ isFather: true });
+      element.hass = hass;
+
+      await (element as any)._checkRoleAndLoadFamily();
+      await element.updateComplete;
+
+      const member = (element as any)._familyMembers[0];
+      await (element as any)._openPermissionDialog(member);
+      await element.updateComplete;
+
+      const viewPath = "main";
+
+      // View transitions: Deny -> Read -> Control -> Read -> Deny -> Control -> Deny
+      await (element as any)._handleSetViewRuleDirect(viewPath, "read");
+      await element.updateComplete;
+      expect((element as any)._userPermissionSet.view_rules[viewPath].access_level).toBe("read");
+
+      await (element as any)._handleSetViewRuleDirect(viewPath, "control");
+      await element.updateComplete;
+      expect((element as any)._userPermissionSet.view_rules[viewPath].access_level).toBe("control");
+
+      await (element as any)._handleSetViewRuleDirect(viewPath, "read");
+      await element.updateComplete;
+      expect((element as any)._userPermissionSet.view_rules[viewPath].access_level).toBe("read");
+
+      await (element as any)._handleSetViewRuleDirect(viewPath, "none");
+      await element.updateComplete;
+      expect((element as any)._userPermissionSet.view_rules[viewPath].access_level).toBe("none");
+
+      await (element as any)._handleSetViewRuleDirect(viewPath, "control");
+      await element.updateComplete;
+      expect((element as any)._userPermissionSet.view_rules[viewPath].access_level).toBe("control");
+
+      await (element as any)._handleSetViewRuleDirect(viewPath, "none");
+      await element.updateComplete;
+      expect((element as any)._userPermissionSet.view_rules[viewPath].access_level).toBe("none");
+
+      // Entity override transitions
+      const eid = "switch.pn16_l3";
+      await (element as any)._handleSetEntityOverride(eid, "read");
+      await element.updateComplete;
+      expect((element as any)._getExplicitEntityOverrideLevel(eid)).toBe("read");
+
+      await (element as any)._handleSetEntityOverride(eid, "control");
+      await element.updateComplete;
+      expect((element as any)._getExplicitEntityOverrideLevel(eid)).toBe("control");
+
+      await (element as any)._handleSetEntityOverride(eid, "none");
+      await element.updateComplete;
+      expect((element as any)._getExplicitEntityOverrideLevel(eid)).toBe("none");
+
+      await (element as any)._handleSetEntityOverride(eid, "inherited");
+      await element.updateComplete;
+      expect((element as any)._getExplicitEntityOverrideLevel(eid)).toBeNull();
+
+      // Tab switching retains state accurately
+      (element as any)._activePermissionTab = "dashboards";
+      await element.updateComplete;
+      expect((element as any)._activePermissionTab).toBe("dashboards");
+      expect((element as any)._userPermissionSet.view_rules[viewPath].access_level).toBe("none");
+
+      (element as any)._activePermissionTab = "devices";
+      await element.updateComplete;
+      expect((element as any)._activePermissionTab).toBe("devices");
     });
   });
 });

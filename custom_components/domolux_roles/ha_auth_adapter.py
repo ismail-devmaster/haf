@@ -21,6 +21,8 @@ from typing import Any, Optional
 
 from .const import (
     ACCESS_LEVEL_CONTROL,
+    ACCESS_LEVEL_NONE,
+    ACCESS_LEVEL_READ,
     TARGET_AREA,
     TARGET_DEVICE,
     TARGET_ENTITY,
@@ -583,6 +585,7 @@ class DomoluxHAAuthAdapter:
             if access_level == ACCESS_LEVEL_CONTROL:
                 entry["control"] = True
             if not entry:
+                sub_categories[sub_category].pop(target_id, None)
                 continue
             sub_categories[sub_category][target_id] = entry
 
@@ -927,7 +930,7 @@ class DomoluxHAAuthAdapter:
             )
             return
 
-        expected: dict[str, bool] = {}
+        expected: dict[str, tuple[bool, bool]] = {}
         for rule in (permission_set.get("entity_rules") or {}).values():
             if not isinstance(rule, dict):
                 continue
@@ -937,9 +940,12 @@ class DomoluxHAAuthAdapter:
             target_id = str(rule.get("target_id") or "")
             if not target_id:
                 continue
-            expected[target_id] = str(rule.get("access_level") or "") == ACCESS_LEVEL_CONTROL
+            lvl = str(rule.get("access_level") or "")
+            should_control = lvl == ACCESS_LEVEL_CONTROL
+            should_read = lvl in (ACCESS_LEVEL_READ, ACCESS_LEVEL_CONTROL)
+            expected[target_id] = (should_control, should_read)
 
-        for entity_id, should_control in expected.items():
+        for entity_id, (should_control, should_read) in expected.items():
             try:
                 can_control = bool(permissions.check_entity(entity_id, "control"))
                 can_read = bool(permissions.check_entity(entity_id, "read"))
@@ -953,9 +959,9 @@ class DomoluxHAAuthAdapter:
                     "Native permission verification failed for "
                     f"'{entity_id}': control={can_control} expected={should_control}"
                 )
-            if not can_read:
+            if can_read != should_read:
                 raise DomoluxAuthAdapterError(
-                    f"Native permission verification failed for '{entity_id}': read denied"
+                    f"Native permission verification failed for '{entity_id}': read={can_read} expected={should_read}"
                 )
 
     async def async_delete_managed_group(self, user_id: str) -> bool:

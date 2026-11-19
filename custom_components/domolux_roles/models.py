@@ -193,10 +193,16 @@ class UserPermissionSet:
         if not user_id:
             return None
         entity_rules = {}
+        target_to_rule_id: dict[tuple[str, str], str] = {}
         for k, v in (data.get("entity_rules") or {}).items():
             if isinstance(v, dict):
                 parsed = EntityPermissionRule.from_dict(v)
                 if parsed:
+                    target_key = (parsed.target_type, parsed.target_id)
+                    if target_key in target_to_rule_id:
+                        old_k = target_to_rule_id[target_key]
+                        entity_rules.pop(old_k, None)
+                    target_to_rule_id[target_key] = k
                     entity_rules[k] = parsed
 
         view_rules = {}

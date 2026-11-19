@@ -678,6 +678,9 @@ export class HaDomoluxFamilyManager extends LitElement {
       this._success = `Updated ${devices.length} devices in area to ${accessLevel}.`;
     } catch (err: any) {
       this._error = this._parseErrorMessage(err, "Failed to update area devices.");
+      if (this._selectedUserForPermissions) {
+        await this._loadUserPermissions(this._selectedUserForPermissions.user_id);
+      }
     } finally {
       this._submitting = false;
     }
@@ -706,6 +709,9 @@ export class HaDomoluxFamilyManager extends LitElement {
       this._success = `Updated ${devices.length} visible devices to ${accessLevel}.`;
     } catch (err: any) {
       this._error = this._parseErrorMessage(err, "Failed to update devices.");
+      if (this._selectedUserForPermissions) {
+        await this._loadUserPermissions(this._selectedUserForPermissions.user_id);
+      }
     } finally {
       this._submitting = false;
     }
@@ -735,6 +741,9 @@ export class HaDomoluxFamilyManager extends LitElement {
       this._success = `All views in '${dash.title}' updated to ${accessLevel}.`;
     } catch (err: any) {
       this._error = this._parseErrorMessage(err, "Failed to update dashboard views.");
+      if (this._selectedUserForPermissions) {
+        await this._loadUserPermissions(this._selectedUserForPermissions.user_id);
+      }
     } finally {
       this._submitting = false;
     }
@@ -775,15 +784,8 @@ export class HaDomoluxFamilyManager extends LitElement {
     if (!this._userPermissionSet) return "none";
     const rules = Object.values(this._userPermissionSet.entity_rules || {});
 
-    const targetRule = rules.find(
-      (r) =>
-        (r.target_type === dev.target_type && r.target_id === dev.target_id) ||
-        (r.target_type === "device" && r.target_id === dev.device_id)
-    );
-    if (targetRule) {
-      return targetRule.access_level;
-    }
-
+    // For single-entity devices, an explicit entity rule on primary_entity_id
+    // takes precedence over device/area rules (matching backend resolver precedence).
     if (!dev.is_multi_entity && dev.primary_entity_id) {
       const entityRule = rules.find(
         (r) =>
@@ -792,6 +794,15 @@ export class HaDomoluxFamilyManager extends LitElement {
       if (entityRule) {
         return entityRule.access_level;
       }
+    }
+
+    const targetRule = rules.find(
+      (r) =>
+        (r.target_type === dev.target_type && r.target_id === dev.target_id) ||
+        (r.target_type === "device" && r.target_id === dev.device_id)
+    );
+    if (targetRule) {
+      return targetRule.access_level;
     }
 
     if (dev.is_multi_entity && dev.channels && dev.channels.length > 0) {
@@ -803,6 +814,9 @@ export class HaDomoluxFamilyManager extends LitElement {
       }
       if (channelLevels.every((lvl) => lvl === "read")) {
         return "read";
+      }
+      if (channelLevels.every((lvl) => lvl === "none")) {
+        return "none";
       }
     }
 
@@ -877,12 +891,36 @@ export class HaDomoluxFamilyManager extends LitElement {
       if (res?.permissions) {
         this._userPermissionSet = res.permissions;
       }
+
+      // If single entity device had an explicit entity rule, update that as well so resolver matches UI
+      if (!dev.is_multi_entity && dev.primary_entity_id) {
+        const rules = Object.values(this._userPermissionSet?.entity_rules || {});
+        const entityRule = rules.find(
+          (r) => r.target_type === "entity" && r.target_id === dev.primary_entity_id
+        );
+        if (entityRule && entityRule.access_level !== accessLevel) {
+          const res2 = (await this.hass.callWS({
+            type: "domolux/permission/set_entity_rule",
+            user_id: this._selectedUserForPermissions.user_id,
+            target_type: "entity",
+            target_id: dev.primary_entity_id,
+            access_level: accessLevel,
+          })) as any;
+          if (res2?.permissions) {
+            this._userPermissionSet = res2.permissions;
+          }
+        }
+      }
+
       this._success = "Device permission updated successfully.";
     } catch (err: any) {
       this._error = this._parseErrorMessage(
         err,
         "Failed to update device permission."
       );
+      if (this._selectedUserForPermissions) {
+        await this._loadUserPermissions(this._selectedUserForPermissions.user_id);
+      }
     } finally {
       this._submitting = false;
     }
@@ -915,6 +953,9 @@ export class HaDomoluxFamilyManager extends LitElement {
         err,
         "Failed to update channel permission."
       );
+      if (this._selectedUserForPermissions) {
+        await this._loadUserPermissions(this._selectedUserForPermissions.user_id);
+      }
     } finally {
       this._submitting = false;
     }
@@ -948,6 +989,9 @@ export class HaDomoluxFamilyManager extends LitElement {
         err,
         "Failed to update all channels."
       );
+      if (this._selectedUserForPermissions) {
+        await this._loadUserPermissions(this._selectedUserForPermissions.user_id);
+      }
     } finally {
       this._submitting = false;
     }
@@ -981,6 +1025,9 @@ export class HaDomoluxFamilyManager extends LitElement {
         err,
         "Failed to update view permission."
       );
+      if (this._selectedUserForPermissions) {
+        await this._loadUserPermissions(this._selectedUserForPermissions.user_id);
+      }
     } finally {
       this._submitting = false;
     }
@@ -1007,10 +1054,10 @@ export class HaDomoluxFamilyManager extends LitElement {
     try {
       if (value === "inherited") {
         const rules = Object.values(this._userPermissionSet?.entity_rules || {});
-        const rule = rules.find(
+        const matchingRules = rules.filter(
           (r) => r.target_type === "entity" && r.target_id === entityId
         );
-        if (rule) {
+        for (const rule of matchingRules) {
           await this._handleRemoveEntityRule(rule.rule_id);
         }
         return;
@@ -1033,6 +1080,9 @@ export class HaDomoluxFamilyManager extends LitElement {
         err,
         "Failed to update exception."
       );
+      if (this._selectedUserForPermissions) {
+        await this._loadUserPermissions(this._selectedUserForPermissions.user_id);
+      }
     } finally {
       this._submitting = false;
     }

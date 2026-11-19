@@ -889,9 +889,195 @@ async def phase_persist(session: aiohttp.ClientSession) -> None:
         )
 
 
+async def phase_transitions(session: aiohttp.ClientSession) -> None:
+    """Verify all 6 permission transitions across devices, entities, views, and scopes."""
+    state = load_state()
+    father_token = state["father_token"]
+    child_a_id = state["child_a_id"]
+    child_a_token = state["child_a_token"]
+    permitted = state["permitted_entity"]
+    forbidden = state["forbidden_entity"]
+
+    transitions = [
+        ("deny_to_read", "read", False, True),
+        ("read_to_control", "control", True, True),
+        ("control_to_read", "read", False, True),
+        ("read_to_deny", "none", False, False),
+        ("deny_to_control", "control", True, True),
+        ("control_to_deny", "none", False, False),
+    ]
+
+    async with WSClient(session, father_token) as father, WSClient(session, child_a_token) as child:
+        # First ensure clean baseline: set forbidden to "none"
+        await father.call(
+            {
+                "type": "domolux/permission/set_entity_rule",
+                "user_id": child_a_id,
+                "target_type": "entity",
+                "target_id": forbidden,
+                "access_level": "none",
+            }
+        )
+
+        for name, level, can_control, can_view in transitions:
+            # 1. Father sets permission
+            res = await father.call(
+                {
+                    "type": "domolux/permission/set_entity_rule",
+                    "user_id": child_a_id,
+                    "target_type": "entity",
+                    "target_id": forbidden,
+                    "access_level": level,
+                }
+            )
+            record(f"transitions.{name}.api_call", res.get("success") is True, response=res)
+
+            # 2. Check backend persistence and deduplication
+            perms = await father.call({"type": "domolux/permission/get", "user_id": child_a_id})
+            rules = [
+                r for r in perms.get("result", {}).get("entity_rules", {}).values()
+                if r.get("target_id") == forbidden
+            ]
+            rule_level = rules[0].get("access_level") if rules else "none"
+            no_duplicates = len(rules) <= 1
+            record(
+                f"transitions.{name}.backend_persistence",
+                rule_level == level and no_duplicates,
+                expected=level,
+                actual=rule_level,
+                rule_count=len(rules),
+            )
+
+            # 3. Verify Child session enforcement
+            call_res = await child.call(
+                {
+                    "type": "call_service",
+                    "domain": "light",
+                    "service": "turn_on",
+                    "service_data": {"entity_id": forbidden},
+                }
+            )
+            record(
+                f"transitions.{name}.child_control_enforcement",
+                (call_res.get("success") is True) == can_control,
+                can_control=can_control,
+                actual=call_res.get("success"),
+            )
+
+            states = await child.call({"type": "get_states"})
+            visible_entities = [s["entity_id"] for s in states.get("result", [])]
+            is_visible = forbidden in visible_entities
+            record(
+                f"transitions.{name}.child_visibility_enforcement",
+                is_visible == can_view,
+                expected_visible=can_view,
+                actual_visible=is_visible,
+            )
+
+        # 4. Selecting already active permission does not corrupt state
+        reselect = await father.call(
+            {
+                "type": "domolux/permission/set_entity_rule",
+                "user_id": child_a_id,
+                "target_type": "entity",
+                "target_id": forbidden,
+                "access_level": "none",
+            }
+        )
+        perms_after = await father.call({"type": "domolux/permission/get", "user_id": child_a_id})
+        rules_after = [
+            r for r in perms_after.get("result", {}).get("entity_rules", {}).values()
+            if r.get("target_id") == forbidden
+        ]
+        record(
+            "transitions.active_reselect_no_corruption",
+            reselect.get("success") is True and len(rules_after) <= 1,
+            rule_count=len(rules_after),
+        )
+
+        # 5. Dashboard View transitions: Deny -> Read -> Control -> Read -> Deny -> Control -> Deny
+        view_path = "kids-room"
+        view_transitions = [
+            ("view_deny_to_read", "read"),
+            ("view_read_to_control", "control"),
+            ("view_control_to_read", "read"),
+            ("view_read_to_deny", "none"),
+            ("view_deny_to_control", "control"),
+            ("view_control_to_deny", "none"),
+        ]
+        for vname, vlevel in view_transitions:
+            vres = await father.call(
+                {
+                    "type": "domolux/permission/set_view_rule",
+                    "user_id": child_a_id,
+                    "view_path": view_path,
+                    "effect": "deny" if vlevel == "none" else "allow",
+                    "access_level": vlevel,
+                }
+            )
+            vperms = await father.call({"type": "domolux/permission/get", "user_id": child_a_id})
+            vrules = vperms.get("result", {}).get("view_rules", {})
+            vrule = vrules.get(view_path)
+            vactual = vrule.get("access_level") if vrule else "none"
+            record(
+                f"transitions.{vname}",
+                vres.get("success") is True and vactual == vlevel,
+                expected=vlevel,
+                actual=vactual,
+            )
+
+        # 6. Entity Override transitions
+        override_steps = [
+            ("override_to_read", "read"),
+            ("override_to_control", "control"),
+            ("override_to_none", "none"),
+        ]
+        for oname, olevel in override_steps:
+            ores = await father.call(
+                {
+                    "type": "domolux/permission/set_entity_rule",
+                    "user_id": child_a_id,
+                    "target_type": "entity",
+                    "target_id": forbidden,
+                    "access_level": olevel,
+                }
+            )
+            operms = await father.call({"type": "domolux/permission/get", "user_id": child_a_id})
+            orules = [
+                r for r in operms.get("result", {}).get("entity_rules", {}).values()
+                if r.get("target_id") == forbidden
+            ]
+            record(
+                f"transitions.{oname}",
+                ores.get("success") is True and len(orules) == 1 and orules[0].get("access_level") == olevel,
+                actual=orules[0].get("access_level") if orules else None,
+            )
+
+        # Restore baseline for subsequent test phases
+        await father.call(
+            {
+                "type": "domolux/permission/set_entity_rule",
+                "user_id": child_a_id,
+                "target_type": "entity",
+                "target_id": permitted,
+                "access_level": "control",
+            }
+        )
+        await father.call(
+            {
+                "type": "domolux/permission/set_entity_rule",
+                "user_id": child_a_id,
+                "target_type": "entity",
+                "target_id": forbidden,
+                "access_level": "none",
+            }
+        )
+
+
 PHASES = {
     "setup": phase_setup,
     "enforce": phase_enforce,
+    "transitions": phase_transitions,
     "revoke": phase_revoke,
     "persist": phase_persist,
 }
